@@ -8,6 +8,30 @@
 #define MAX_EDGES_PER_NODE 4   // Mỗi ngã tư nối tối đa 4 điểm khác
 #define INF_DIST 99999         // Giá trị vô cùng cho thuật toán Dijkstra
 
+// Định nghĩa bí danh (Alias) cho 100 điểm để code dễ đọc
+#define N00 0
+#define N01 1
+#define N02 2
+#define N03 3
+#define N04 4
+#define N05 5
+#define N06 6
+#define N07 7
+#define N08 8
+#define N09 9
+#define N10 10
+#define N11 11
+#define N12 12
+#define N13 13
+#define N14 14
+#define N15 15
+#define N16 16
+#define N17 17
+#define N18 18
+#define N19 19
+#define N20 20
+// ... Bạn có thể tự định nghĩa thêm N21 đến N99 nếu cần ...
+
 // Định nghĩa Hướng rẽ
 typedef enum {
     DIR_NONE = 0,

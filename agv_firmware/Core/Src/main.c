@@ -26,6 +26,7 @@
 #include "qr50_reader.h"
 #include "sensor.h"
 #include "agv_routing.h"
+#include <stdlib.h> // Để sử dụng hàm atoi
 
 /* USER CODE END Includes */
 
@@ -149,71 +150,71 @@ void Load_Factory_Map(void) {
     // Bạn KHÔNG CẦN khai báo ma trận 100x100 toàn số 99999 nữa.
     // Đường nào có thật trên bản đồ thì bạn mới AddEdge.
     
-    // Từ Node A (0)
-    Map_AddEdge(&factory_map, 0, 11, 3, DIR_STRAIGHT);
+    // Từ Node N00 (0)
+    Map_AddEdge(&factory_map, N00, N11, 3, DIR_STRAIGHT);
     
-    // Từ Node B (1)
-    Map_AddEdge(&factory_map, 1, 12, 3, DIR_STRAIGHT);
+    // Từ Node N01 (1)
+    Map_AddEdge(&factory_map, N01, N12, 3, DIR_STRAIGHT);
 
-    // Từ Node C (2)
-    Map_AddEdge(&factory_map, 2, 11, 3, DIR_STRAIGHT);
+    // Từ Node N02 (2)
+    Map_AddEdge(&factory_map, N02, N11, 3, DIR_RIGHT);    // Ví dụ: Ngã rẽ phải
 
-    // Từ Node D (3)
-    Map_AddEdge(&factory_map, 3, 12, 3, DIR_STRAIGHT);
+    // Từ Node N03 (3)
+    Map_AddEdge(&factory_map, N03, N12, 3, DIR_LEFT);     // Ví dụ: Ngã rẽ trái
 
-    // Từ Node E (4)
-    Map_AddEdge(&factory_map, 4, 13, 3, DIR_STRAIGHT);
+    // Từ Node N04 (4)
+    Map_AddEdge(&factory_map, N04, N13, 3, DIR_STRAIGHT);
 
-    // Từ Node F (5)
-    Map_AddEdge(&factory_map, 5, 14, 3, DIR_STRAIGHT);
+    // Từ Node N05 (5)
+    Map_AddEdge(&factory_map, N05, N14, 3, DIR_STRAIGHT);
 
-    // Từ Node G (6)
-    Map_AddEdge(&factory_map, 6, 7, 15, DIR_NONE); // Code cũ của bạn chỗ này hướng là INF
-    Map_AddEdge(&factory_map, 6, 15, 15, DIR_STRAIGHT);
+    // Từ Node N06 (6) - Ngã ba chữ T
+    Map_AddEdge(&factory_map, N06, N07, 15, DIR_RIGHT); 
+    Map_AddEdge(&factory_map, N06, N15, 15, DIR_LEFT);
 
-    // Từ Node H (7)
-    Map_AddEdge(&factory_map, 7, 6, 15, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 7, 8, 10, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 7, 11, 7, DIR_STRAIGHT);
+    // Từ Node N07 (7) - Ngã tư trung tâm
+    Map_AddEdge(&factory_map, N07, N06, 15, DIR_LEFT);
+    Map_AddEdge(&factory_map, N07, N08, 10, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N07, N11, 7,  DIR_RIGHT);
 
-    // Từ Node I (8)
-    Map_AddEdge(&factory_map, 8, 7, 10, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 8, 13, 7, DIR_NONE);
+    // Từ Node N08 (8)
+    Map_AddEdge(&factory_map, N08, N07, 10, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N08, N13, 7,  DIR_LEFT);
 
-    // Từ Node J (9)
-    Map_AddEdge(&factory_map, 9, 10, 10, DIR_NONE);
-    Map_AddEdge(&factory_map, 9, 14, 7, DIR_STRAIGHT);
+    // Từ Node N09 (9)
+    Map_AddEdge(&factory_map, N09, N10, 10, DIR_REVERSE); // Đi ngõ cụt phải quay đầu
+    Map_AddEdge(&factory_map, N09, N14, 7,  DIR_RIGHT);
 
-    // Từ Node K (10)
-    Map_AddEdge(&factory_map, 10, 9, 10, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 10, 12, 7, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 10, 15, 15, DIR_NONE);
+    // Từ Node N10 (10)
+    Map_AddEdge(&factory_map, N10, N09, 10, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N10, N12, 7,  DIR_LEFT);
+    Map_AddEdge(&factory_map, N10, N15, 15, DIR_RIGHT);
 
-    // Từ Node L (11)
-    Map_AddEdge(&factory_map, 11, 0, 3, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 11, 2, 3, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 11, 7, 7, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 11, 12, 5, DIR_REVERSE);
+    // Từ Node N11 (11) - Ngã tư lớn
+    Map_AddEdge(&factory_map, N11, N00, 3, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N11, N02, 3, DIR_LEFT);
+    Map_AddEdge(&factory_map, N11, N07, 7, DIR_RIGHT);
+    Map_AddEdge(&factory_map, N11, N12, 5, DIR_REVERSE);  // Đi nhầm phải quay đầu
 
-    // Từ Node M (12)
-    Map_AddEdge(&factory_map, 12, 1, 3, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 12, 3, 3, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 12, 10, 7, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 12, 11, 5, DIR_STRAIGHT);
+    // Từ Node N12 (12)
+    Map_AddEdge(&factory_map, N12, N01, 3, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N12, N03, 3, DIR_RIGHT);
+    Map_AddEdge(&factory_map, N12, N10, 7, DIR_LEFT);
+    Map_AddEdge(&factory_map, N12, N11, 5, DIR_STRAIGHT);
 
-    // Từ Node N (13)
-    Map_AddEdge(&factory_map, 13, 4, 3, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 13, 8, 7, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 13, 14, 5, DIR_STRAIGHT);
+    // Từ Node N13 (13)
+    Map_AddEdge(&factory_map, N13, N04, 3, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N13, N08, 7, DIR_RIGHT);
+    Map_AddEdge(&factory_map, N13, N14, 5, DIR_LEFT);
 
-    // Từ Node O (14)
-    Map_AddEdge(&factory_map, 14, 5, 3, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 14, 9, 7, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, 14, 13, 5, DIR_STRAIGHT);
+    // Từ Node N14 (14)
+    Map_AddEdge(&factory_map, N14, N05, 3, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N14, N09, 7, DIR_LEFT);
+    Map_AddEdge(&factory_map, N14, N13, 5, DIR_RIGHT);
 
-    // Từ Node P (15)
-    Map_AddEdge(&factory_map, 15, 6, 15, DIR_NONE);
-    Map_AddEdge(&factory_map, 15, 10, 15, DIR_STRAIGHT);
+    // Từ Node N15 (15)
+    Map_AddEdge(&factory_map, N15, N06, 15, DIR_RIGHT);
+    Map_AddEdge(&factory_map, N15, N10, 15, DIR_LEFT);
 }
 /* USER CODE END 0 */
 
@@ -305,9 +306,16 @@ int main(void) {
     if (qr50.Data.New_Data_Flag) {
         qr50.Data.New_Data_Flag = false;
         
-        // Trích xuất ID từ chuỗi quét được (Giả sử định dạng mã là 'A', 'B', 'C'...)
-        // Trừ đi 'A' để ra index: 'A' -> 0, 'B' -> 1...
-        uint16_t read_node_id = qr50.Data.Data_Buffer[0] - 'A'; 
+        // Lọc rác: Chỉ xử lý nếu chuỗi bắt đầu bằng chữ 'N'
+        if (qr50.Data.Data_Buffer[0] != 'N') {
+            continue; // Bỏ qua nếu đọc trúng mã vạch rác
+        }
+        
+        // Trích xuất ID từ định dạng "N00", "N05", "N99"...
+        // Bỏ qua ký tự 'N' ở đầu, chuyển phần số thành int
+        uint16_t read_node_id = atoi((char *)&qr50.Data.Data_Buffer[1]); 
+        
+        if (read_node_id >= MAX_NODES) continue; // Cầu chì an toàn
         
         if (read_node_id == destination_node) {
             // Đã đến đích
@@ -351,19 +359,19 @@ int main(void) {
             
             switch (next_dir) {
                 case DIR_LEFT: 
-                    /* AGV_TurnLeft(); */ 
+                    AGV_TurnLeft(&h_agv);
                     break;
                 case DIR_RIGHT: 
-                    /* AGV_TurnRight(); */ 
+                    AGV_TurnRight(&h_agv);
                     break;
                 case DIR_STRAIGHT: 
-                    /* Tiếp tục đi thẳng */ 
+                    /* Tiếp tục bám vạch đi thẳng */ 
                     break;
                 case DIR_REVERSE: 
-                    /* AGV_Turn180(); */ 
+                    AGV_Turn180(&h_agv);
                     break;
                 case DIR_STOP: 
-                    /* AGV_Stop(); */ 
+                    AGV_Stop(&h_agv);
                     break;
                 default: 
                     break;
