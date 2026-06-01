@@ -29,8 +29,13 @@ extern "C" {
 
 /* USER CODE BEGIN Exported types */
 typedef struct {
-    TIM_HandleTypeDef *htim;
+    TIM_HandleTypeDef *htim; // PWM Timer
     uint32_t Channel;
+    GPIO_TypeDef *DIR_Port;
+    uint16_t DIR_Pin;
+    GPIO_TypeDef *EN_Port;
+    uint16_t EN_Pin;
+    
     int16_t Speed;
     uint8_t Direction;
 } Motor_HandleTypeDef;
@@ -45,7 +50,9 @@ typedef struct {
 /* USER CODE END Exported macro */
 
 /* Exported functions prototypes ---------------------------------------------*/
-void Motor_Init(Motor_HandleTypeDef *hmotor, TIM_HandleTypeDef *htim, uint32_t Channel);
+void Motor_Init(Motor_HandleTypeDef *hmotor, TIM_HandleTypeDef *htim, uint32_t Channel,
+                GPIO_TypeDef *DIR_Port, uint16_t DIR_Pin,
+                GPIO_TypeDef *EN_Port, uint16_t EN_Pin);
 void Motor_SetSpeed(Motor_HandleTypeDef *hmotor, int16_t speed);
 void Motor_Stop(Motor_HandleTypeDef *hmotor);
 
