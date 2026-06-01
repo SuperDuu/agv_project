@@ -79,6 +79,9 @@ uint16_t path_length = 0;
 int path_index = 0;
 uint16_t current_node = 0;
 uint16_t destination_node = 15; // Ví dụ: Điểm P
+AGV_Heading_t current_heading = HEAD_NORTH; // Biến la bàn theo dõi góc nhìn hiện tại
+bool agv_follow_line_enable = true; // Cờ khóa/mở ngắt bám vạch
+static uint16_t last_processed_node = 0xFFFF; // Cờ chống quét trùng QR
 
 GPIO_TypeDef *sensor_ports[16] = {
     B_In35_GPIO_Port, B_In34_GPIO_Port, B_In33_GPIO_Port, B_In32_GPIO_Port,
@@ -150,71 +153,73 @@ void Load_Factory_Map(void) {
     // Bạn KHÔNG CẦN khai báo ma trận 100x100 toàn số 99999 nữa.
     // Đường nào có thật trên bản đồ thì bạn mới AddEdge.
     
+    // Giả sử: Bắc (0), Đông (1), Nam (2), Tây (3)
+    
     // Từ Node N00 (0)
-    Map_AddEdge(&factory_map, N00, N11, 3, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N00, N11, 3, HEAD_EAST);
     
     // Từ Node N01 (1)
-    Map_AddEdge(&factory_map, N01, N12, 3, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N01, N12, 3, HEAD_EAST);
 
     // Từ Node N02 (2)
-    Map_AddEdge(&factory_map, N02, N11, 3, DIR_RIGHT);    // Ví dụ: Ngã rẽ phải
+    Map_AddEdge(&factory_map, N02, N11, 3, HEAD_SOUTH);   
 
     // Từ Node N03 (3)
-    Map_AddEdge(&factory_map, N03, N12, 3, DIR_LEFT);     // Ví dụ: Ngã rẽ trái
+    Map_AddEdge(&factory_map, N03, N12, 3, HEAD_NORTH);    
 
     // Từ Node N04 (4)
-    Map_AddEdge(&factory_map, N04, N13, 3, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N04, N13, 3, HEAD_EAST);
 
     // Từ Node N05 (5)
-    Map_AddEdge(&factory_map, N05, N14, 3, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N05, N14, 3, HEAD_EAST);
 
     // Từ Node N06 (6) - Ngã ba chữ T
-    Map_AddEdge(&factory_map, N06, N07, 15, DIR_RIGHT); 
-    Map_AddEdge(&factory_map, N06, N15, 15, DIR_LEFT);
+    Map_AddEdge(&factory_map, N06, N07, 15, HEAD_SOUTH); 
+    Map_AddEdge(&factory_map, N06, N15, 15, HEAD_NORTH);
 
     // Từ Node N07 (7) - Ngã tư trung tâm
-    Map_AddEdge(&factory_map, N07, N06, 15, DIR_LEFT);
-    Map_AddEdge(&factory_map, N07, N08, 10, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, N07, N11, 7,  DIR_RIGHT);
+    Map_AddEdge(&factory_map, N07, N06, 15, HEAD_NORTH);
+    Map_AddEdge(&factory_map, N07, N08, 10, HEAD_EAST);
+    Map_AddEdge(&factory_map, N07, N11, 7,  HEAD_SOUTH);
 
     // Từ Node N08 (8)
-    Map_AddEdge(&factory_map, N08, N07, 10, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, N08, N13, 7,  DIR_LEFT);
+    Map_AddEdge(&factory_map, N08, N07, 10, HEAD_WEST);
+    Map_AddEdge(&factory_map, N08, N13, 7,  HEAD_NORTH);
 
     // Từ Node N09 (9)
-    Map_AddEdge(&factory_map, N09, N10, 10, DIR_REVERSE); // Đi ngõ cụt phải quay đầu
-    Map_AddEdge(&factory_map, N09, N14, 7,  DIR_RIGHT);
+    Map_AddEdge(&factory_map, N09, N10, 10, HEAD_WEST); 
+    Map_AddEdge(&factory_map, N09, N14, 7,  HEAD_SOUTH);
 
     // Từ Node N10 (10)
-    Map_AddEdge(&factory_map, N10, N09, 10, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, N10, N12, 7,  DIR_LEFT);
-    Map_AddEdge(&factory_map, N10, N15, 15, DIR_RIGHT);
+    Map_AddEdge(&factory_map, N10, N09, 10, HEAD_EAST);
+    Map_AddEdge(&factory_map, N10, N12, 7,  HEAD_NORTH);
+    Map_AddEdge(&factory_map, N10, N15, 15, HEAD_SOUTH);
 
     // Từ Node N11 (11) - Ngã tư lớn
-    Map_AddEdge(&factory_map, N11, N00, 3, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, N11, N02, 3, DIR_LEFT);
-    Map_AddEdge(&factory_map, N11, N07, 7, DIR_RIGHT);
-    Map_AddEdge(&factory_map, N11, N12, 5, DIR_REVERSE);  // Đi nhầm phải quay đầu
+    Map_AddEdge(&factory_map, N11, N00, 3, HEAD_WEST);
+    Map_AddEdge(&factory_map, N11, N02, 3, HEAD_NORTH);
+    Map_AddEdge(&factory_map, N11, N07, 7, HEAD_NORTH); // Sửa tạm: Nếu N07 nằm hướng Bắc
+    Map_AddEdge(&factory_map, N11, N12, 5, HEAD_EAST);  
 
     // Từ Node N12 (12)
-    Map_AddEdge(&factory_map, N12, N01, 3, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, N12, N03, 3, DIR_RIGHT);
-    Map_AddEdge(&factory_map, N12, N10, 7, DIR_LEFT);
-    Map_AddEdge(&factory_map, N12, N11, 5, DIR_STRAIGHT);
+    Map_AddEdge(&factory_map, N12, N01, 3, HEAD_WEST);
+    Map_AddEdge(&factory_map, N12, N03, 3, HEAD_SOUTH);
+    Map_AddEdge(&factory_map, N12, N10, 7, HEAD_SOUTH);
+    Map_AddEdge(&factory_map, N12, N11, 5, HEAD_WEST);
 
     // Từ Node N13 (13)
-    Map_AddEdge(&factory_map, N13, N04, 3, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, N13, N08, 7, DIR_RIGHT);
-    Map_AddEdge(&factory_map, N13, N14, 5, DIR_LEFT);
+    Map_AddEdge(&factory_map, N13, N04, 3, HEAD_WEST);
+    Map_AddEdge(&factory_map, N13, N08, 7, HEAD_SOUTH);
+    Map_AddEdge(&factory_map, N13, N14, 5, HEAD_NORTH);
 
     // Từ Node N14 (14)
-    Map_AddEdge(&factory_map, N14, N05, 3, DIR_STRAIGHT);
-    Map_AddEdge(&factory_map, N14, N09, 7, DIR_LEFT);
-    Map_AddEdge(&factory_map, N14, N13, 5, DIR_RIGHT);
+    Map_AddEdge(&factory_map, N14, N05, 3, HEAD_WEST);
+    Map_AddEdge(&factory_map, N14, N09, 7, HEAD_NORTH);
+    Map_AddEdge(&factory_map, N14, N13, 5, HEAD_SOUTH);
 
     // Từ Node N15 (15)
-    Map_AddEdge(&factory_map, N15, N06, 15, DIR_RIGHT);
-    Map_AddEdge(&factory_map, N15, N10, 15, DIR_LEFT);
+    Map_AddEdge(&factory_map, N15, N06, 15, HEAD_SOUTH);
+    Map_AddEdge(&factory_map, N15, N10, 15, HEAD_NORTH);
 }
 /* USER CODE END 0 */
 
@@ -317,14 +322,20 @@ int main(void) {
         
         if (read_node_id >= MAX_NODES) continue; // Cầu chì an toàn
         
+        // BUG 2: Chống quét trùng mã QR (Debounce)
+        if (read_node_id == last_processed_node) continue; 
+        last_processed_node = read_node_id;
+        
         if (read_node_id == destination_node) {
-            // Đã đến đích
-            // AGV_Stop(&h_agv);
+            // BUG 1: Lỗi "Tông xuyên đích". Phải ngắt FollowLine và phanh cứng!
+            agv_follow_line_enable = false;
+            AGV_Stop(&h_agv);
             continue;
         }
 
         // Kiểm tra xem xe có chạy đúng tuyến đường mong muốn không
-        if (path_index < path_length - 1 && read_node_id == current_path[path_index + 1]) {
+        // BUG 4: Chống lỗi Tràn số (Underflow) nếu path_length = 0
+        if (path_length > 0 && path_index < path_length - 1 && read_node_id == current_path[path_index + 1]) {
             // Đi ĐÚNG đường! -> Cập nhật vị trí hiện tại
             path_index++;
             current_node = read_node_id;
@@ -345,37 +356,50 @@ int main(void) {
             if (found_path) {
                 path_index = 0; // Bắt đầu chạy theo mảng current_path mới
             } else {
-                // LỖI: Đi vào đường cụt, không thể về đích!
-                // Nháy còi cảnh báo, dừng hệ thống...
+                // BUG 6: Lỗi "Mất lái đường cụt". Phải phanh xe!
+                agv_follow_line_enable = false;
+                AGV_Stop(&h_agv);
                 continue; 
             }
         }
 
         // --- XỬ LÝ CHUYỂN HƯỚNG ---
-        // (Áp dụng chung cho cả đi đúng đường HOẶC vừa được tính lại đường mới)
-        if (path_index < path_length - 1) {
+        if (path_length > 0 && path_index < path_length - 1) {
             uint16_t next_node = current_path[path_index + 1];
-            AGV_Direction_t next_dir = Routing_GetDirection(&factory_map, current_node, next_node);
+            AGV_Heading_t target_heading = Routing_GetHeading(&factory_map, current_node, next_node);
             
-            switch (next_dir) {
-                case DIR_LEFT: 
+            // Tính toán chênh lệch hướng (0: Thẳng, 1: Phải, 2: Quay đầu, 3: Trái)
+            int diff = (target_heading - current_heading + 4) % 4;
+            AGV_Action_t next_action = (AGV_Action_t)diff;
+            
+            // BUG 5: Xung đột Ngắt TIM6. Khóa PID bám vạch khi đang rẽ!
+            agv_follow_line_enable = false;
+            
+            switch (next_action) {
+                case ACT_TURN_LEFT: 
                     AGV_TurnLeft(&h_agv);
                     break;
-                case DIR_RIGHT: 
+                case ACT_TURN_RIGHT: 
                     AGV_TurnRight(&h_agv);
                     break;
-                case DIR_STRAIGHT: 
+                case ACT_STRAIGHT: 
                     /* Tiếp tục bám vạch đi thẳng */ 
                     break;
-                case DIR_REVERSE: 
+                case ACT_TURN_180: 
                     AGV_Turn180(&h_agv);
                     break;
-                case DIR_STOP: 
+                case ACT_STOP: 
                     AGV_Stop(&h_agv);
                     break;
                 default: 
                     break;
             }
+            
+            // Cập nhật lại góc nhìn la bàn của xe sau khi đã rẽ
+            current_heading = target_heading;
+            
+            // Rẽ xong, cho phép ngắt TIM6 tiếp tục bám vạch
+            agv_follow_line_enable = true;
         }
     }
   }
@@ -1067,8 +1091,10 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
   if (htim->Instance == TIM6) {
-    // Ngắt PID mỗi 10ms - Đọc Line và điều khiển Motor
-    AGV_FollowLine(&h_agv);
+    // Ngắt PID mỗi 10ms - Chỉ điều khiển Motor nếu cờ được bật
+    if (agv_follow_line_enable) {
+        AGV_FollowLine(&h_agv);
+    }
   }
 }
 /* USER CODE END 4 */
