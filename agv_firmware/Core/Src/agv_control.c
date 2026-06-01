@@ -10,6 +10,13 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "agv_control.h"
+#include <stddef.h>
+#include <stdbool.h>
+
+extern bool agv_follow_line_enable;
+extern bool is_at_intersection;
+extern uint32_t intersection_time;
+extern uint32_t last_leave_intersection_time;
 
 /* USER CODE BEGIN 0 */
 
@@ -150,10 +157,30 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
   // Read sensors
   uint16_t line_val = LineSensor_Read(hagv->line_sensor);
 
-  // Stop condition: all 1s
-  if (line_val == 0xFFFF) {
-    AGV_Stop(hagv);
+  // Stop condition: all 1s (mạch kéo Pull-up đứt dây) hoặc all 0s (Mất vạch / đứt dây Pull-down)
+  if (line_val == 0xFFFF || line_val == 0x0000) {
+    static uint32_t lost_line_time = 0;
+    if (lost_line_time == 0) lost_line_time = HAL_GetTick();
+    
+    // Nếu mất vạch liên tục quá 1 giây -> Lỗi phần cứng hoặc văng khỏi line -> Phanh gấp!
+    if (HAL_GetTick() - lost_line_time > 1000) {
+        agv_follow_line_enable = false; 
+        AGV_Stop(hagv);
+    }
     return;
+  } else {
+    lost_line_time = 0; // Đã tìm lại được vạch, reset bộ đếm
+  }
+
+  // CẢM BIẾN NGÃ TƯ: Kiểm tra 2 mắt ngoài cùng (Bit 15 và Bit 0)
+  // Tính năng an toàn (Blind Zone): Bỏ qua ngã tư trong vòng 1.5 giây sau khi vừa rời đi 
+  // để tránh đọc lại chính ngã tư cũ hoặc vạch xước gần đó.
+  if (((line_val & 0x8001) != 0) && (HAL_GetTick() - last_leave_intersection_time > 1500)) {
+      AGV_Stop(hagv);
+      agv_follow_line_enable = false; // Phanh cứng chờ xử lý QR
+      is_at_intersection = true;
+      intersection_time = HAL_GetTick();
+      return;
   }
 
   // Calculate error
@@ -223,14 +250,29 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
   HAL_Delay(500);
 
   // Giai đoạn 2: Tiếp tục xoay và chờ bắt vạch mới
+  uint32_t start_time = HAL_GetTick();
+  int debounce_cnt = 0;
+  
   while (1) {
     line_val = LineSensor_Read(hagv->line_sensor);
 
     // 0x0180 tương đương nhị phân là 0000 0001 1000 0000
     // -> Khi vạch từ đè lên 2 cảm biến ở TÂM xe (bit 7 và 8), cờ này sẽ khác 0
     if ((line_val & 0x0180) != 0) {
-      break; // Đã bắt được vạch 90 độ! Thoát vòng lặp.
+        debounce_cnt++;
+        if (debounce_cnt >= 3) { // Chống nhiễu: Phải đọc thấy vạch 3 lần liên tiếp
+            break; // Đã bắt được vạch 90 độ! Thoát vòng lặp.
+        }
+    } else {
+        debounce_cnt = 0;
     }
+    
+    // Watchdog Timer: Nếu xoay quá 3 giây không bắt được vạch -> Lỗi trượt bánh hoặc đứt vạch
+    if (HAL_GetTick() - start_time > 3000) {
+        agv_follow_line_enable = false; // Báo lỗi toàn hệ thống
+        break;
+    }
+    
     HAL_Delay(5); // Đọc cảm biến mỗi 5ms
   }
 
@@ -258,10 +300,21 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   HAL_Delay(500);
 
   // Chờ bắt vạch mới
+  uint32_t start_time = HAL_GetTick();
+  int debounce_cnt = 0;
+  
   while (1) {
     line_val = LineSensor_Read(hagv->line_sensor);
     if ((line_val & 0x0180) != 0) {
-      break;
+        debounce_cnt++;
+        if (debounce_cnt >= 3) break;
+    } else {
+        debounce_cnt = 0;
+    }
+    
+    if (HAL_GetTick() - start_time > 3000) {
+        agv_follow_line_enable = false; 
+        break;
     }
     HAL_Delay(5);
   }
@@ -292,10 +345,21 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
   // lưng).
   HAL_Delay(1200);
 
+  uint32_t start_time = HAL_GetTick();
+  int debounce_cnt = 0;
+  
   while (1) {
     line_val = LineSensor_Read(hagv->line_sensor);
     if ((line_val & 0x0180) != 0) {
-      break; // Đã bắt được vạch sau lưng
+        debounce_cnt++;
+        if (debounce_cnt >= 3) break; // Đã bắt được vạch sau lưng
+    } else {
+        debounce_cnt = 0;
+    }
+    
+    if (HAL_GetTick() - start_time > 4000) { // Quay 180 độ cần nhiều thời gian hơn (4s)
+        agv_follow_line_enable = false; 
+        break;
     }
     HAL_Delay(5);
   }
