@@ -9,14 +9,14 @@ void Map_Init(AGV_Map_t *map) {
     }
 }
 
-void Map_AddEdge(AGV_Map_t *map, uint16_t from_id, uint16_t to_id, uint16_t dist, AGV_Direction_t dir) {
+void Map_AddEdge(AGV_Map_t *map, uint16_t from_id, uint16_t to_id, uint16_t dist, AGV_Heading_t hdg) {
     if (from_id >= MAX_NODES || to_id >= MAX_NODES) return;
     
     Node_t *node = &map->nodes[from_id];
     if (node->edge_count < MAX_EDGES_PER_NODE) {
         node->edges[node->edge_count].target_node_id = to_id;
         node->edges[node->edge_count].distance = dist;
-        node->edges[node->edge_count].direction = dir;
+        node->edges[node->edge_count].heading = hdg;
         node->edge_count++;
     }
 }
@@ -85,14 +85,14 @@ bool Routing_Dijkstra(AGV_Map_t *map, uint16_t start_id, uint16_t target_id, uin
     return true;
 }
 
-AGV_Direction_t Routing_GetDirection(AGV_Map_t *map, uint16_t current_id, uint16_t next_id) {
-    if (current_id >= MAX_NODES) return DIR_NONE;
+AGV_Heading_t Routing_GetHeading(AGV_Map_t *map, uint16_t current_id, uint16_t next_id) {
+    if (current_id >= MAX_NODES) return HEAD_NONE;
     
     Node_t *node = &map->nodes[current_id];
     for (int e = 0; e < node->edge_count; e++) {
         if (node->edges[e].target_node_id == next_id) {
-            return node->edges[e].direction;
+            return node->edges[e].heading;
         }
     }
-    return DIR_NONE;
+    return HEAD_NONE;
 }
