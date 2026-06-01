@@ -208,6 +208,11 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
 
   uint16_t line_val;
 
+  // Bù trừ cơ khí: Chạy thẳng 300ms để đẩy trục bánh xe vào giữa ngã tư
+  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
+  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
+  HAL_Delay(300);
+
   // Giai đoạn 1: Xoay mù để thoát vạch cũ
   // Rẽ trái -> Bánh trái lùi, Bánh phải tiến
   Motor_SetSpeed(hagv->motor_left, -500);
@@ -240,6 +245,11 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
 
   uint16_t line_val;
 
+  // Bù trừ cơ khí: Chạy thẳng 300ms để đẩy trục bánh xe vào giữa ngã tư
+  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
+  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
+  HAL_Delay(300);
+
   // Rẽ phải -> Bánh trái tiến, Bánh phải lùi
   Motor_SetSpeed(hagv->motor_left, 500);
   Motor_SetSpeed(hagv->motor_right, -500);
@@ -265,6 +275,11 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
     return;
 
   uint16_t line_val;
+
+  // Bù trừ cơ khí: Chạy thẳng 300ms để đẩy trục bánh xe vào giữa ngã tư
+  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
+  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
+  HAL_Delay(300);
 
   // Xoay 180 độ (Thường chọn xoay phải cho thuận)
   Motor_SetSpeed(hagv->motor_left, 500);
