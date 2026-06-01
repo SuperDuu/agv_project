@@ -45,28 +45,52 @@ SPI_HandleTypeDef hspi1;
 
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim6;
 
 UART_HandleTypeDef huart5;
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
+DMA_NodeTypeDef Node_GPDMA1_Channel0;
+DMA_QListTypeDef List_GPDMA1_Channel0;
+DMA_HandleTypeDef handle_GPDMA1_Channel0;
 
 /* USER CODE BEGIN PV */
+AGV_HandleTypeDef h_agv;
+Motor_HandleTypeDef m_left, m_right;
+LineSensor_HandleTypeDef line_ss;
+Pid_data pid_ctrl;
 
+uint8_t rx_scan[2]; // Mảng nhận dữ liệu từ USART3 qua DMA
+
+GPIO_TypeDef *sensor_ports[16] = {
+    B_In35_GPIO_Port, B_In34_GPIO_Port, B_In33_GPIO_Port, B_In32_GPIO_Port, 
+    B_In31_GPIO_Port, B_In30_GPIO_Port, B_In27_GPIO_Port, B_In26_GPIO_Port, 
+    B_In25_GPIO_Port, B_In24_GPIO_Port, B_In23_GPIO_Port, B_In22_GPIO_Port, 
+    B_In21_GPIO_Port, B_In20_GPIO_Port, B_In17_GPIO_Port, B_In16_GPIO_Port
+};
+uint16_t sensor_pins[16] = {
+    B_In35_Pin, B_In34_Pin, B_In33_Pin, B_In32_Pin, 
+    B_In31_Pin, B_In30_Pin, B_In27_Pin, B_In26_Pin, 
+    B_In25_Pin, B_In24_Pin, B_In23_Pin, B_In22_Pin, 
+    B_In21_Pin, B_In20_Pin, B_In17_Pin, B_In16_Pin
+};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_GPDMA1_Init(void);
 static void MX_ICACHE_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_UART5_Init(void);
 static void MX_USART1_UART_Init(void);
-static void MX_USART2_UART_Init(void);
 static void MX_USART3_UART_Init(void);
+static void MX_TIM6_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -138,16 +162,38 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_GPDMA1_Init();
   MX_ICACHE_Init();
   MX_TIM3_Init();
   MX_TIM4_Init();
   MX_SPI1_Init();
   MX_UART5_Init();
   MX_USART1_UART_Init();
-  MX_USART2_UART_Init();
   MX_USART3_UART_Init();
+  MX_TIM6_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  LineSensor_Init(&line_ss, sensor_ports, sensor_pins);
 
+  // Khởi tạo Motor trái (PWM CH1) và phải (PWM CH2) trên TIM4
+  Motor_Init(&m_left,  &htim4, TIM_CHANNEL_1, B_Out23_GPIO_Port, B_Out23_Pin, B_Out22_GPIO_Port, B_Out22_Pin);
+  Motor_Init(&m_right, &htim4, TIM_CHANNEL_2, B_Out21_GPIO_Port, B_Out21_Pin, B_Out20_GPIO_Port, B_Out20_Pin);
+
+  // Cấu hình tham số PID dò vạch
+  pid_ctrl.Kp = 55.0f;
+  pid_ctrl.Ki = 0.0f;
+  pid_ctrl.Kd = 10.0f;
+  pid_ctrl.i = 0.0f;
+
+  // Base speed = 300
+  AGV_Init(&h_agv, &m_left, &m_right, &line_ss, &pid_ctrl, 300.0f);
+
+  // Khởi động GPDMA nhận dữ liệu UART liên tục (Circular mode)
+  HAL_UART_Receive_DMA(&huart3, rx_scan, 2);
+
+  // Bật ngắt Timer 6 (nếu bạn dùng TIM6 cho ngắt PID)
+  extern TIM_HandleTypeDef htim6;
+  HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -157,8 +203,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  Toggle_Outputs();
-	  HAL_Delay(500);
+	  // Toggle_Outputs();
+	  // HAL_Delay(500);
   }
   /* USER CODE END 3 */
 }
@@ -240,6 +286,34 @@ void PeriphCommonClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief GPDMA1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPDMA1_Init(void)
+{
+
+  /* USER CODE BEGIN GPDMA1_Init 0 */
+
+  /* USER CODE END GPDMA1_Init 0 */
+
+  /* Peripheral clock enable */
+  __HAL_RCC_GPDMA1_CLK_ENABLE();
+
+  /* GPDMA1 interrupt Init */
+    HAL_NVIC_SetPriority(GPDMA1_Channel0_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(GPDMA1_Channel0_IRQn);
+
+  /* USER CODE BEGIN GPDMA1_Init 1 */
+
+  /* USER CODE END GPDMA1_Init 1 */
+  /* USER CODE BEGIN GPDMA1_Init 2 */
+
+  /* USER CODE END GPDMA1_Init 2 */
+
 }
 
 /**
@@ -391,9 +465,9 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 0;
+  htim4.Init.Prescaler = 249;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 65535;
+  htim4.Init.Period = 999;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
@@ -430,6 +504,44 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 2 */
   HAL_TIM_MspPostInit(&htim4);
+
+}
+
+/**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 249;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 9999;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
 
 }
 
@@ -690,9 +802,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : B_In0_Pin B_In1_Pin B_In2_Pin B_In3_Pin
-                           B_In4_Pin B_In5_Pin B_In30_Pin */
+                           B_In4_Pin B_In5_Pin */
   GPIO_InitStruct.Pin = B_In0_Pin|B_In1_Pin|B_In2_Pin|B_In3_Pin
-                          |B_In4_Pin|B_In5_Pin|B_In30_Pin;
+                          |B_In4_Pin|B_In5_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
@@ -729,20 +841,32 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : B_In16_Pin B_In15_Pin B_In26_Pin B_In27_Pin
-                           B_In35_Pin B_In34_Pin */
-  GPIO_InitStruct.Pin = B_In16_Pin|B_In15_Pin|B_In26_Pin|B_In27_Pin
-                          |B_In35_Pin|B_In34_Pin;
+  /*Configure GPIO pin : B_In30_Pin */
+  GPIO_InitStruct.Pin = B_In30_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(B_In30_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : B_In16_Pin B_In26_Pin B_In27_Pin B_In35_Pin
+                           B_In34_Pin */
+  GPIO_InitStruct.Pin = B_In16_Pin|B_In26_Pin|B_In27_Pin|B_In35_Pin
+                          |B_In34_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : B_In15_Pin */
+  GPIO_InitStruct.Pin = B_In15_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+  HAL_GPIO_Init(B_In15_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : B_In17_Pin B_In21_Pin B_In20_Pin B_In23_Pin
                            B_In22_Pin B_In25_Pin B_In24_Pin */
   GPIO_InitStruct.Pin = B_In17_Pin|B_In21_Pin|B_In20_Pin|B_In23_Pin
                           |B_In22_Pin|B_In25_Pin|B_In24_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
   /*Configure GPIO pins : T_ADC_SDO_Pin T_ENC_SDO_Pin */
@@ -772,7 +896,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : B_In32_Pin B_In31_Pin B_In33_Pin */
   GPIO_InitStruct.Pin = B_In32_Pin|B_In31_Pin|B_In33_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -781,7 +905,12 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+  if (htim->Instance == TIM6) {
+      // Ngắt PID mỗi 10ms - Đọc Line và điều khiển Motor
+      AGV_FollowLine(&h_agv);
+  }
+}
 /* USER CODE END 4 */
 
 /**
