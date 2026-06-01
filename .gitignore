@@ -1,0 +1,11 @@
+agv_firmware/Debug/
+agv_firmware/.vscode/
+.vscode/
+
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
