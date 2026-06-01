@@ -1,5 +1,0 @@
-../Core/Src/agv_control.c:21:6:AGV_Init	32	static
-../Core/Src/agv_control.c:35:14:AGV_ComputePID	24	static
-../Core/Src/agv_control.c:49:7:AGV_GetLineError	16	static
-../Core/Src/agv_control.c:108:6:AGV_FollowLine	32	static
-../Core/Src/agv_control.c:149:6:AGV_Stop	16	static
