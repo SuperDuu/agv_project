@@ -60,8 +60,8 @@ all: main-build
 main-build: agv_firmware.elf secondary-outputs
 
 # Tool invocations
-agv_firmware.elf agv_firmware.map: $(OBJS) $(USER_OBJS) /home/du/STM32CubeIDE/workspace_1.19.0/agv_firmware/STM32H563ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "agv_firmware.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m33 -T"/home/du/STM32CubeIDE/workspace_1.19.0/agv_firmware/STM32H563ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="agv_firmware.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+agv_firmware.elf agv_firmware.map: $(OBJS) $(USER_OBJS) /home/du/Desktop/agv_project/agv_firmware/STM32H563ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "agv_firmware.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m33 -T"/home/du/Desktop/agv_project/agv_firmware/STM32H563ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="agv_firmware.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
