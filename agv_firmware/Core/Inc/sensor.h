@@ -33,6 +33,11 @@ typedef struct {
     uint16_t GPIO_Pin;
     uint8_t State;
 } Sensor_HandleTypeDef;
+
+typedef struct {
+    Sensor_HandleTypeDef sensors[16];
+    uint16_t line_value;
+} LineSensor_HandleTypeDef;
 /* USER CODE END Exported types */
 
 /* USER CODE BEGIN Exported constants */
@@ -46,6 +51,9 @@ typedef struct {
 /* Exported functions prototypes ---------------------------------------------*/
 void Sensor_Init(Sensor_HandleTypeDef *hsensor, GPIO_TypeDef *GPIO_Port, uint16_t GPIO_Pin);
 uint8_t Sensor_Read(Sensor_HandleTypeDef *hsensor);
+
+void LineSensor_Init(LineSensor_HandleTypeDef *hline, GPIO_TypeDef **ports, uint16_t *pins);
+uint16_t LineSensor_Read(LineSensor_HandleTypeDef *hline);
 
 /* USER CODE BEGIN EFP */
 
