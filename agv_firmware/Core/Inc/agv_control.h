@@ -66,6 +66,9 @@ void AGV_Init(AGV_HandleTypeDef *hagv, Motor_HandleTypeDef *m_left, Motor_Handle
 float AGV_GetLineError(uint16_t line_value, float current_error);
 void AGV_FollowLine(AGV_HandleTypeDef *hagv);
 void AGV_Stop(AGV_HandleTypeDef *hagv);
+void AGV_TurnLeft(AGV_HandleTypeDef *hagv);
+void AGV_TurnRight(AGV_HandleTypeDef *hagv);
+void AGV_Turn180(AGV_HandleTypeDef *hagv);
 
 /* USER CODE BEGIN EFP */
 
