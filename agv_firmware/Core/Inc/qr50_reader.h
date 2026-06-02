@@ -34,7 +34,7 @@ typedef struct {
 typedef struct {
     uint8_t Data_Buffer[QR50_MAX_DATA_LEN];
     uint16_t Data_Length;
-    bool New_Data_Flag;
+    volatile bool New_Data_Flag;
 } QR50_Data_t;
 
 /* 4. Overarching Handler Struct */
