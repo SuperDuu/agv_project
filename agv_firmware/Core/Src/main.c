@@ -22,11 +22,12 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "agv_control.h"
+#include "agv_routing.h"
 #include "motor.h"
 #include "qr50_reader.h"
 #include "sensor.h"
-#include "agv_routing.h"
 #include <stdlib.h> // Để sử dụng hàm atoi
+
 
 /* USER CODE END Includes */
 
@@ -79,14 +80,16 @@ uint16_t path_length = 0;
 int path_index = 0;
 uint16_t current_node = 0;
 uint16_t destination_node = 15; // Ví dụ: Điểm P
-AGV_Heading_t current_heading = HEAD_NORTH; // Biến la bàn theo dõi góc nhìn hiện tại
-bool agv_follow_line_enable = true; // Cờ khóa/mở ngắt bám vạch
+AGV_Heading_t current_heading =
+    HEAD_NORTH; // Biến la bàn theo dõi góc nhìn hiện tại
+volatile bool agv_follow_line_enable = true;  // Cờ khóa/mở ngắt bám vạch
 static uint16_t last_processed_node = 0xFFFF; // Cờ chống quét trùng QR
 
-bool is_at_intersection = false; // Cờ báo hiệu chạm ngã tư
-uint32_t intersection_time = 0;
+volatile bool is_at_intersection = false; // Cờ báo hiệu chạm ngã tư
+volatile uint32_t intersection_time = 0;
 uint16_t pending_qr_node = 0xFFFF; // Bộ đệm chứa mã QR chờ xử lý
-uint32_t last_leave_intersection_time = 0; // Blind zone: Hẹn giờ mù ngã tư cũ
+volatile uint32_t last_leave_intersection_time =
+    0; // Blind zone: Hẹn giờ mù ngã tư cũ
 
 GPIO_TypeDef *sensor_ports[16] = {
     B_In35_GPIO_Port, B_In34_GPIO_Port, B_In33_GPIO_Port, B_In32_GPIO_Port,
@@ -151,80 +154,81 @@ void Toggle_Outputs(void) {
 }
 
 void Load_Factory_Map(void) {
-    Map_Init(&factory_map);
-    factory_map.total_nodes = 16;
-    
-    // ĐÂY LÀ ĐIỂM ĂN TIỀN CỦA ADJACENCY LIST!
-    // Bạn KHÔNG CẦN khai báo ma trận 100x100 toàn số 99999 nữa.
-    // Đường nào có thật trên bản đồ thì bạn mới AddEdge.
-    
-    // Giả sử: Bắc (0), Đông (1), Nam (2), Tây (3)
-    
-    // Từ Node N00 (0)
-    Map_AddEdge(&factory_map, N00, N11, 3, HEAD_EAST);
-    
-    // Từ Node N01 (1)
-    Map_AddEdge(&factory_map, N01, N12, 3, HEAD_EAST);
+  Map_Init(&factory_map);
+  factory_map.total_nodes = 16;
 
-    // Từ Node N02 (2)
-    Map_AddEdge(&factory_map, N02, N11, 3, HEAD_SOUTH);   
+  // ĐÂY LÀ ĐIỂM ĂN TIỀN CỦA ADJACENCY LIST!
+  // Bạn KHÔNG CẦN khai báo ma trận 100x100 toàn số 99999 nữa.
+  // Đường nào có thật trên bản đồ thì bạn mới AddEdge.
 
-    // Từ Node N03 (3)
-    Map_AddEdge(&factory_map, N03, N12, 3, HEAD_NORTH);    
+  // Giả sử: Bắc (0), Đông (1), Nam (2), Tây (3)
 
-    // Từ Node N04 (4)
-    Map_AddEdge(&factory_map, N04, N13, 3, HEAD_EAST);
+  // Từ Node N00 (0)
+  Map_AddEdge(&factory_map, N00, N11, 3, HEAD_EAST);
 
-    // Từ Node N05 (5)
-    Map_AddEdge(&factory_map, N05, N14, 3, HEAD_EAST);
+  // Từ Node N01 (1)
+  Map_AddEdge(&factory_map, N01, N12, 3, HEAD_EAST);
 
-    // Từ Node N06 (6) - Ngã ba chữ T
-    Map_AddEdge(&factory_map, N06, N07, 15, HEAD_SOUTH); 
-    Map_AddEdge(&factory_map, N06, N15, 15, HEAD_NORTH);
+  // Từ Node N02 (2)
+  Map_AddEdge(&factory_map, N02, N11, 3, HEAD_SOUTH);
 
-    // Từ Node N07 (7) - Ngã tư trung tâm
-    Map_AddEdge(&factory_map, N07, N06, 15, HEAD_NORTH);
-    Map_AddEdge(&factory_map, N07, N08, 10, HEAD_EAST);
-    Map_AddEdge(&factory_map, N07, N11, 7,  HEAD_SOUTH);
+  // Từ Node N03 (3)
+  Map_AddEdge(&factory_map, N03, N12, 3, HEAD_NORTH);
 
-    // Từ Node N08 (8)
-    Map_AddEdge(&factory_map, N08, N07, 10, HEAD_WEST);
-    Map_AddEdge(&factory_map, N08, N13, 7,  HEAD_NORTH);
+  // Từ Node N04 (4)
+  Map_AddEdge(&factory_map, N04, N13, 3, HEAD_EAST);
 
-    // Từ Node N09 (9)
-    Map_AddEdge(&factory_map, N09, N10, 10, HEAD_WEST); 
-    Map_AddEdge(&factory_map, N09, N14, 7,  HEAD_SOUTH);
+  // Từ Node N05 (5)
+  Map_AddEdge(&factory_map, N05, N14, 3, HEAD_EAST);
 
-    // Từ Node N10 (10)
-    Map_AddEdge(&factory_map, N10, N09, 10, HEAD_EAST);
-    Map_AddEdge(&factory_map, N10, N12, 7,  HEAD_NORTH);
-    Map_AddEdge(&factory_map, N10, N15, 15, HEAD_SOUTH);
+  // Từ Node N06 (6) - Ngã ba chữ T
+  Map_AddEdge(&factory_map, N06, N07, 15, HEAD_SOUTH);
+  Map_AddEdge(&factory_map, N06, N15, 15, HEAD_NORTH);
 
-    // Từ Node N11 (11) - Ngã tư lớn
-    Map_AddEdge(&factory_map, N11, N00, 3, HEAD_WEST);
-    Map_AddEdge(&factory_map, N11, N02, 3, HEAD_NORTH);
-    Map_AddEdge(&factory_map, N11, N07, 7, HEAD_NORTH); // Sửa tạm: Nếu N07 nằm hướng Bắc
-    Map_AddEdge(&factory_map, N11, N12, 5, HEAD_EAST);  
+  // Từ Node N07 (7) - Ngã tư trung tâm
+  Map_AddEdge(&factory_map, N07, N06, 15, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N07, N08, 10, HEAD_EAST);
+  Map_AddEdge(&factory_map, N07, N11, 7, HEAD_SOUTH);
 
-    // Từ Node N12 (12)
-    Map_AddEdge(&factory_map, N12, N01, 3, HEAD_WEST);
-    Map_AddEdge(&factory_map, N12, N03, 3, HEAD_SOUTH);
-    Map_AddEdge(&factory_map, N12, N10, 7, HEAD_SOUTH);
-    Map_AddEdge(&factory_map, N12, N11, 5, HEAD_WEST);
+  // Từ Node N08 (8)
+  Map_AddEdge(&factory_map, N08, N07, 10, HEAD_WEST);
+  Map_AddEdge(&factory_map, N08, N13, 7, HEAD_NORTH);
 
-    // Từ Node N13 (13)
-    Map_AddEdge(&factory_map, N13, N04, 3, HEAD_WEST);
-    Map_AddEdge(&factory_map, N13, N08, 7, HEAD_SOUTH);
-    Map_AddEdge(&factory_map, N13, N14, 5, HEAD_NORTH);
+  // Từ Node N09 (9)
+  Map_AddEdge(&factory_map, N09, N10, 10, HEAD_WEST);
+  Map_AddEdge(&factory_map, N09, N14, 7, HEAD_SOUTH);
 
-    // Từ Node N14 (14)
-    Map_AddEdge(&factory_map, N14, N05, 3, HEAD_WEST);
-    Map_AddEdge(&factory_map, N14, N09, 7, HEAD_NORTH);
-    Map_AddEdge(&factory_map, N14, N13, 5, HEAD_SOUTH);
+  // Từ Node N10 (10)
+  Map_AddEdge(&factory_map, N10, N09, 10, HEAD_EAST);
+  Map_AddEdge(&factory_map, N10, N12, 7, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N10, N15, 15, HEAD_SOUTH);
 
-    // Từ Node N15 (15)
-    Map_AddEdge(&factory_map, N15, N06, 15, HEAD_SOUTH);
-    Map_AddEdge(&factory_map, N15, N10, 15, HEAD_NORTH);
+  // Từ Node N11 (11) - Ngã tư lớn
+  Map_AddEdge(&factory_map, N11, N00, 3, HEAD_WEST);
+  Map_AddEdge(&factory_map, N11, N02, 3, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N11, N07, 7,
+              HEAD_NORTH); // Sửa tạm: Nếu N07 nằm hướng Bắc
+  Map_AddEdge(&factory_map, N11, N12, 5, HEAD_EAST);
+
+  // Từ Node N12 (12)
+  Map_AddEdge(&factory_map, N12, N01, 3, HEAD_WEST);
+  Map_AddEdge(&factory_map, N12, N03, 3, HEAD_SOUTH);
+  Map_AddEdge(&factory_map, N12, N10, 7, HEAD_SOUTH);
+  Map_AddEdge(&factory_map, N12, N11, 5, HEAD_WEST);
+
+  // Từ Node N13 (13)
+  Map_AddEdge(&factory_map, N13, N04, 3, HEAD_WEST);
+  Map_AddEdge(&factory_map, N13, N08, 7, HEAD_SOUTH);
+  Map_AddEdge(&factory_map, N13, N14, 5, HEAD_NORTH);
+
+  // Từ Node N14 (14)
+  Map_AddEdge(&factory_map, N14, N05, 3, HEAD_WEST);
+  Map_AddEdge(&factory_map, N14, N09, 7, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N14, N13, 5, HEAD_SOUTH);
+
+  // Từ Node N15 (15)
+  Map_AddEdge(&factory_map, N15, N06, 15, HEAD_SOUTH);
+  Map_AddEdge(&factory_map, N15, N10, 15, HEAD_NORTH);
 }
 /* USER CODE END 0 */
 
@@ -299,16 +303,19 @@ int main(void) {
   QR50_Init(&qr50, &huart2, 0);
   HAL_UARTEx_ReceiveToIdle_DMA(&huart2, qr50.Data.Data_Buffer,
                                QR50_MAX_DATA_LEN);
-                               
+
   // Load bản đồ và tính đường đi mẫu từ A(0) đến P(15)
   Load_Factory_Map();
-  bool initial_path_found = Routing_Dijkstra(&factory_map, current_node, destination_node, current_path, &path_length);
+  bool initial_path_found = Routing_Dijkstra(
+      &factory_map, current_node, destination_node, current_path, &path_length);
   if (!initial_path_found) {
-      agv_follow_line_enable = false; // Lỗi Cấu hình: Khóa xe ngay từ đầu nếu điểm đích không tồn tại
+    agv_follow_line_enable =
+        false; // Lỗi Cấu hình: Khóa xe ngay từ đầu nếu điểm đích không tồn tại
   }
   path_index = 0; // Đặt lại index đường đi
-  
-  uint32_t last_qr_time = HAL_GetTick(); // Khởi tạo biến hẹn giờ Distance Watchdog
+
+  uint32_t last_qr_time =
+      HAL_GetTick(); // Khởi tạo biến hẹn giờ Distance Watchdog
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -317,122 +324,129 @@ int main(void) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    
-    // Distance Watchdog: Nếu chạy 15s (tương đương quãng đường rất dài) mà ko quét được QR -> Có thể hỏng camera hoặc trật đường ray
+
+    // Distance Watchdog: Nếu chạy 15s (tương đương quãng đường rất dài) mà ko
+    // quét được QR -> Có thể hỏng camera hoặc trật đường ray
     if (agv_follow_line_enable && (HAL_GetTick() - last_qr_time > 15000)) {
-        agv_follow_line_enable = false;
-        AGV_Stop(&h_agv);
+      agv_follow_line_enable = false;
+      AGV_Stop(&h_agv);
     }
 
     if (qr50.Data.New_Data_Flag) {
-        qr50.Data.New_Data_Flag = false;
-        
-        // Lọc rác: Chỉ xử lý nếu chuỗi bắt đầu bằng chữ 'N'
-        if (qr50.Data.Data_Buffer[0] == 'N') {
-            last_qr_time = HAL_GetTick(); // Đã bắt được QR chuẩn, reset Watchdog
-            
-            // Trích xuất ID từ định dạng "N00", "N05", "N99"...
-            uint16_t read_node_id = atoi((char *)&qr50.Data.Data_Buffer[1]); 
-            
-            if (read_node_id < MAX_NODES && read_node_id != last_processed_node) {
-                // Lưu vào bộ đệm, chờ chạm ngã tư mới xử lý (Hoặc nếu đã chạm rồi thì xử lý ngay)
-                pending_qr_node = read_node_id;
-            }
+      qr50.Data.New_Data_Flag = false;
+
+      // Lọc rác: Chỉ xử lý nếu chuỗi bắt đầu bằng chữ 'N'
+      if (qr50.Data.Data_Buffer[0] == 'N') {
+        last_qr_time = HAL_GetTick(); // Đã bắt được QR chuẩn, reset Watchdog
+
+        // Trích xuất ID từ định dạng "N00", "N05", "N99"...
+        uint16_t read_node_id = atoi((char *)&qr50.Data.Data_Buffer[1]);
+
+        if (read_node_id < MAX_NODES && read_node_id != last_processed_node) {
+          // Lưu vào bộ đệm, chờ chạm ngã tư mới xử lý (Hoặc nếu đã chạm rồi thì
+          // xử lý ngay)
+          pending_qr_node = read_node_id;
         }
+      }
     }
 
     // STATE MACHINE: Xử lý ngã tư
     if (is_at_intersection) {
-        if (pending_qr_node != 0xFFFF) {
-            // ĐÃ ĐỌC ĐƯỢC QR VÀ ĐANG Ở ĐÚNG NGÃ TƯ!
-            uint16_t read_node_id = pending_qr_node;
-            pending_qr_node = 0xFFFF; // Tiêu thụ mã QR
-            last_processed_node = read_node_id; // Đánh dấu đã xử lý chống trùng
-            is_at_intersection = false; // Giải phóng trạng thái ngã tư
-            
-            if (read_node_id == destination_node) {
-                // BUG 1: Lỗi "Tông xuyên đích". Phải ngắt FollowLine và phanh cứng!
-                agv_follow_line_enable = false;
-                AGV_Stop(&h_agv);
-                continue;
-            }
+      if (pending_qr_node != 0xFFFF) {
+        // ĐÃ ĐỌC ĐƯỢC QR VÀ ĐANG Ở ĐÚNG NGÃ TƯ!
+        uint16_t read_node_id = pending_qr_node;
+        pending_qr_node = 0xFFFF;           // Tiêu thụ mã QR
+        last_processed_node = read_node_id; // Đánh dấu đã xử lý chống trùng
+        is_at_intersection = false;         // Giải phóng trạng thái ngã tư
 
-            // Kiểm tra xem xe có chạy đúng tuyến đường mong muốn không
-            if (path_length > 0 && path_index < path_length - 1 && read_node_id == current_path[path_index + 1]) {
-                // Đi ĐÚNG đường! -> Cập nhật vị trí hiện tại
-                path_index++;
-                current_node = read_node_id;
-            } 
-            else if (read_node_id != current_node) {
-                // XE BỊ LẠC / TRƯỢT MÃ / CHẠY SAI ĐƯỜNG!
-                current_node = read_node_id;
-                
-                // Chạy lại thuật toán Dijkstra để vẽ đường mới từ điểm bị lạc tới đích
-                bool found_path = Routing_Dijkstra(&factory_map, current_node, destination_node, current_path, &path_length);
-                
-                if (found_path) {
-                    path_index = 0; // Bắt đầu chạy theo mảng current_path mới
-                } else {
-                    // LỖI: Đi vào đường cụt, không thể về đích!
-                    agv_follow_line_enable = false;
-                    AGV_Stop(&h_agv);
-                    continue; 
-                }
-            }
-
-            // --- XỬ LÝ CHUYỂN HƯỚNG ---
-            if (path_length > 0 && path_index < path_length - 1) {
-                uint16_t next_node = current_path[path_index + 1];
-                AGV_Heading_t target_heading = Routing_GetHeading(&factory_map, current_node, next_node);
-                
-                // Tính toán chênh lệch hướng (0: Thẳng, 1: Phải, 2: Quay đầu, 3: Trái)
-                int diff = (target_heading - current_heading + 4) % 4;
-                AGV_Action_t next_action = (AGV_Action_t)diff;
-                
-                // BUG 5: Xung đột Ngắt TIM6. Khóa PID bám vạch khi đang rẽ!
-                agv_follow_line_enable = false;
-                
-                switch (next_action) {
-                    case ACT_TURN_LEFT: 
-                        AGV_TurnLeft(&h_agv);
-                        break;
-                    case ACT_TURN_RIGHT: 
-                        AGV_TurnRight(&h_agv);
-                        break;
-                    case ACT_STRAIGHT: 
-                        // Xe đang đứng khựng ở ngã tư, để đi thẳng ta cần đẩy xe qua khỏi ngã tư một chút
-                        Motor_SetSpeed(h_agv.motor_left, (int16_t)h_agv.base_speed);
-                        Motor_SetSpeed(h_agv.motor_right, (int16_t)h_agv.base_speed);
-                        HAL_Delay(300);
-                        break;
-                    case ACT_TURN_180: 
-                        AGV_Turn180(&h_agv);
-                        break;
-                    case ACT_STOP: 
-                        AGV_Stop(&h_agv);
-                        break;
-                    default: 
-                        break;
-                }
-                
-                // Cập nhật lại góc nhìn la bàn của xe sau khi đã rẽ
-                current_heading = target_heading;
-                
-                // Cập nhật thời gian rời ngã tư để tạo "Vùng Mù" (Blind Zone)
-                last_leave_intersection_time = HAL_GetTick();
-                
-                // Rẽ xong, cho phép ngắt TIM6 tiếp tục bám vạch
-                agv_follow_line_enable = true;
-            }
-        } 
-        else if (HAL_GetTick() - intersection_time > 2000) {
-            // Xe đã chạm ngã tư nhưng chờ quá 2 giây không thấy QR bắn về
-            // -> Hỏng camera, rách tem QR, hoặc chạm nhầm vạch rác
-            AGV_Stop(&h_agv);
-            agv_follow_line_enable = false; // Tắt xe chờ xử lý sự cố
-            is_at_intersection = false;
-            // Bật còi/đèn nháy báo lỗi tại đây
+        if (read_node_id == destination_node) {
+          // BUG 1: Lỗi "Tông xuyên đích". Phải ngắt FollowLine và phanh cứng!
+          agv_follow_line_enable = false;
+          AGV_Stop(&h_agv);
+          continue;
         }
+
+        // Kiểm tra xem xe có chạy đúng tuyến đường mong muốn không
+        if (path_length > 0 && path_index < path_length - 1 &&
+            read_node_id == current_path[path_index + 1]) {
+          // Đi ĐÚNG đường! -> Cập nhật vị trí hiện tại
+          path_index++;
+          current_node = read_node_id;
+        } else if (read_node_id != current_node) {
+          // XE BỊ LẠC / TRƯỢT MÃ / CHẠY SAI ĐƯỜNG!
+          current_node = read_node_id;
+
+          // Chạy lại thuật toán Dijkstra để vẽ đường mới từ điểm bị lạc tới
+          // đích
+          bool found_path =
+              Routing_Dijkstra(&factory_map, current_node, destination_node,
+                               current_path, &path_length);
+
+          if (found_path) {
+            path_index = 0; // Bắt đầu chạy theo mảng current_path mới
+          } else {
+            // LỖI: Đi vào đường cụt, không thể về đích!
+            agv_follow_line_enable = false;
+            AGV_Stop(&h_agv);
+            continue;
+          }
+        }
+
+        // --- XỬ LÝ CHUYỂN HƯỚNG ---
+        if (path_length > 0 && path_index < path_length - 1) {
+          uint16_t next_node = current_path[path_index + 1];
+          AGV_Heading_t target_heading =
+              Routing_GetHeading(&factory_map, current_node, next_node);
+
+          // Tính toán chênh lệch hướng (0: Thẳng, 1: Phải, 2: Quay đầu, 3:
+          // Trái)
+          int diff = (target_heading - current_heading + 4) % 4;
+          AGV_Action_t next_action = (AGV_Action_t)diff;
+
+          // BUG 5: Xung đột Ngắt TIM6. Khóa PID bám vạch khi đang rẽ!
+          agv_follow_line_enable = false;
+
+          switch (next_action) {
+          case ACT_TURN_LEFT:
+            AGV_TurnLeft(&h_agv);
+            break;
+          case ACT_TURN_RIGHT:
+            AGV_TurnRight(&h_agv);
+            break;
+          case ACT_STRAIGHT:
+            // Xe đang đứng khựng ở ngã tư, để đi thẳng ta cần đẩy xe qua khỏi
+            // ngã tư một chút
+            Motor_SetSpeed(h_agv.motor_left, (int16_t)h_agv.base_speed);
+            Motor_SetSpeed(h_agv.motor_right, (int16_t)h_agv.base_speed);
+            HAL_Delay(300);
+            break;
+          case ACT_TURN_180:
+            AGV_Turn180(&h_agv);
+            break;
+          case ACT_STOP:
+            AGV_Stop(&h_agv);
+            break;
+          default:
+            break;
+          }
+
+          // Cập nhật lại góc nhìn la bàn của xe sau khi đã rẽ
+          current_heading = target_heading;
+
+          // Cập nhật thời gian rời ngã tư để tạo "Vùng Mù" (Blind Zone)
+          last_leave_intersection_time = HAL_GetTick();
+
+          // Rẽ xong, cho phép ngắt TIM6 tiếp tục bám vạch
+          agv_follow_line_enable = true;
+        }
+      } else if (HAL_GetTick() - intersection_time > 2000) {
+        // Xe đã chạm ngã tư nhưng chờ quá 2 giây không thấy QR bắn về
+        // -> Hỏng camera, rách tem QR, hoặc chạm nhầm vạch rác
+        AGV_Stop(&h_agv);
+        agv_follow_line_enable = false; // Tắt xe chờ xử lý sự cố
+        is_at_intersection = false;
+        // Bật còi/đèn nháy báo lỗi tại đây
+      }
     }
   }
   /* USER CODE END 3 */
@@ -1107,15 +1121,18 @@ static void MX_GPIO_Init(void) {
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
   if (huart->Instance == USART3) {
     // Hàm này tự động được gọi khi nhận đủ 2 byte HOẶC khi đường dây RS485 nghỉ
-    // (IDLE). Ngay khi đường dây nghỉ, DMA tự động reset con trỏ về rx_scan[0]
-    // cho gói tin tiếp theo!
-
-    // (Tùy chọn) Có thể xử lý dữ liệu rx_scan ở đây nếu cần phản hồi tức thời
+    // Ngay khi đường dây nghỉ, DMA trong chế độ Circular KHÔNG tự reset con trỏ
+    // về 0! Bắt buộc phải Abort và Start lại để gói tin tiếp theo bắt đầu ghi
+    // từ rx_scan[0]
+    HAL_UART_AbortReceive(&huart3);
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart3, rx_scan, 2);
   } else if (huart->Instance == USART2) {
     // Xử lý gói tin từ đầu đọc QR50
     QR50_ParseData(&qr50, qr50.Data.Data_Buffer, Size);
 
-    // Khởi động lại ngắt nhận cho lần quét tiếp theo
+    // Abort trước khi khởi động lại để đảm bảo con trỏ DMA quay về 0
+    // Tránh việc gói tin thứ 2 ghi nối tiếp vào đuôi gói tin thứ 1
+    HAL_UART_AbortReceive(&huart2);
     HAL_UARTEx_ReceiveToIdle_DMA(&huart2, qr50.Data.Data_Buffer,
                                  QR50_MAX_DATA_LEN);
   }
@@ -1125,7 +1142,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
   if (htim->Instance == TIM6) {
     // Ngắt PID mỗi 10ms - Chỉ điều khiển Motor nếu cờ được bật
     if (agv_follow_line_enable) {
-        AGV_FollowLine(&h_agv);
+      AGV_FollowLine(&h_agv);
     }
   }
 }
