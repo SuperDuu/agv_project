@@ -49,8 +49,10 @@ void QR50_ParseData(QR50_Handler_t *handler, uint8_t *raw_buffer, uint16_t lengt
         handler->Status = QR50_OK;
     }
     
-    // Copy dữ liệu thô vào Buffer của thiết bị
-    memcpy(handler->Data.Data_Buffer, raw_buffer, length);
+    // Copy dữ liệu thô vào Buffer của thiết bị (chỉ copy nếu dùng 2 buffer khác nhau)
+    if (raw_buffer != handler->Data.Data_Buffer) {
+        memcpy(handler->Data.Data_Buffer, raw_buffer, length);
+    }
     handler->Data.Data_Length = length;
     
     // Đảm bảo kết thúc chuỗi (để in ra màn hình dễ dàng nếu là mã QR string)
