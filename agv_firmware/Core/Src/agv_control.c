@@ -13,10 +13,10 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-extern bool agv_follow_line_enable;
-extern bool is_at_intersection;
-extern uint32_t intersection_time;
-extern uint32_t last_leave_intersection_time;
+extern volatile bool agv_follow_line_enable;
+extern volatile bool is_at_intersection;
+extern volatile uint32_t intersection_time;
+extern volatile uint32_t last_leave_intersection_time;
 
 /* USER CODE BEGIN 0 */
 
@@ -154,12 +154,13 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL)
     return;
 
+  static uint32_t lost_line_time = 0;
+
   // Read sensors
   uint16_t line_val = LineSensor_Read(hagv->line_sensor);
 
   // Stop condition: all 1s (mạch kéo Pull-up đứt dây) hoặc all 0s (Mất vạch / đứt dây Pull-down)
   if (line_val == 0xFFFF || line_val == 0x0000) {
-    static uint32_t lost_line_time = 0;
     if (lost_line_time == 0) lost_line_time = HAL_GetTick();
     
     // Nếu mất vạch liên tục quá 1 giây -> Lỗi phần cứng hoặc văng khỏi line -> Phanh gấp!
@@ -175,7 +176,7 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
   // CẢM BIẾN NGÃ TƯ: Kiểm tra 2 mắt ngoài cùng (Bit 15 và Bit 0)
   // Tính năng an toàn (Blind Zone): Bỏ qua ngã tư trong vòng 1.5 giây sau khi vừa rời đi 
   // để tránh đọc lại chính ngã tư cũ hoặc vạch xước gần đó.
-  if (((line_val & 0x8001) != 0) && (HAL_GetTick() - last_leave_intersection_time > 1500)) {
+  if (((line_val & 0x8001) != 0x8001) && (HAL_GetTick() - last_leave_intersection_time > 1500)) {
       AGV_Stop(hagv);
       agv_follow_line_enable = false; // Phanh cứng chờ xử lý QR
       is_at_intersection = true;
@@ -258,7 +259,7 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
 
     // 0x0180 tương đương nhị phân là 0000 0001 1000 0000
     // -> Khi vạch từ đè lên 2 cảm biến ở TÂM xe (bit 7 và 8), cờ này sẽ khác 0
-    if ((line_val & 0x0180) != 0) {
+    if ((line_val & 0x0180) != 0x0180) {
         debounce_cnt++;
         if (debounce_cnt >= 3) { // Chống nhiễu: Phải đọc thấy vạch 3 lần liên tiếp
             break; // Đã bắt được vạch 90 độ! Thoát vòng lặp.
@@ -305,7 +306,7 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   
   while (1) {
     line_val = LineSensor_Read(hagv->line_sensor);
-    if ((line_val & 0x0180) != 0) {
+    if ((line_val & 0x0180) != 0x0180) {
         debounce_cnt++;
         if (debounce_cnt >= 3) break;
     } else {
@@ -350,7 +351,7 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
   
   while (1) {
     line_val = LineSensor_Read(hagv->line_sensor);
-    if ((line_val & 0x0180) != 0) {
+    if ((line_val & 0x0180) != 0x0180) {
         debounce_cnt++;
         if (debounce_cnt >= 3) break; // Đã bắt được vạch sau lưng
     } else {
