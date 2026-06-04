@@ -352,6 +352,11 @@ int main(void) {
 
     // STATE MACHINE: Xử lý ngã tư
     if (is_at_intersection) {
+      // Trong MODE_2, xe chỉ bám vạch và dừng tại ngã tư, không xử lý định tuyến tiếp
+      if (agv_run_mode == MODE_2_LINE_INTERSECTION) {
+          continue; // Bỏ qua toàn bộ logic bên dưới, xe đứng im
+      }
+
       if (pending_qr_node != 0xFFFF) {
         // ĐÃ ĐỌC ĐƯỢC QR VÀ ĐANG Ở ĐÚNG NGÃ TƯ!
         uint16_t read_node_id = pending_qr_node;
