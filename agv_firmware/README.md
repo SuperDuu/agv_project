@@ -118,3 +118,14 @@ Hệ thống mã nguồn C được thiết kế theo dạng Module hóa để d
 | **`stm32h5xx_it.c`** | Xử lý các ngắt phần cứng (Interrupt Service Routines). Nơi chứa logic reset an toàn con trỏ Circular DMA RS485 bằng lệnh `HAL_UART_AbortReceive()`. |
 
 ---
+
+## 6. Hệ Thống 4 Chế Độ Debug Thực Tế (AGV Run Modes)
+
+Để việc test xe trên sa bàn thực tế an toàn và chia nhỏ thành từng bước, firmware được tích hợp 4 chế độ chạy. Bạn có thể thay đổi chế độ bằng cách sửa biến `agv_run_mode` ở đầu file `agv_control.c` trước khi biên dịch:
+
+* **`MODE_1_LINE_ONLY`**: Xe chỉ bám theo vạch từ, lờ đi hoàn toàn tín hiệu ngã tư và mã QR. Phù hợp để tinh chỉnh PID bám vạch.
+* **`MODE_2_LINE_INTERSECTION`**: Xe bám vạch và phanh cứng (đứng yên vĩnh viễn) khi 2 mắt rìa chạm ngã tư. Phù hợp để đo đạc sai số cơ khí tại ngã tư.
+* **`MODE_3_TEST_SENSORS_NO_MOTOR`**: Động cơ bị ngắt điện hoàn toàn. Các thuật toán định tuyến và đọc QR vẫn chạy bình thường. Người dùng có thể đẩy xe qua ngã tư để xem biến số nhảy trên Debugger (Live Watch) mà không sợ xe đâm vào tường.
+* **`MODE_4_FULL_RUN`**: Chế độ chạy tự động toàn diện (Mặc định).
+
+
