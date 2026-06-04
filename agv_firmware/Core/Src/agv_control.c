@@ -18,6 +18,9 @@ extern volatile bool is_at_intersection;
 extern volatile uint32_t intersection_time;
 extern volatile uint32_t last_leave_intersection_time;
 
+// Mặc định chạy Full (thực tế có thể đổi thành MODE_1, 2, 3 tùy nhu cầu test)
+volatile AGV_RunMode_t agv_run_mode = MODE_4_FULL_RUN;
+
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
@@ -174,14 +177,15 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
   }
 
   // CẢM BIẾN NGÃ TƯ: Kiểm tra 2 mắt ngoài cùng (Bit 15 và Bit 0)
-  // Tính năng an toàn (Blind Zone): Bỏ qua ngã tư trong vòng 1.5 giây sau khi vừa rời đi 
-  // để tránh đọc lại chính ngã tư cũ hoặc vạch xước gần đó.
-  if (((line_val & 0x8001) != 0x8001) && (HAL_GetTick() - last_leave_intersection_time > 1500)) {
-      AGV_Stop(hagv);
-      agv_follow_line_enable = false; // Phanh cứng chờ xử lý QR
-      is_at_intersection = true;
-      intersection_time = HAL_GetTick();
-      return;
+  // Trong MODE_1_LINE_ONLY, ta lờ đi tín hiệu ngã tư để chỉ test bám vạch
+  if (agv_run_mode != MODE_1_LINE_ONLY) {
+    if (((line_val & 0x8001) != 0x8001) && (HAL_GetTick() - last_leave_intersection_time > 1500)) {
+        AGV_Stop(hagv);
+        agv_follow_line_enable = false; // Phanh cứng chờ xử lý QR
+        is_at_intersection = true;
+        intersection_time = HAL_GetTick();
+        return;
+    }
   }
 
   // Calculate error
@@ -214,8 +218,11 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     if (speed_r < -300)
       speed_r = -300;
 
-    Motor_SetSpeed(hagv->motor_left, speed_l);
-    Motor_SetSpeed(hagv->motor_right, speed_r);
+    // Trong MODE_3, không xuất tốc độ ra Motor để test mạch, quét LED an toàn
+    if (agv_run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
+      Motor_SetSpeed(hagv->motor_left, speed_l);
+      Motor_SetSpeed(hagv->motor_right, speed_r);
+    }
   }
 }
 
@@ -231,7 +238,7 @@ void AGV_Stop(AGV_HandleTypeDef *hagv) {
 // ---------------------------------------------------------
 
 void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
-  if (hagv == NULL)
+  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
   uint16_t line_val;
@@ -283,7 +290,7 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
 }
 
 void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
-  if (hagv == NULL)
+  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
   uint16_t line_val;
@@ -325,7 +332,7 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
 }
 
 void AGV_Turn180(AGV_HandleTypeDef *hagv) {
-  if (hagv == NULL)
+  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
   uint16_t line_val;
