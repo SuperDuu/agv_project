@@ -30,6 +30,14 @@ extern "C" {
 /* USER CODE END Private defines */
 
 /* USER CODE BEGIN Exported types */
+typedef enum {
+    MODE_1_LINE_ONLY = 1,
+    MODE_2_LINE_INTERSECTION = 2,
+    MODE_3_TEST_SENSORS_NO_MOTOR = 3,
+    MODE_4_FULL_RUN = 4
+} AGV_RunMode_t;
+
+extern volatile AGV_RunMode_t agv_run_mode;
 typedef struct {
   volatile float gtht;
   volatile float er;
