@@ -19,7 +19,7 @@ extern volatile uint32_t intersection_time;
 extern volatile uint32_t last_leave_intersection_time;
 
 // Mặc định chạy Full (thực tế có thể đổi thành MODE_1, 2, 3 tùy nhu cầu test)
-volatile AGV_RunMode_t agv_run_mode = MODE_6_TEST_TURN_RIGHT;
+volatile AGV_RunMode_t agv_run_mode = MODE_7_DEBUG_NO_QR;
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
@@ -261,8 +261,8 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
   Motor_SetSpeed(hagv->motor_right, speed_r);
 
   while (HAL_GetTick() - start < total_time) {
-    // Sau 500ms mới bắt đầu check mắt giữa (tránh đọc nhầm vạch ngang ngã tư)
-    if (HAL_GetTick() - start > 500) {
+    // Sau 1500ms mới bắt đầu check mắt giữa (để xe xoay hẳn ra khỏi vạch cũ, tránh nhận nhầm)
+    if (HAL_GetTick() - start > 1500) {
       uint16_t val = LineSensor_Read(hagv->line_sensor);
       if ((val & CENTER_MASK) != CENTER_MASK) {
         center_found = true;
@@ -302,7 +302,7 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
   // Tiến lên tâm ngã tư 500ms
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(750);
+  HAL_Delay(1000);
 
   // Phanh xả quán tính
   AGV_Stop(hagv);
@@ -322,7 +322,7 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   // Tiến lên tâm ngã tư 500ms
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(750);
+  HAL_Delay(1000);
 
   // Phanh xả quán tính
   AGV_Stop(hagv);
@@ -342,7 +342,7 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
   // Tiến lên tâm ngã tư 500ms
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(750);
+  HAL_Delay(1000);
 
   // Phanh xả quán tính
   AGV_Stop(hagv);
