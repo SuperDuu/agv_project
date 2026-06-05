@@ -34,7 +34,9 @@ typedef enum {
     MODE_1_LINE_ONLY = 1,
     MODE_2_LINE_INTERSECTION = 2,
     MODE_3_TEST_SENSORS_NO_MOTOR = 3,
-    MODE_4_FULL_RUN = 4
+    MODE_4_FULL_RUN = 4,
+    MODE_5_CALIBRATE_MOTORS = 5,
+    MODE_6_TEST_TURN_RIGHT = 6
 } AGV_RunMode_t;
 
 extern volatile AGV_RunMode_t agv_run_mode;
