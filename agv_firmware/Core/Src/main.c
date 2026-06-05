@@ -488,78 +488,60 @@ int main(void) {
         continue; // Bỏ qua toàn bộ logic bên dưới, xe đứng im
       }
 
-      // Xử lý Ngã tư cho MODE 6: Luôn rẽ phải rồi bám vạch tiếp
       if (agv_run_mode == MODE_6_TEST_TURN_RIGHT) {
         AGV_TurnRight(&h_agv);
-        last_leave_intersection_time = HAL_GetTick(); // Kích hoạt Blind Zone
+        last_leave_intersection_time = HAL_GetTick();
         is_at_intersection = false;
         agv_follow_line_enable = true;
         continue;
       }
 
-      // Xử lý Ngã tư cho MODE 7 (Debug không cần QR)
       if (agv_run_mode == MODE_7_DEBUG_NO_QR) {
         if (path_length > 0 && path_index < path_length - 1) {
-          // Tự động giả lập việc đọc được mã QR của điểm tiếp theo
           pending_qr_node = current_path[path_index + 1];
         } else {
-          // Nếu đã đến đích, giả lập đọc được mã đích
           pending_qr_node = destination_node;
         }
       }
 
       if (pending_qr_node != 0xFFFF) {
-        // ĐÃ ĐỌC ĐƯỢC QR VÀ ĐANG Ở ĐÚNG NGÃ TƯ!
         uint16_t read_node_id = pending_qr_node;
-        pending_qr_node = 0xFFFF;           // Tiêu thụ mã QR
-        last_processed_node = read_node_id; // Đánh dấu đã xử lý chống trùng
-        is_at_intersection = false;         // Giải phóng trạng thái ngã tư
+        pending_qr_node = 0xFFFF;
+        last_processed_node = read_node_id;
+        is_at_intersection = false;
 
         if (read_node_id == destination_node) {
-          // BUG 1: Lỗi "Tông xuyên đích". Phải ngắt FollowLine và phanh cứng!
           agv_follow_line_enable = false;
           AGV_Stop(&h_agv);
           continue;
         }
 
-        // Kiểm tra xem xe có chạy đúng tuyến đường mong muốn không
         if (path_length > 0 && path_index < path_length - 1 &&
             read_node_id == current_path[path_index + 1]) {
-          // Đi ĐÚNG đường! -> Cập nhật vị trí hiện tại
           path_index++;
           current_node = read_node_id;
         } else if (read_node_id != current_node) {
-          // XE BỊ LẠC / TRƯỢT MÃ / CHẠY SAI ĐƯỜNG!
           current_node = read_node_id;
-
-          // Chạy lại thuật toán Dijkstra để vẽ đường mới từ điểm bị lạc tới
-          // đích
           bool found_path =
               Routing_Dijkstra(&factory_map, current_node, destination_node,
                                current_path, &path_length);
-
           if (found_path) {
-            path_index = 0; // Bắt đầu chạy theo mảng current_path mới
+            path_index = 0;
           } else {
-            // LỖI: Đi vào đường cụt, không thể về đích!
             agv_follow_line_enable = false;
             AGV_Stop(&h_agv);
             continue;
           }
         }
 
-        // --- XỬ LÝ CHUYỂN HƯỚNG ---
         if (path_length > 0 && path_index < path_length - 1) {
           uint16_t next_node = current_path[path_index + 1];
           AGV_Heading_t target_heading =
               Routing_GetHeading(&factory_map, current_node, next_node);
 
-          // Tính toán chênh lệch hướng (0: Thẳng, 1: Phải, 2: Quay đầu, 3:
-          // Trái)
           int diff = (target_heading - current_heading + 4) % 4;
           AGV_Action_t next_action = (AGV_Action_t)diff;
 
-          // BUG 5: Xung đột Ngắt TIM6. Khóa PID bám vạch khi đang rẽ!
           agv_follow_line_enable = false;
 
           switch (next_action) {
@@ -570,8 +552,6 @@ int main(void) {
             AGV_TurnRight(&h_agv);
             break;
           case ACT_STRAIGHT:
-            // Xe đang đứng khựng ở ngã tư, để đi thẳng ta cần đẩy xe qua khỏi
-            // ngã tư một chút
             Motor_SetSpeed(h_agv.motor_left, (int16_t)h_agv.base_speed);
             Motor_SetSpeed(h_agv.motor_right, (int16_t)h_agv.base_speed);
             HAL_Delay(300);
@@ -586,17 +566,11 @@ int main(void) {
             break;
           }
 
-          // Cập nhật lại góc nhìn la bàn của xe sau khi đã rẽ
           current_heading = target_heading;
-
-          // Cập nhật thời gian rời ngã tư để tạo "Vùng Mù" (Blind Zone)
           last_leave_intersection_time = HAL_GetTick();
-
-          // Rẽ xong, cho phép ngắt TIM6 tiếp tục bám vạch
           agv_follow_line_enable = true;
         }
       } else if (HAL_GetTick() - intersection_time > 2000) {
-        // Xe đã chạm ngã tư nhưng chờ quá 2 giây không thấy QR bắn về
         AGV_Stop(&h_agv);
         is_at_intersection = false;
 

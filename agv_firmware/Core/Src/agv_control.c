@@ -18,7 +18,6 @@ extern volatile bool is_at_intersection;
 extern volatile uint32_t intersection_time;
 extern volatile uint32_t last_leave_intersection_time;
 
-// Mặc định chạy Full (thực tế có thể đổi thành MODE_1, 2, 3 tùy nhu cầu test)
 volatile AGV_RunMode_t agv_run_mode = MODE_7_DEBUG_NO_QR;
 /* USER CODE BEGIN 0 */
 
@@ -26,7 +25,7 @@ volatile AGV_RunMode_t agv_run_mode = MODE_7_DEBUG_NO_QR;
 
 /* USER CODE BEGIN 1 */
 
-float Delta_t = 0.01f; // Tối ưu delta_t như user cấu hình
+float Delta_t = 0.01f;
 
 void AGV_Init(AGV_HandleTypeDef *hagv, Motor_HandleTypeDef *m_left,
               Motor_HandleTypeDef *m_right, LineSensor_HandleTypeDef *l_sensor,
@@ -59,93 +58,55 @@ static float AGV_ComputePID(Pid_data *pid, float setpoint) {
 
 float AGV_GetLineError(uint16_t line_value, float current_error) {
   switch (line_value) {
-  // Center
-  case 0xFC3F:
-    return 0.0f; // 1111110000111111
+  case 0xFC3F: return 0.0f;
 
   // Left deviation 4 units
-  case 0xF87F:
-    return -1.0f; // 1111100001111111
-  case 0xF0FF:
-    return -1.5f; // 1111000011111111
-  case 0xE1FF:
-    return -2.0f; // 1110000111111111
-  case 0xC3FF:
-    return -2.5f; // 1100001111111111
-  case 0x87FF:
-    return -3.0f; // 1000011111111111
-  case 0x0FFF:
-    return -3.5f; // 0000111111111111
+  case 0xF87F: return -1.0f;
+  case 0xF0FF: return -1.5f;
+  case 0xE1FF: return -2.0f;
+  case 0xC3FF: return -2.5f;
+  case 0x87FF: return -3.0f;
+  case 0x0FFF: return -3.5f;
 
   // Left deviation 3 units
-  case 0xFC7F:
-    return -1.0f; // 1111110001111111
-  case 0xF8FF:
-    return -1.5f; // 1111100011111111
-  case 0xF1FF:
-    return -2.0f; // 1111000111111111
-  case 0xE3FF:
-    return -2.5f; // 1110001111111111
-  case 0xC7FF:
-    return -3.0f; // 1100011111111111
-  case 0x8FFF:
-    return -3.5f; // 1000111111111111
-  case 0x1FFF:
-    return -4.0f; // 0001111111111111
+  case 0xFC7F: return -1.0f;
+  case 0xF8FF: return -1.5f;
+  case 0xF1FF: return -2.0f;
+  case 0xE3FF: return -2.5f;
+  case 0xC7FF: return -3.0f;
+  case 0x8FFF: return -3.5f;
+  case 0x1FFF: return -4.0f;
 
   // Left deviation 5 units
-  case 0xF07F:
-    return -1.0f; // 1111000001111111
-  case 0xE0FF:
-    return -1.5f; // 1110000011111111
-  case 0xC1FF:
-    return -2.0f; // 1100000111111111
-  case 0x83FF:
-    return -2.5f; // 1000001111111111
-  case 0x07FF:
-    return -3.0f; // 0000011111111111
+  case 0xF07F: return -1.0f;
+  case 0xE0FF: return -1.5f;
+  case 0xC1FF: return -2.0f;
+  case 0x83FF: return -2.5f;
+  case 0x07FF: return -3.0f;
 
   // Right deviation 4 units
-  case 0xFE1F:
-    return 1.0f; // 1111111000011111
-  case 0xFF0F:
-    return 1.5f; // 1111111100001111
-  case 0xFF87:
-    return 2.0f; // 1111111110000111
-  case 0xFFC3:
-    return 2.5f; // 1111111111000011
-  case 0xFFE1:
-    return 3.0f; // 1111111111100001
-  case 0xFFF0:
-    return 3.5f; // 1111111111110000
+  case 0xFE1F: return 1.0f;
+  case 0xFF0F: return 1.5f;
+  case 0xFF87: return 2.0f;
+  case 0xFFC3: return 2.5f;
+  case 0xFFE1: return 3.0f;
+  case 0xFFF0: return 3.5f;
 
   // Right deviation 3 units
-  case 0xFE3F:
-    return 1.0f; // 1111111000111111
-  case 0xFF1F:
-    return 1.5f; // 1111111100011111
-  case 0xFF8F:
-    return 2.0f; // 1111111110001111
-  case 0xFFC7:
-    return 2.5f; // 1111111111000111
-  case 0xFFE3:
-    return 3.0f; // 1111111111100011
-  case 0xFFF1:
-    return 3.5f; // 1111111111110001
-  case 0xFFF8:
-    return 4.0f; // 1111111111111000
+  case 0xFE3F: return 1.0f;
+  case 0xFF1F: return 1.5f;
+  case 0xFF8F: return 2.0f;
+  case 0xFFC7: return 2.5f;
+  case 0xFFE3: return 3.0f;
+  case 0xFFF1: return 3.5f;
+  case 0xFFF8: return 4.0f;
 
   // Right deviation 5 units
-  case 0xFE0F:
-    return 1.0f; // 1111111000001111
-  case 0xFF07:
-    return 1.5f; // 1111111100000111
-  case 0xFF83:
-    return 2.0f; // 1111111110000011
-  case 0xFFC1:
-    return 2.5f; // 1111111111000001
-  case 0xFFE0:
-    return 3.0f; // 1111111111100000
+  case 0xFE0F: return 1.0f;
+  case 0xFF07: return 1.5f;
+  case 0xFF83: return 2.0f;
+  case 0xFFC1: return 2.5f;
+  case 0xFFE0: return 3.0f;
 
   default:
     return current_error;
@@ -157,78 +118,51 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     return;
 
   static uint32_t lost_line_time = 0;
-
-  // Read sensors
   uint16_t line_val = LineSensor_Read(hagv->line_sensor);
 
-  // Stop condition: all 1s (mạch kéo Pull-up đứt dây) hoặc all 0s (Mất vạch /
-  // đứt dây Pull-down)
+  // Stop condition: all 1s (Pull-up disconnected) or all 0s (lost line)
   if (line_val == 0xFFFF || line_val == 0x0000) {
     if (lost_line_time == 0)
       lost_line_time = HAL_GetTick();
 
-    // Nếu mất vạch liên tục quá 1 giây -> Lỗi phần cứng hoặc văng khỏi line ->
-    // Phanh gấp!
     if (HAL_GetTick() - lost_line_time > 1000) {
       if (agv_run_mode == MODE_4_FULL_RUN) {
-        agv_follow_line_enable = false; // Chỉ khóa vĩnh viễn khi chạy thật
+        agv_follow_line_enable = false;
       }
       AGV_Stop(hagv);
     }
     return;
   } else {
-    lost_line_time = 0; // Đã tìm lại được vạch, reset bộ đếm
+    lost_line_time = 0;
   }
 
-  // CẢM BIẾN NGÃ TƯ: Kiểm tra 2 mắt ngoài cùng (Bit 15 và Bit 0)
-  // Trong MODE_1_LINE_ONLY và MODE_3_TEST_SENSORS, lờ đi ngã tư để cảm biến
-  // luôn được đọc
+  // Intersection check: Bit 15 and Bit 0
   if (agv_run_mode != MODE_1_LINE_ONLY &&
       agv_run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
     if (((line_val & 0x8001) != 0x8001) &&
         (HAL_GetTick() - last_leave_intersection_time > 800)) {
       AGV_Stop(hagv);
-      agv_follow_line_enable = false; // Phanh cứng chờ xử lý QR
+      agv_follow_line_enable = false;
       is_at_intersection = true;
       intersection_time = HAL_GetTick();
-      lost_line_time =
-          0; // Reset bộ đếm mất vạch để không bị khóa sau khi rẽ xong
+      lost_line_time = 0;
       return;
     }
   }
 
-  // Calculate error
   hagv->current_error = AGV_GetLineError(line_val, hagv->current_error);
-
-  // Compute Line Following PID
-  // Setpoint is 0 (center of line), current value is the line error.
   hagv->pid_controller->gtht = hagv->current_error;
   float output = AGV_ComputePID(hagv->pid_controller, 0.0f);
 
   if (hagv->direction == 1) {
-    // Cập nhật tốc độ 2 bánh mượt mà theo PID (Differential Drive)
-    // Khi vạch ở bên trái (error < 0), output bị âm -> speed_l giảm, speed_r
-    // tăng -> rẽ trái. Khi vạch ở bên phải (error > 0), output dương -> speed_l
-    // tăng, speed_r giảm -> rẽ phải.
-
-    // Đã xác nhận thực tế: Dấu PID phải đảo ngược do cấu hình phần cứng
     int16_t speed_l = (int16_t)(hagv->base_speed - output);
     int16_t speed_r = (int16_t)(hagv->base_speed + output);
 
-    // Giới hạn max speed (tránh băm xung quá 999 của Timer)
-    if (speed_l > 999)
-      speed_l = 999;
-    if (speed_r > 999)
-      speed_r = 999;
+    if (speed_l > 999) speed_l = 999;
+    if (speed_r > 999) speed_r = 999;
+    if (speed_l < -300) speed_l = -300;
+    if (speed_r < -300) speed_r = -300;
 
-    // Có thể giới hạn tốc độ min là 0 (tránh quay ngược bánh) hoặc cho phép âm
-    // để quay góc gắt
-    if (speed_l < -300)
-      speed_l = -300;
-    if (speed_r < -300)
-      speed_r = -300;
-
-    // Trong MODE_3, không xuất tốc độ ra Motor để test mạch, quét LED an toàn
     if (agv_run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
       Motor_SetSpeed(hagv->motor_left, speed_l);
       Motor_SetSpeed(hagv->motor_right, speed_r);
@@ -243,12 +177,7 @@ void AGV_Stop(AGV_HandleTypeDef *hagv) {
   Motor_Stop(hagv->motor_right);
 }
 
-// ---------------------------------------------------------
-// LOGIC RẼ CHUẨN CÔNG NGHIỆP (SPIN TURN - XOAY TẠI CHỖ)
-// ---------------------------------------------------------
-
-// Hàm Helper: Xoay theo thời gian + Tự tìm vạch nếu chưa chạm
-// Mask 4 mắt giữa (bits 9-6): 0x03C0 = 0000001111000000
+// Mask for 4 center sensors (bits 9-6): 0x03C0 = 0000001111000000
 #define CENTER_MASK 0x03C0
 
 static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
@@ -256,27 +185,23 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
   bool center_found = false;
   uint32_t start = HAL_GetTick();
 
-  // Phase 1: Quay 100% lực, tối đa total_time ms
   Motor_SetSpeed(hagv->motor_left, speed_l);
   Motor_SetSpeed(hagv->motor_right, speed_r);
 
   while (HAL_GetTick() - start < total_time) {
-    // Sau 1500ms mới bắt đầu check mắt giữa (để xe xoay hẳn ra khỏi vạch cũ, tránh nhận nhầm)
+    // Blind turn time: wait 1500ms before checking center sensors to clear original line
     if (HAL_GetTick() - start > 1500) {
       uint16_t val = LineSensor_Read(hagv->line_sensor);
       if ((val & CENTER_MASK) != CENTER_MASK) {
         center_found = true;
-        break; // Tìm thấy vạch đích → Dừng quay ngay!
+        break;
       }
     }
     HAL_Delay(5);
   }
 
-  // Phase 2: Nếu hết thời gian mà mắt giữa chưa thấy vạch → quay tiếp tìm
+  // Phase 2: If line not found, continue turning for up to 800ms
   if (!center_found) {
-    // Giữ nguyên tốc độ, tiếp tục quay cho đến khi tìm vạch
-
-    // Timeout an toàn: Tối đa quay thêm 800ms
     while (HAL_GetTick() - start < total_time + 800) {
       uint16_t val = LineSensor_Read(hagv->line_sensor);
       if ((val & CENTER_MASK) != CENTER_MASK) {
@@ -286,7 +211,6 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
     }
   }
 
-  // Phanh
   AGV_Stop(hagv);
   HAL_Delay(200);
 }
@@ -295,20 +219,16 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
-  // Gọi biến thời gian và tốc độ từ lúc Calib
   extern volatile uint32_t calib_time_turn_90;
   extern volatile int16_t calib_speed;
 
-  // Tiến lên tâm ngã tư 500ms
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
   HAL_Delay(1000);
 
-  // Phanh xả quán tính
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  // Rẽ trái: Bánh trái lùi, bánh phải tiến
   Turn_Time_Based(hagv, -calib_speed, calib_speed, calib_time_turn_90);
 }
 
@@ -319,16 +239,13 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   extern volatile uint32_t calib_time_turn_90;
   extern volatile int16_t calib_speed;
 
-  // Tiến lên tâm ngã tư 500ms
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
   HAL_Delay(1000);
 
-  // Phanh xả quán tính
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  // Rẽ phải: Bánh trái tiến, bánh phải lùi
   Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_90);
 }
 
@@ -339,16 +256,13 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
   extern volatile uint32_t calib_time_turn_180;
   extern volatile int16_t calib_speed;
 
-  // Tiến lên tâm ngã tư 500ms
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
   HAL_Delay(1000);
 
-  // Phanh xả quán tính
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  // Xoay 180 độ: Thuận chiều kim đồng hồ (Xoay phải)
   Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_180);
 }
 
