@@ -78,7 +78,7 @@ uint16_t current_path[MAX_NODES];
 uint16_t path_length = 0;
 int path_index = 0;
 uint16_t current_node = 0;
-uint16_t destination_node = 15; // Ví dụ: Điểm P
+uint16_t destination_node = 11; // Chạy tới điểm N11
 AGV_Heading_t current_heading =
     HEAD_NORTH; // Biến la bàn theo dõi góc nhìn hiện tại
 volatile bool agv_follow_line_enable = true;  // Cờ khóa/mở ngắt bám vạch
@@ -167,81 +167,80 @@ void Toggle_Outputs(void) {
 
 void Load_Factory_Map(void) {
   Map_Init(&factory_map);
-  factory_map.total_nodes = 16;
+  factory_map.total_nodes = 15;
 
-  // ĐÂY LÀ ĐIỂM ĂN TIỀN CỦA ADJACENCY LIST!
-  // Bạn KHÔNG CẦN khai báo ma trận 100x100 toàn số 99999 nữa.
-  // Đường nào có thật trên bản đồ thì bạn mới AddEdge.
+  // Robot tại N00, HEAD_FORWARD = HEAD_NORTH (hướng đến N01)
+  // NORTH = tăng hàng, SOUTH = giảm hàng
+  // EAST  = tăng cột,  WEST  = giảm cột
 
-  // Giả sử: Bắc (0), Đông (1), Nam (2), Tây (3)
+  // ── ĐƯỜNG DỌC (tất cả các cột đều có đường dọc) ──
 
-  // Từ Node N00 (0)
-  Map_AddEdge(&factory_map, N00, N11, 3, HEAD_EAST);
+  // Cột 0: N00 <-> N01 <-> N02
+  Map_AddEdge(&factory_map, N00, N01, 1, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N01, N00, 1, HEAD_SOUTH);
+  Map_AddEdge(&factory_map, N01, N02, 1, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N02, N01, 1, HEAD_SOUTH);
 
-  // Từ Node N01 (1)
-  Map_AddEdge(&factory_map, N01, N12, 3, HEAD_EAST);
+  // Cột 1: N03 <-> N04 <-> N05
+  Map_AddEdge(&factory_map, N03, N04, 1, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N04, N03, 1, HEAD_SOUTH);
+  Map_AddEdge(&factory_map, N04, N05, 1, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N05, N04, 1, HEAD_SOUTH);
 
-  // Từ Node N02 (2)
-  Map_AddEdge(&factory_map, N02, N11, 3, HEAD_SOUTH);
+  // Cột 2: N06 <-> N07 <-> N08
+  Map_AddEdge(&factory_map, N06, N07, 1, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N07, N06, 1, HEAD_SOUTH);
+  Map_AddEdge(&factory_map, N07, N08, 1, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N08, N07, 1, HEAD_SOUTH);
 
-  // Từ Node N03 (3)
-  Map_AddEdge(&factory_map, N03, N12, 3, HEAD_NORTH);
+  // Cột 3: N09 <-> N10 <-> N11
+  Map_AddEdge(&factory_map, N09, N10, 1, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N10, N09, 1, HEAD_SOUTH);
+  Map_AddEdge(&factory_map, N10, N11, 1, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N11, N10, 1, HEAD_SOUTH);
 
-  // Từ Node N04 (4)
-  Map_AddEdge(&factory_map, N04, N13, 3, HEAD_EAST);
+  // Cột 4: N12 <-> N13 <-> N14
+  Map_AddEdge(&factory_map, N12, N13, 1, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N13, N12, 1, HEAD_SOUTH);
+  Map_AddEdge(&factory_map, N13, N14, 1, HEAD_NORTH);
+  Map_AddEdge(&factory_map, N14, N13, 1, HEAD_SOUTH);
 
-  // Từ Node N05 (5)
-  Map_AddEdge(&factory_map, N05, N14, 3, HEAD_EAST);
+  // ── ĐƯỜNG NGANG (CHỈ hàng trên: N02-N05-N08-N11-N14) ──
 
-  // Từ Node N06 (6) - Ngã ba chữ T
-  Map_AddEdge(&factory_map, N06, N07, 15, HEAD_SOUTH);
-  Map_AddEdge(&factory_map, N06, N15, 15, HEAD_NORTH);
+  // N02 <-> N05
+  Map_AddEdge(&factory_map, N02, N05, 1, HEAD_EAST);
+  Map_AddEdge(&factory_map, N05, N02, 1, HEAD_WEST);
 
-  // Từ Node N07 (7) - Ngã tư trung tâm
-  Map_AddEdge(&factory_map, N07, N06, 15, HEAD_NORTH);
-  Map_AddEdge(&factory_map, N07, N08, 10, HEAD_EAST);
-  Map_AddEdge(&factory_map, N07, N11, 7, HEAD_SOUTH);
+  // N05 <-> N08
+  Map_AddEdge(&factory_map, N05, N08, 1, HEAD_EAST);
+  Map_AddEdge(&factory_map, N08, N05, 1, HEAD_WEST);
 
-  // Từ Node N08 (8)
-  Map_AddEdge(&factory_map, N08, N07, 10, HEAD_WEST);
-  Map_AddEdge(&factory_map, N08, N13, 7, HEAD_NORTH);
+  // N08 <-> N11
+  Map_AddEdge(&factory_map, N08, N11, 1, HEAD_EAST);
+  Map_AddEdge(&factory_map, N11, N08, 1, HEAD_WEST);
 
-  // Từ Node N09 (9)
-  Map_AddEdge(&factory_map, N09, N10, 10, HEAD_WEST);
-  Map_AddEdge(&factory_map, N09, N14, 7, HEAD_SOUTH);
-
-  // Từ Node N10 (10)
-  Map_AddEdge(&factory_map, N10, N09, 10, HEAD_EAST);
-  Map_AddEdge(&factory_map, N10, N12, 7, HEAD_NORTH);
-  Map_AddEdge(&factory_map, N10, N15, 15, HEAD_SOUTH);
-
-  // Từ Node N11 (11) - Ngã tư lớn
-  Map_AddEdge(&factory_map, N11, N00, 3, HEAD_WEST);
-  Map_AddEdge(&factory_map, N11, N02, 3, HEAD_NORTH);
-  Map_AddEdge(&factory_map, N11, N07, 7,
-              HEAD_NORTH); // Sửa tạm: Nếu N07 nằm hướng Bắc
-  Map_AddEdge(&factory_map, N11, N12, 5, HEAD_EAST);
-
-  // Từ Node N12 (12)
-  Map_AddEdge(&factory_map, N12, N01, 3, HEAD_WEST);
-  Map_AddEdge(&factory_map, N12, N03, 3, HEAD_SOUTH);
-  Map_AddEdge(&factory_map, N12, N10, 7, HEAD_SOUTH);
-  Map_AddEdge(&factory_map, N12, N11, 5, HEAD_WEST);
-
-  // Từ Node N13 (13)
-  Map_AddEdge(&factory_map, N13, N04, 3, HEAD_WEST);
-  Map_AddEdge(&factory_map, N13, N08, 7, HEAD_SOUTH);
-  Map_AddEdge(&factory_map, N13, N14, 5, HEAD_NORTH);
-
-  // Từ Node N14 (14)
-  Map_AddEdge(&factory_map, N14, N05, 3, HEAD_WEST);
-  Map_AddEdge(&factory_map, N14, N09, 7, HEAD_NORTH);
-  Map_AddEdge(&factory_map, N14, N13, 5, HEAD_SOUTH);
-
-  // Từ Node N15 (15)
-  Map_AddEdge(&factory_map, N15, N06, 15, HEAD_SOUTH);
-  Map_AddEdge(&factory_map, N15, N10, 15, HEAD_NORTH);
+  // N11 <-> N14
+  Map_AddEdge(&factory_map, N11, N14, 1, HEAD_EAST);
+  Map_AddEdge(&factory_map, N14, N11, 1, HEAD_WEST);
 }
+
+// ---- CODE DEBUG ĐƯỜNG ĐI ĐẾN N11 CHO LIVE WATCH ----
+uint16_t debug_path[20];
+uint16_t debug_path_len = 0;
+AGV_Heading_t debug_actions[20];
+
+void Debug_Test_N11(void) {
+  // Giả sử xe đang ở N00
+  Routing_Dijkstra(&factory_map, N00, N11, debug_path, &debug_path_len);
+  
+  // Tính toán các hướng đi tương ứng cho từng Node
+  if (debug_path_len > 1) {
+    for (int i = 0; i < debug_path_len - 1; i++) {
+      debug_actions[i] = Routing_GetHeading(&factory_map, debug_path[i], debug_path[i+1]);
+    }
+  }
+}
+// ----------------------------------------------------
 /* USER CODE END 0 */
 
 /**
@@ -302,9 +301,9 @@ int main(void) {
   m_right.InvertDirection = 1;
 
   // Cấu hình tham số PID dò vạch (Đã chuẩn hóa Kd theo thời gian Delta_t)
-  pid_ctrl.Kp = 55.0f;
+  pid_ctrl.Kp = 85.0f; // Tăng từ 55 lên 85 để xe nắn vào giữa gắt và nhanh hơn
   pid_ctrl.Ki = 0.0f;
-  pid_ctrl.Kd = 0.1f;
+  pid_ctrl.Kd = 0.5f; // Tăng từ 0.1 lên 0.5 để hãm chống dao động khi nắn gắt
   pid_ctrl.i = 0.0f;
 
   // Base speed = 300
@@ -324,6 +323,7 @@ int main(void) {
 
   // Load bản đồ và tính đường đi mẫu từ A(0) đến P(15)
   Load_Factory_Map();
+  Debug_Test_N11(); // Khởi chạy thuật toán tìm đường thử để xem trong Live Watch
   bool initial_path_found = Routing_Dijkstra(
       &factory_map, current_node, destination_node, current_path, &path_length);
   if (!initial_path_found && agv_run_mode == MODE_4_FULL_RUN) {
@@ -495,6 +495,17 @@ int main(void) {
         is_at_intersection = false;
         agv_follow_line_enable = true;
         continue;
+      }
+
+      // Xử lý Ngã tư cho MODE 7 (Debug không cần QR)
+      if (agv_run_mode == MODE_7_DEBUG_NO_QR) {
+        if (path_length > 0 && path_index < path_length - 1) {
+          // Tự động giả lập việc đọc được mã QR của điểm tiếp theo
+          pending_qr_node = current_path[path_index + 1];
+        } else {
+          // Nếu đã đến đích, giả lập đọc được mã đích
+          pending_qr_node = destination_node;
+        }
       }
 
       if (pending_qr_node != 0xFFFF) {
