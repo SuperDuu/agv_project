@@ -1,0 +1,3 @@
+- Mỗi lần sửa đổi mã nguồn là một lần thực hiện commit riêng biệt.
+- Mỗi commit chỉ dành cho duy nhất một file (không gộp nhiều file vào một commit).
+- Nội dung tin nhắn commit (commit message) phải ngắn gọn, chỉ từ 2 đến 3 từ.
