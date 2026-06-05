@@ -169,57 +169,40 @@ void Load_Factory_Map(void) {
   Map_Init(&factory_map);
   factory_map.total_nodes = 15;
 
-  // Robot tại N00, HEAD_FORWARD = HEAD_NORTH (hướng đến N01)
-  // NORTH = tăng hàng, SOUTH = giảm hàng
-  // EAST  = tăng cột,  WEST  = giảm cột
-
-  // ── ĐƯỜNG DỌC (tất cả các cột đều có đường dọc) ──
-
-  // Cột 0: N00 <-> N01 <-> N02
   Map_AddEdge(&factory_map, N00, N01, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N01, N00, 1, HEAD_SOUTH);
   Map_AddEdge(&factory_map, N01, N02, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N02, N01, 1, HEAD_SOUTH);
 
-  // Cột 1: N03 <-> N04 <-> N05
   Map_AddEdge(&factory_map, N03, N04, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N04, N03, 1, HEAD_SOUTH);
   Map_AddEdge(&factory_map, N04, N05, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N05, N04, 1, HEAD_SOUTH);
 
-  // Cột 2: N06 <-> N07 <-> N08
   Map_AddEdge(&factory_map, N06, N07, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N07, N06, 1, HEAD_SOUTH);
   Map_AddEdge(&factory_map, N07, N08, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N08, N07, 1, HEAD_SOUTH);
 
-  // Cột 3: N09 <-> N10 <-> N11
   Map_AddEdge(&factory_map, N09, N10, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N10, N09, 1, HEAD_SOUTH);
   Map_AddEdge(&factory_map, N10, N11, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N11, N10, 1, HEAD_SOUTH);
 
-  // Cột 4: N12 <-> N13 <-> N14
   Map_AddEdge(&factory_map, N12, N13, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N13, N12, 1, HEAD_SOUTH);
   Map_AddEdge(&factory_map, N13, N14, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N14, N13, 1, HEAD_SOUTH);
 
-  // ── ĐƯỜNG NGANG (CHỈ hàng trên: N02-N05-N08-N11-N14) ──
-
-  // N02 <-> N05
   Map_AddEdge(&factory_map, N02, N05, 1, HEAD_EAST);
   Map_AddEdge(&factory_map, N05, N02, 1, HEAD_WEST);
 
-  // N05 <-> N08
   Map_AddEdge(&factory_map, N05, N08, 1, HEAD_EAST);
   Map_AddEdge(&factory_map, N08, N05, 1, HEAD_WEST);
 
-  // N08 <-> N11
   Map_AddEdge(&factory_map, N08, N11, 1, HEAD_EAST);
   Map_AddEdge(&factory_map, N11, N08, 1, HEAD_WEST);
 
-  // N11 <-> N14
   Map_AddEdge(&factory_map, N11, N14, 1, HEAD_EAST);
   Map_AddEdge(&factory_map, N14, N11, 1, HEAD_WEST);
 }
@@ -297,43 +280,34 @@ int main(void) {
   Motor_Init(&m_right, &htim3, TIM_CHANNEL_2, B_Out21_GPIO_Port, B_Out21_Pin,
              B_Out20_GPIO_Port, B_Out20_Pin);
 
-  // Đảo chiều quay logic của bánh phải vì bị lắp ngược gương so với bánh trái
   m_right.InvertDirection = 1;
 
-  // Cấu hình tham số PID dò vạch (Đã chuẩn hóa Kd theo thời gian Delta_t)
-  pid_ctrl.Kp = 85.0f; // Tăng từ 55 lên 85 để xe nắn vào giữa gắt và nhanh hơn
+  pid_ctrl.Kp = 85.0f;
   pid_ctrl.Ki = 0.0f;
-  pid_ctrl.Kd = 0.5f; // Tăng từ 0.1 lên 0.5 để hãm chống dao động khi nắn gắt
+  pid_ctrl.Kd = 0.5f;
   pid_ctrl.i = 0.0f;
 
-  // Base speed = 300
   AGV_Init(&h_agv, &m_left, &m_right, &line_ss, &pid_ctrl, 300.0f);
 
-  // Khởi động GPDMA nhận dữ liệu UART bằng Ngắt rảnh rỗi (IDLE Line)
   HAL_UARTEx_ReceiveToIdle_DMA(&huart3, rx_scan, 2);
 
-  // Bật ngắt Timer 6 (nếu bạn dùng TIM6 cho ngắt PID)
   extern TIM_HandleTypeDef htim6;
   HAL_TIM_Base_Start_IT(&htim6);
 
-  // Khởi tạo đầu đọc mã vạch QR50 trên cổng RS485_1 (USART2)
   QR50_Init(&qr50, &huart2, 255);
   HAL_UARTEx_ReceiveToIdle_DMA(&huart2, qr50.Data.Data_Buffer,
                                QR50_MAX_DATA_LEN);
 
-  // Load bản đồ và tính đường đi mẫu từ A(0) đến P(15)
   Load_Factory_Map();
-  Debug_Test_N11(); // Khởi chạy thuật toán tìm đường thử để xem trong Live Watch
+  Debug_Test_N11();
   bool initial_path_found = Routing_Dijkstra(
       &factory_map, current_node, destination_node, current_path, &path_length);
   if (!initial_path_found && agv_run_mode == MODE_4_FULL_RUN) {
-    agv_follow_line_enable =
-        false; // Lỗi Cấu hình: Khóa xe ngay từ đầu nếu điểm đích không tồn tại
+    agv_follow_line_enable = false;
   }
-  path_index = 0; // Đặt lại index đường đi
+  path_index = 0;
 
-  uint32_t last_qr_time =
-      HAL_GetTick(); // Khởi tạo biến hẹn giờ Distance Watchdog
+  uint32_t last_qr_time = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -345,23 +319,23 @@ int main(void) {
 
     // STATE MACHINE CHUYÊN DỤNG CHO CALIBRATION (MODE 5)
     if (agv_run_mode == MODE_5_CALIBRATE_MOTORS) {
-      agv_follow_line_enable = false; // Bắt buộc tắt PID dò vạch
+      agv_follow_line_enable = false;
       static uint8_t calib_state = 0;
       static uint32_t state_start_time = 0;
 
       if (state_start_time == 0)
-        state_start_time = HAL_GetTick(); // Khởi tạo lần đầu
+        state_start_time = HAL_GetTick();
       uint32_t elapsed = HAL_GetTick() - state_start_time;
 
       switch (calib_state) {
-      case 0: // Chờ 2s trước khi bắt đầu bài test
+      case 0:
         AGV_Stop(&h_agv);
         if (elapsed > 2000) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
         break;
-      case 1: // Tiến
+      case 1:
         Motor_SetSpeed(&m_left, calib_speed);
         Motor_SetSpeed(&m_right, calib_speed);
         if (elapsed > calib_time_forward) {
@@ -369,14 +343,14 @@ int main(void) {
           state_start_time = HAL_GetTick();
         }
         break;
-      case 2: // Nghỉ 1s
+      case 2:
         AGV_Stop(&h_agv);
         if (elapsed > 1000) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
         break;
-      case 3: // Lùi
+      case 3:
         Motor_SetSpeed(&m_left, -calib_speed);
         Motor_SetSpeed(&m_right, -calib_speed);
         if (elapsed > calib_time_forward) {
@@ -384,14 +358,14 @@ int main(void) {
           state_start_time = HAL_GetTick();
         }
         break;
-      case 4: // Nghỉ 1s
+      case 4:
         AGV_Stop(&h_agv);
         if (elapsed > 1000) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
         break;
-      case 5: // Xoay trái 90 độ (Left quay lùi, Right quay tiến)
+      case 5:
         Motor_SetSpeed(&m_left, -calib_speed);
         Motor_SetSpeed(&m_right, calib_speed);
         if (elapsed > calib_time_turn_90) {
@@ -399,14 +373,14 @@ int main(void) {
           state_start_time = HAL_GetTick();
         }
         break;
-      case 6: // Nghỉ 1s
+      case 6:
         AGV_Stop(&h_agv);
         if (elapsed > 1000) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
         break;
-      case 7: // Xoay phải 90 độ (Left quay tiến, Right quay lùi)
+      case 7:
         Motor_SetSpeed(&m_left, calib_speed);
         Motor_SetSpeed(&m_right, -calib_speed);
         if (elapsed > calib_time_turn_90) {
@@ -414,14 +388,14 @@ int main(void) {
           state_start_time = HAL_GetTick();
         }
         break;
-      case 8: // Nghỉ 1s
+      case 8:
         AGV_Stop(&h_agv);
         if (elapsed > 1000) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
         break;
-      case 9: // Xoay trái 180 độ
+      case 9:
         Motor_SetSpeed(&m_left, -calib_speed);
         Motor_SetSpeed(&m_right, calib_speed);
         if (elapsed > calib_time_turn_180) {
@@ -429,14 +403,14 @@ int main(void) {
           state_start_time = HAL_GetTick();
         }
         break;
-      case 10: // Nghỉ 1s
+      case 10:
         AGV_Stop(&h_agv);
         if (elapsed > 1000) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
         break;
-      case 11: // Xoay phải 180 độ
+      case 11:
         Motor_SetSpeed(&m_left, calib_speed);
         Motor_SetSpeed(&m_right, -calib_speed);
         if (elapsed > calib_time_turn_180) {
@@ -444,17 +418,13 @@ int main(void) {
           state_start_time = HAL_GetTick();
         }
         break;
-      case 12: // Đã hoàn thành toàn bộ bài test
+      case 12:
         AGV_Stop(&h_agv);
         break;
       }
-      continue; // Bỏ qua toàn bộ logic bên dưới của xe (không đọc QR, không dò
-                // vạch)
+      continue;
     }
 
-    // Distance Watchdog: Nếu chạy Full 15s mà ko quét được QR -> Có thể hỏng
-    // camera CHÚ Ý: Tính năng này chỉ bật ở MODE_4. Các chế độ Debug (1, 2, 3)
-    // sẽ bỏ qua để test.
     if (agv_run_mode == MODE_4_FULL_RUN) {
       if (agv_follow_line_enable && (HAL_GetTick() - last_qr_time > 15000)) {
         agv_follow_line_enable = false;
@@ -465,27 +435,20 @@ int main(void) {
     if (qr50.Data.New_Data_Flag) {
       qr50.Data.New_Data_Flag = false;
 
-      // Lọc rác: Chỉ xử lý nếu chuỗi bắt đầu bằng chữ 'N'
       if (qr50.Data.Data_Buffer[0] == 'N') {
-        last_qr_time = HAL_GetTick(); // Đã bắt được QR chuẩn, reset Watchdog
+        last_qr_time = HAL_GetTick();
 
-        // Trích xuất ID từ định dạng "N00", "N05", "N99"...
         uint16_t read_node_id = atoi((char *)&qr50.Data.Data_Buffer[1]);
 
         if (read_node_id < MAX_NODES && read_node_id != last_processed_node) {
-          // Lưu vào bộ đệm, chờ chạm ngã tư mới xử lý (Hoặc nếu đã chạm rồi thì
-          // xử lý ngay)
           pending_qr_node = read_node_id;
         }
       }
     }
 
-    // STATE MACHINE: Xử lý ngã tư
     if (is_at_intersection) {
-      // Trong MODE_2, xe chỉ bám vạch và dừng tại ngã tư, không xử lý định
-      // tuyến tiếp
       if (agv_run_mode == MODE_2_LINE_INTERSECTION) {
-        continue; // Bỏ qua toàn bộ logic bên dưới, xe đứng im
+        continue;
       }
 
       if (agv_run_mode == MODE_6_TEST_TURN_RIGHT) {
