@@ -78,11 +78,11 @@ uint16_t current_path[MAX_NODES];
 uint16_t path_length = 0;
 int path_index = 0;
 uint16_t current_node = 0;
-uint16_t destination_node = 11; // Chạy tới điểm N11
+uint16_t destination_node = 6;
 AGV_Heading_t current_heading =
-    HEAD_NORTH; // Biến la bàn theo dõi góc nhìn hiện tại
-volatile bool agv_follow_line_enable = true;  // Cờ khóa/mở ngắt bám vạch
-static uint16_t last_processed_node = 0xFFFF; // Cờ chống quét trùng QR
+    HEAD_NORTH;
+volatile bool agv_follow_line_enable = true;
+static uint16_t last_processed_node = 0xFFFF;
 
 volatile bool is_at_intersection = false; // Cờ báo hiệu chạm ngã tư
 volatile uint32_t intersection_time = 0;
@@ -207,23 +207,19 @@ void Load_Factory_Map(void) {
   Map_AddEdge(&factory_map, N14, N11, 1, HEAD_WEST);
 }
 
-// ---- CODE DEBUG ĐƯỜNG ĐI ĐẾN N11 CHO LIVE WATCH ----
 uint16_t debug_path[20];
 uint16_t debug_path_len = 0;
 AGV_Heading_t debug_actions[20];
 
 void Debug_Test_N11(void) {
-  // Giả sử xe đang ở N00
   Routing_Dijkstra(&factory_map, N00, N11, debug_path, &debug_path_len);
-  
-  // Tính toán các hướng đi tương ứng cho từng Node
+
   if (debug_path_len > 1) {
     for (int i = 0; i < debug_path_len - 1; i++) {
       debug_actions[i] = Routing_GetHeading(&factory_map, debug_path[i], debug_path[i+1]);
     }
   }
 }
-// ----------------------------------------------------
 /* USER CODE END 0 */
 
 /**
@@ -474,9 +470,33 @@ int main(void) {
         is_at_intersection = false;
 
         if (read_node_id == destination_node) {
-          agv_follow_line_enable = false;
-          AGV_Stop(&h_agv);
-          continue;
+          if (agv_run_mode == MODE_7_DEBUG_NO_QR) {
+            if (destination_node == 6) {
+              AGV_Stop(&h_agv);
+              HAL_Delay(3000);
+              destination_node = 3;
+              current_node = 6;
+              Routing_Dijkstra(&factory_map, current_node, destination_node,
+                               current_path, &path_length);
+              path_index = 0;
+            } else if (destination_node == 3) {
+              AGV_Stop(&h_agv);
+              HAL_Delay(3000);
+              destination_node = 1;
+              current_node = 3;
+              Routing_Dijkstra(&factory_map, current_node, destination_node,
+                               current_path, &path_length);
+              path_index = 0;
+            } else {
+              agv_follow_line_enable = false;
+              AGV_Stop(&h_agv);
+              continue;
+            }
+          } else {
+            agv_follow_line_enable = false;
+            AGV_Stop(&h_agv);
+            continue;
+          }
         }
 
         if (path_length > 0 && path_index < path_length - 1 &&
