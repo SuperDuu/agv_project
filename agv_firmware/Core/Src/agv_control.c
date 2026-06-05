@@ -256,10 +256,6 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
   extern volatile uint32_t calib_time_turn_180;
   extern volatile int16_t calib_speed;
 
-  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
-  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(1000);
-
   AGV_Stop(hagv);
   HAL_Delay(300);
 
