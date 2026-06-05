@@ -45,7 +45,7 @@ typedef enum {
 typedef enum {
     ACT_STRAIGHT = 0,
     ACT_TURN_RIGHT = 1,
-    ACT_TURN_180 = 2,
+    ACT_BACKWARD = 2,
     ACT_TURN_LEFT = 3,
     ACT_STOP = 4,
     ACT_NONE = 5
