@@ -167,6 +167,19 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
       Motor_SetSpeed(hagv->motor_left, speed_l);
       Motor_SetSpeed(hagv->motor_right, speed_r);
     }
+  } else if (hagv->direction == -1) {
+    int16_t speed_l = (int16_t)(-hagv->base_speed - output);
+    int16_t speed_r = (int16_t)(-hagv->base_speed + output);
+
+    if (speed_l < -999) speed_l = -999;
+    if (speed_r < -999) speed_r = -999;
+    if (speed_l > 300) speed_l = 300;
+    if (speed_r > 300) speed_r = 300;
+
+    if (agv_run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
+      Motor_SetSpeed(hagv->motor_left, speed_l);
+      Motor_SetSpeed(hagv->motor_right, speed_r);
+    }
   }
 }
 
@@ -249,17 +262,6 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_90);
 }
 
-void AGV_Turn180(AGV_HandleTypeDef *hagv) {
-  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
-    return;
 
-  extern volatile uint32_t calib_time_turn_180;
-  extern volatile int16_t calib_speed;
-
-  AGV_Stop(hagv);
-  HAL_Delay(300);
-
-  Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_180);
-}
 
 /* USER CODE END 1 */
