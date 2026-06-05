@@ -19,8 +19,7 @@ extern volatile uint32_t intersection_time;
 extern volatile uint32_t last_leave_intersection_time;
 
 // Mặc định chạy Full (thực tế có thể đổi thành MODE_1, 2, 3 tùy nhu cầu test)
-volatile AGV_RunMode_t agv_run_mode = MODE_4_FULL_RUN;
-
+volatile AGV_RunMode_t agv_run_mode = MODE_6_TEST_TURN_RIGHT;
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
@@ -168,7 +167,9 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     
     // Nếu mất vạch liên tục quá 1 giây -> Lỗi phần cứng hoặc văng khỏi line -> Phanh gấp!
     if (HAL_GetTick() - lost_line_time > 1000) {
-        agv_follow_line_enable = false; 
+        if (agv_run_mode == MODE_4_FULL_RUN) {
+            agv_follow_line_enable = false; // Chỉ khóa vĩnh viễn khi chạy thật
+        }
         AGV_Stop(hagv);
     }
     return;
@@ -177,13 +178,14 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
   }
 
   // CẢM BIẾN NGÃ TƯ: Kiểm tra 2 mắt ngoài cùng (Bit 15 và Bit 0)
-  // Trong MODE_1_LINE_ONLY, ta lờ đi tín hiệu ngã tư để chỉ test bám vạch
-  if (agv_run_mode != MODE_1_LINE_ONLY) {
+  // Trong MODE_1_LINE_ONLY và MODE_3_TEST_SENSORS, lờ đi ngã tư để cảm biến luôn được đọc
+  if (agv_run_mode != MODE_1_LINE_ONLY && agv_run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
     if (((line_val & 0x8001) != 0x8001) && (HAL_GetTick() - last_leave_intersection_time > 1500)) {
         AGV_Stop(hagv);
         agv_follow_line_enable = false; // Phanh cứng chờ xử lý QR
         is_at_intersection = true;
         intersection_time = HAL_GetTick();
+        lost_line_time = 0; // Reset bộ đếm mất vạch để không bị khóa sau khi rẽ xong
         return;
     }
   }
@@ -202,8 +204,9 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     // tăng -> rẽ trái. Khi vạch ở bên phải (error > 0), output dương -> speed_l
     // tăng, speed_r giảm -> rẽ phải.
 
-    int16_t speed_l = (int16_t)(hagv->base_speed + output);
-    int16_t speed_r = (int16_t)(hagv->base_speed - output);
+    // Đảo dấu bù trừ: Sửa theo thực tế để xe bẻ lái đúng hướng vạch
+    int16_t speed_l = (int16_t)(hagv->base_speed - output);
+    int16_t speed_r = (int16_t)(hagv->base_speed + output);
 
     // Giới hạn max speed (tránh băm xung quá 999 của Timer)
     if (speed_l > 999)
@@ -237,143 +240,67 @@ void AGV_Stop(AGV_HandleTypeDef *hagv) {
 // LOGIC RẼ CHUẨN CÔNG NGHIỆP (SPIN TURN - XOAY TẠI CHỖ)
 // ---------------------------------------------------------
 
+// Hàm Helper: Xoay mù theo thời gian (Sử dụng 100% lực y như MODE_5)
+static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l, int16_t speed_r, uint32_t total_time) {
+  // Cấp điện 100% sức mạnh như lúc bạn Calib
+  Motor_SetSpeed(hagv->motor_left, speed_l);
+  Motor_SetSpeed(hagv->motor_right, speed_r);
+  
+  // Chờ đúng khoảng thời gian đã được tinh chỉnh
+  HAL_Delay(total_time);
+
+  // Phanh chết ngay lập tức
+  AGV_Stop(hagv);
+  HAL_Delay(200); 
+}
+
 void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
-  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
-    return;
+  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR) return;
 
-  uint16_t line_val;
+  // Gọi biến thời gian và tốc độ từ lúc Calib
+  extern volatile uint32_t calib_time_offset;
+  extern volatile uint32_t calib_time_turn_90;
+  extern volatile int16_t calib_speed;
 
-  // Bù trừ cơ khí: Chạy thẳng 300ms để đẩy trục bánh xe vào giữa ngã tư
+  // Bù trừ cơ khí: Chạy thẳng để đẩy trục bánh xe vào giữa ngã tư
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(300);
-
-  // Giai đoạn 1: Xoay mù để thoát vạch cũ
-  // Rẽ trái -> Bánh trái lùi, Bánh phải tiến
-  Motor_SetSpeed(hagv->motor_left, -500);
-  Motor_SetSpeed(hagv->motor_right, 500);
-
-  // Delay mù 500ms (Bạn có thể tăng giảm tùy tốc độ bánh xe)
-  // Mục đích: Cho xe văng hẳn ra khỏi đường băng dính hiện tại
-  HAL_Delay(500);
-
-  // Giai đoạn 2: Tiếp tục xoay và chờ bắt vạch mới
-  uint32_t start_time = HAL_GetTick();
-  int debounce_cnt = 0;
+  HAL_Delay(calib_time_offset);
   
-  while (1) {
-    line_val = LineSensor_Read(hagv->line_sensor);
-
-    // 0x0180 tương đương nhị phân là 0000 0001 1000 0000
-    // -> Khi vạch từ đè lên 2 cảm biến ở TÂM xe (bit 7 và 8), cờ này sẽ khác 0
-    if ((line_val & 0x0180) != 0x0180) {
-        debounce_cnt++;
-        if (debounce_cnt >= 3) { // Chống nhiễu: Phải đọc thấy vạch 3 lần liên tiếp
-            break; // Đã bắt được vạch 90 độ! Thoát vòng lặp.
-        }
-    } else {
-        debounce_cnt = 0;
-    }
-    
-    // Watchdog Timer: Nếu xoay quá 3 giây không bắt được vạch -> Lỗi trượt bánh hoặc đứt vạch
-    if (HAL_GetTick() - start_time > 3000) {
-        agv_follow_line_enable = false; // Báo lỗi toàn hệ thống
-        break;
-    }
-    
-    HAL_Delay(5); // Đọc cảm biến mỗi 5ms
-  }
-
-  // Giai đoạn 3: Phanh lại để triệt tiêu quán tính
-  AGV_Stop(hagv);
-  HAL_Delay(200); // Chờ xe đứng yên hẳn trước khi nhường quyền cho bám vạch
+  // Rẽ trái: Bánh trái lùi, bánh phải tiến. Chạy bằng hàm Time_Based
+  Turn_Time_Based(hagv, -calib_speed, calib_speed, calib_time_turn_90);
 }
 
 void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
-  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
-    return;
+  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR) return;
 
-  uint16_t line_val;
+  extern volatile uint32_t calib_time_offset;
+  extern volatile uint32_t calib_time_turn_90;
+  extern volatile int16_t calib_speed;
 
-  // Bù trừ cơ khí: Chạy thẳng 300ms để đẩy trục bánh xe vào giữa ngã tư
+  // Bù trừ cơ khí
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(300);
-
-  // Rẽ phải -> Bánh trái tiến, Bánh phải lùi
-  Motor_SetSpeed(hagv->motor_left, 500);
-  Motor_SetSpeed(hagv->motor_right, -500);
-
-  // Xoay mù thoát vạch
-  HAL_Delay(500);
-
-  // Chờ bắt vạch mới
-  uint32_t start_time = HAL_GetTick();
-  int debounce_cnt = 0;
+  HAL_Delay(calib_time_offset);
   
-  while (1) {
-    line_val = LineSensor_Read(hagv->line_sensor);
-    if ((line_val & 0x0180) != 0x0180) {
-        debounce_cnt++;
-        if (debounce_cnt >= 3) break;
-    } else {
-        debounce_cnt = 0;
-    }
-    
-    if (HAL_GetTick() - start_time > 3000) {
-        agv_follow_line_enable = false; 
-        break;
-    }
-    HAL_Delay(5);
-  }
-
-  AGV_Stop(hagv);
-  HAL_Delay(200);
+  // Rẽ phải: Bánh trái tiến, bánh phải lùi
+  Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_90);
 }
 
 void AGV_Turn180(AGV_HandleTypeDef *hagv) {
-  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
-    return;
+  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR) return;
 
-  uint16_t line_val;
+  extern volatile uint32_t calib_time_offset;
+  extern volatile uint32_t calib_time_turn_180;
+  extern volatile int16_t calib_speed;
 
-  // Bù trừ cơ khí: Chạy thẳng 300ms để đẩy trục bánh xe vào giữa ngã tư
+  // Bù trừ cơ khí
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(300);
-
-  // Xoay 180 độ (Thường chọn xoay phải cho thuận)
-  Motor_SetSpeed(hagv->motor_left, 500);
-  Motor_SetSpeed(hagv->motor_right, -500);
-
-  // QUAN TRỌNG: Quay 180 độ tốn gấp đôi thời gian so với quay 90 độ!
-  // Bạn cần TĂNG thời gian delay mù lên (ví dụ 1000ms hoặc 1200ms).
-  // Nếu ngã tư có vạch 90 độ, delay mù đủ lâu sẽ giúp xe "lướt qua" và phớt lờ
-  // vạch 90 độ. Nó chỉ dừng lại khi bắt được vạch thứ hai (vạch 180 độ nằm sau
-  // lưng).
-  HAL_Delay(1200);
-
-  uint32_t start_time = HAL_GetTick();
-  int debounce_cnt = 0;
+  HAL_Delay(calib_time_offset);
   
-  while (1) {
-    line_val = LineSensor_Read(hagv->line_sensor);
-    if ((line_val & 0x0180) != 0x0180) {
-        debounce_cnt++;
-        if (debounce_cnt >= 3) break; // Đã bắt được vạch sau lưng
-    } else {
-        debounce_cnt = 0;
-    }
-    
-    if (HAL_GetTick() - start_time > 4000) { // Quay 180 độ cần nhiều thời gian hơn (4s)
-        agv_follow_line_enable = false; 
-        break;
-    }
-    HAL_Delay(5);
-  }
-
-  AGV_Stop(hagv);
-  HAL_Delay(200);
+  // Xoay 180 độ: Thuận chiều kim đồng hồ (Xoay phải)
+  Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_180);
 }
 
 /* USER CODE END 1 */
