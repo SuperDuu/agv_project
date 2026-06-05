@@ -274,7 +274,7 @@ void SystemInit(void)
     /* Lock the FLASH Option Control Register access */
     FLASH->OPTCR |= FLASH_OPTCR_OPTLOCK;
   }
-}
+ }
 
 /**
   * @brief  Update SystemCoreClock variable according to Clock Register Values.
