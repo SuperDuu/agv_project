@@ -529,18 +529,24 @@ int main(void) {
 
           switch (next_action) {
           case ACT_TURN_LEFT:
+            h_agv.direction = 1;
             AGV_TurnLeft(&h_agv);
             break;
           case ACT_TURN_RIGHT:
+            h_agv.direction = 1;
             AGV_TurnRight(&h_agv);
             break;
           case ACT_STRAIGHT:
+            h_agv.direction = 1;
             Motor_SetSpeed(h_agv.motor_left, (int16_t)h_agv.base_speed);
             Motor_SetSpeed(h_agv.motor_right, (int16_t)h_agv.base_speed);
             HAL_Delay(300);
             break;
-          case ACT_TURN_180:
-            AGV_Turn180(&h_agv);
+          case ACT_BACKWARD:
+            h_agv.direction = -1;
+            Motor_SetSpeed(h_agv.motor_left, (int16_t)-h_agv.base_speed);
+            Motor_SetSpeed(h_agv.motor_right, (int16_t)-h_agv.base_speed);
+            HAL_Delay(300);
             break;
           case ACT_STOP:
             AGV_Stop(&h_agv);
@@ -549,7 +555,9 @@ int main(void) {
             break;
           }
 
-          current_heading = target_heading;
+          if (next_action != ACT_BACKWARD) {
+            current_heading = target_heading;
+          }
           last_leave_intersection_time = HAL_GetTick();
           agv_follow_line_enable = true;
         }
