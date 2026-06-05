@@ -32,6 +32,7 @@ void Motor_Init(Motor_HandleTypeDef *hmotor, TIM_HandleTypeDef *htim, uint32_t C
     
     hmotor->Speed = 0;
     hmotor->Direction = 0;
+    hmotor->InvertDirection = 0;
     
     if (hmotor->EN_Port != NULL) {
         HAL_GPIO_WritePin(hmotor->EN_Port, hmotor->EN_Pin, GPIO_PIN_SET); 
@@ -44,9 +45,10 @@ void Motor_SetSpeed(Motor_HandleTypeDef *hmotor, int16_t speed)
 {
     if (hmotor == NULL) return;
     
+    int16_t physical_speed = hmotor->InvertDirection ? -speed : speed;
     hmotor->Speed = speed;
     
-    if (speed >= 0) {
+    if (physical_speed >= 0) {
         hmotor->Direction = 1;
         if (hmotor->DIR_Port != NULL) {
             HAL_GPIO_WritePin(hmotor->DIR_Port, hmotor->DIR_Pin, GPIO_PIN_SET);
@@ -58,7 +60,7 @@ void Motor_SetSpeed(Motor_HandleTypeDef *hmotor, int16_t speed)
         }
     }
     
-    uint32_t duty = (speed >= 0) ? speed : -speed;
+    uint32_t duty = (physical_speed >= 0) ? physical_speed : -physical_speed;
     __HAL_TIM_SET_COMPARE(hmotor->htim, hmotor->Channel, duty);
 }
 
