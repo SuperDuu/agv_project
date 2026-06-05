@@ -79,7 +79,6 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv);
 void AGV_Stop(AGV_HandleTypeDef *hagv);
 void AGV_TurnLeft(AGV_HandleTypeDef *hagv);
 void AGV_TurnRight(AGV_HandleTypeDef *hagv);
-void AGV_Turn180(AGV_HandleTypeDef *hagv);
 
 /* USER CODE BEGIN EFP */
 
