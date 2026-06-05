@@ -38,6 +38,7 @@ typedef struct {
     
     int16_t Speed;
     uint8_t Direction;
+    uint8_t InvertDirection; // 1: Đảo chiều, 0: Bình thường
 } Motor_HandleTypeDef;
 /* USER CODE END Exported types */
 
