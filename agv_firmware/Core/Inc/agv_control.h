@@ -41,6 +41,8 @@ typedef enum {
 } AGV_RunMode_t;
 
 extern volatile AGV_RunMode_t agv_run_mode;
+extern volatile uint8_t agv_indicator_state; // 0: Normal, 1: Turning, 2: Error
+
 typedef struct {
   volatile float gtht;
   volatile float er;
@@ -79,6 +81,7 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv);
 void AGV_Stop(AGV_HandleTypeDef *hagv);
 void AGV_TurnLeft(AGV_HandleTypeDef *hagv);
 void AGV_TurnRight(AGV_HandleTypeDef *hagv);
+void AGV_Turn180(AGV_HandleTypeDef *hagv);
 
 /* USER CODE BEGIN EFP */
 
