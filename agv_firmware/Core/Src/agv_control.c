@@ -19,6 +19,7 @@ extern volatile uint32_t intersection_time;
 extern volatile uint32_t last_leave_intersection_time;
 
 volatile AGV_RunMode_t agv_run_mode = MODE_7_DEBUG_NO_QR;
+volatile uint8_t agv_indicator_state = 0; // 0: Normal, 2: Turning, 3: Error
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
@@ -128,6 +129,7 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     if (HAL_GetTick() - lost_line_time > 1000) {
       if (agv_run_mode == MODE_4_FULL_RUN) {
         agv_follow_line_enable = false;
+        agv_indicator_state = 3; // Lỗi mất line (State 3: Error)
       }
       AGV_Stop(hagv);
     }
@@ -202,6 +204,9 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
   // Cấp xung mạnh (Kick-start) 700PWM trong 80ms để thắng lực ma sát tĩnh lúc xe đang đứng im
   int16_t kick_l = (speed_l > 0) ? 700 : -700;
   int16_t kick_r = (speed_r > 0) ? 700 : -700;
+  
+  agv_indicator_state = 2; // State 2: Turning
+  
   Motor_SetSpeed(hagv->motor_left, kick_l);
   Motor_SetSpeed(hagv->motor_right, kick_r);
   HAL_Delay(80);
@@ -210,7 +215,10 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
   Motor_SetSpeed(hagv->motor_left, speed_l);
   Motor_SetSpeed(hagv->motor_right, speed_r);
 
+  extern void HMI_Process(void);
+
   while (HAL_GetTick() - start < total_time) {
+    HMI_Process(); // Keep Modbus alive during blocking turn
     // Blind turn time: wait 1500ms before checking center sensors to clear original line
     if (HAL_GetTick() - start > 1500) {
       uint16_t val = LineSensor_Read(hagv->line_sensor);
@@ -225,6 +233,7 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
   // Phase 2: If line not found, continue turning for up to 800ms
   if (!center_found) {
     while (HAL_GetTick() - start < total_time + 800) {
+      HMI_Process(); // Keep Modbus alive during blocking turn
       uint16_t val = LineSensor_Read(hagv->line_sensor);
       if ((val & CENTER_MASK) != CENTER_MASK) {
         break;
@@ -234,6 +243,7 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
   }
 
   AGV_Stop(hagv);
+  agv_indicator_state = 0; // Turn complete
   HAL_Delay(200);
 }
 
@@ -269,6 +279,24 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   HAL_Delay(300);
 
   Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_90);
+}
+
+void AGV_Turn180(AGV_HandleTypeDef *hagv) {
+  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
+    return;
+
+  extern volatile uint32_t calib_time_turn_180;
+  extern volatile int16_t calib_speed;
+
+  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
+  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
+  HAL_Delay(1000);
+
+  AGV_Stop(hagv);
+  HAL_Delay(300);
+
+  // Chọn chiều quay (phải) để quay 180 độ
+  Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_180);
 }
 
 
