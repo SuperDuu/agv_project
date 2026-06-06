@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "hmi_modbus.h"
 #include "agv_control.h"
 #include "agv_routing.h"
 #include "motor.h"
@@ -70,7 +71,7 @@ Motor_HandleTypeDef m_left, m_right;
 LineSensor_HandleTypeDef line_ss;
 Pid_data pid_ctrl;
 
-uint8_t rx_scan[2];  // Mảng nhận dữ liệu từ USART3 qua DMA
+// (Đã xóa rx_scan vì USART3 chuyển sang cho HMI Weinview)
 QR50_Handler_t qr50; // Đầu đọc QR50 trên USART2
 char debug_line_binary[17] = "0000000000000000";
 AGV_Map_t factory_map;
@@ -285,7 +286,7 @@ int main(void) {
 
   AGV_Init(&h_agv, &m_left, &m_right, &line_ss, &pid_ctrl, 300.0f);
 
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart3, rx_scan, 2);
+  HMI_Init(&huart3, 1); // Khởi tạo HMI trên USART3, địa chỉ Slave = 1
 
   extern TIM_HandleTypeDef htim6;
   HAL_TIM_Base_Start_IT(&htim6);
@@ -309,6 +310,8 @@ int main(void) {
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
+    HMI_Process();
+    HMI_SyncData();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -1250,12 +1253,7 @@ static void MX_GPIO_Init(void) {
 /* USER CODE BEGIN 4 */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
   if (huart->Instance == USART3) {
-    // Hàm này tự động được gọi khi nhận đủ 2 byte HOẶC khi đường dây RS485 nghỉ
-    // Ngay khi đường dây nghỉ, DMA trong chế độ Circular KHÔNG tự reset con trỏ
-    // về 0! Bắt buộc phải Abort và Start lại để gói tin tiếp theo bắt đầu ghi
-    // từ rx_scan[0]
-    HAL_UART_AbortReceive(&huart3);
-    HAL_UARTEx_ReceiveToIdle_DMA(&huart3, rx_scan, 2);
+    HMI_RxCallback(huart, Size);
   } else if (huart->Instance == USART2) {
     // Xử lý gói tin từ đầu đọc QR50
     QR50_ParseData(&qr50, qr50.Data.Data_Buffer, Size);
