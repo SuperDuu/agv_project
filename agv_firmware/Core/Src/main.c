@@ -303,6 +303,11 @@ int main(void)
       bool found = Routing_Dijkstra(&factory_map, current_node, destination_node, current_path, &path_length);
       if (found) {
         path_index = 0;
+        // Tự động chạy luôn khi nhận được đường đi mới (do không có nút Start trên HMI)
+        agv_follow_line_enable = true;
+        agv_indicator_state = 0;
+        last_leave_intersection_time = HAL_GetTick();
+        last_qr_time = HAL_GetTick();
       } else {
         path_length = 0;
       }
