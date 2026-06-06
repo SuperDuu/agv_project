@@ -1,6 +1,7 @@
 #include "hmi_modbus.h"
 #include <string.h>
 #include "agv_routing.h"
+#include "agv_control.h"
 
 uint16_t hmi_registers[HMI_REG_COUNT] = {0};
 HMI_HandleTypeDef h_hmi;
@@ -14,8 +15,10 @@ extern volatile uint16_t current_node;
 extern volatile uint16_t destination_node;
 extern uint16_t current_path[];
 extern uint16_t path_length;
-extern volatile uint8_t agv_run_mode;
-extern bool agv_follow_line_enable;
+extern volatile uint16_t path_index;
+extern volatile AGV_RunMode_t agv_run_mode;
+extern volatile bool agv_follow_line_enable;
+extern volatile uint32_t last_leave_intersection_time;
 extern void Route_Recalculate(void); // Cần định nghĩa hoặc dùng flag trong main
 
 // Tính mã CRC16 cho Modbus RTU
@@ -35,6 +38,11 @@ static uint16_t Modbus_CalcCRC(uint8_t *buf, uint16_t len) {
     return crc;
 }
 
+// Bộ đệm xử lý tách biệt khỏi DMA
+static uint8_t process_buffer[256];
+static volatile uint16_t process_len = 0;
+static volatile bool need_restart_dma = false;
+
 // Khởi tạo UART DMA/IT cho Modbus
 void HMI_Init(UART_HandleTypeDef *huart, uint8_t slave_address) {
     h_hmi.huart = huart;
@@ -42,40 +50,77 @@ void HMI_Init(UART_HandleTypeDef *huart, uint8_t slave_address) {
     h_hmi.rx_index = 0;
     h_hmi.frame_ready = false;
     
-    // Khởi động nhận DMA hoặc ngắt (sử dụng chế độ ngắt nhàn rỗi - IDLE LINE nếu có)
-    HAL_UARTEx_ReceiveToIdle_IT(h_hmi.huart, h_hmi.rx_buffer, sizeof(h_hmi.rx_buffer));
+    // Đồng bộ các biến mặc định lên HMI khi khởi tạo để tránh bị ghi đè về 0
+    hmi_registers[REG_AGV_MODE] = agv_run_mode;
+    hmi_registers[REG_DEST_NODE] = destination_node;
+    hmi_registers[REG_CURRENT_NODE] = current_node;
+    
+    prev_dest_node = destination_node; // Đồng bộ để không tự tính đường đi khi khởi động
+    prev_command = 0;
+    
+    // Kích hoạt ngắt toàn cục UART để bắt sự kiện IDLE LINE
+    HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(USART2_IRQn);
+    
+    // Khởi động nhận DMA
+    HAL_UARTEx_ReceiveToIdle_DMA(h_hmi.huart, h_hmi.rx_buffer, sizeof(h_hmi.rx_buffer));
 }
 
 // Callback khi UART nhận được dữ liệu (Gọi từ HAL_UARTEx_RxEventCallback trong main)
 void HMI_RxCallback(UART_HandleTypeDef *huart, uint16_t Size) {
     if (huart->Instance == h_hmi.huart->Instance) {
-        h_hmi.rx_index = Size;
-        h_hmi.frame_ready = true;
+        // Nháy đèn SYS_LED1 báo hiệu nhận được dữ liệu
+        HAL_GPIO_TogglePin(SYS_LED1_GPIO_Port, SYS_LED1_Pin);
         
-        // Khởi động lại vòng nhận
-        HAL_UARTEx_ReceiveToIdle_IT(h_hmi.huart, h_hmi.rx_buffer, sizeof(h_hmi.rx_buffer));
+        // Copy dữ liệu sang bộ đệm xử lý ngay lập tức (trong ngắt, trước khi DMA ghi đè)
+        if (Size <= sizeof(process_buffer)) {
+            memcpy(process_buffer, h_hmi.rx_buffer, Size);
+            process_len = Size;
+            h_hmi.frame_ready = true;
+        }
+        
+        // Đánh dấu cần khởi động lại DMA (sẽ thực hiện trong HMI_Process ở main loop)
+        need_restart_dma = true;
     }
+}
+
+// Khởi động lại DMA an toàn (Gọi từ main loop, KHÔNG gọi trong ISR)
+void HMI_RestartDMA(void) {
+    if (!need_restart_dma) return;
+    need_restart_dma = false;
+    
+    // Dừng hoàn toàn DMA cũ
+    HAL_UART_AbortReceive(h_hmi.huart);
+    
+    // Xóa tất cả cờ lỗi UART
+    __HAL_UART_CLEAR_FLAG(h_hmi.huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
+    
+    // Khởi động lại DMA từ đầu (con trỏ quay về rx_buffer[0])
+    HAL_UARTEx_ReceiveToIdle_DMA(h_hmi.huart, h_hmi.rx_buffer, sizeof(h_hmi.rx_buffer));
 }
 
 // Xử lý gói tin Modbus (Gọi liên tục trong while(1))
 void HMI_Process(void) {
+    // Luôn kiểm tra xem có cần restart DMA không (dù có frame hay không)
+    HMI_RestartDMA();
+    
     if (!h_hmi.frame_ready) return;
     h_hmi.frame_ready = false;
 
-    uint16_t len = h_hmi.rx_index;
+    uint16_t len = process_len;
     if (len < 8) return; // Khung Modbus RTU tối thiểu 8 bytes
 
     // Kiểm tra Slave Address
-    if (h_hmi.rx_buffer[0] != h_hmi.slave_address) return;
+    if (process_buffer[0] != h_hmi.slave_address) return;
 
     // Kiểm tra CRC
-    uint16_t received_crc = (h_hmi.rx_buffer[len - 1] << 8) | h_hmi.rx_buffer[len - 2];
-    uint16_t calc_crc = Modbus_CalcCRC(h_hmi.rx_buffer, len - 2);
+    uint16_t received_crc = (process_buffer[len - 1] << 8) | process_buffer[len - 2];
+    uint16_t calc_crc = Modbus_CalcCRC(process_buffer, len - 2);
     if (received_crc != calc_crc) return;
 
-    uint8_t function_code = h_hmi.rx_buffer[1];
-    uint16_t start_addr = (h_hmi.rx_buffer[2] << 8) | h_hmi.rx_buffer[3];
-    uint16_t reg_count = (h_hmi.rx_buffer[4] << 8) | h_hmi.rx_buffer[5];
+    uint8_t function_code = process_buffer[1];
+    uint16_t start_addr = (process_buffer[2] << 8) | process_buffer[3];
+    uint16_t reg_count = (process_buffer[4] << 8) | process_buffer[5];
 
     // Chống ghi đè ngoài mảng
     if (start_addr + reg_count > HMI_REG_COUNT) return;
@@ -102,31 +147,32 @@ void HMI_Process(void) {
     }
     // Lệnh 0x06: Ghi 1 thanh ghi (Write Single Register)
     else if (function_code == 0x06) {
-        uint16_t write_val = (h_hmi.rx_buffer[4] << 8) | h_hmi.rx_buffer[5];
-        hmi_registers[start_addr] = write_val;
+        uint16_t reg_value = (process_buffer[4] << 8) | process_buffer[5];
+        hmi_registers[start_addr] = reg_value;
         
         // Echo lại toàn bộ lệnh 0x06
-        memcpy(h_hmi.tx_buffer, h_hmi.rx_buffer, len);
+        memcpy(h_hmi.tx_buffer, process_buffer, len);
         tx_len = len;
     }
     // Lệnh 0x10: Ghi nhiều thanh ghi (Write Multiple Registers)
     else if (function_code == 0x10) {
-        uint8_t byte_count = h_hmi.rx_buffer[6];
-        if (byte_count != reg_count * 2) return;
-        
-        uint16_t data_idx = 7;
+        // HMI gửi function 16, đính kèm số lượng byte data = reg_count * 2
+        // Data bắt đầu từ byte số 7
+        uint8_t byte_count = process_buffer[6];
+        if (byte_count != reg_count * 2) return; // Kiểm tra tính hợp lệ
+        if (7 + byte_count > len - 2) return; // Tránh đọc lố mảng
+
         for (uint16_t i = 0; i < reg_count; i++) {
-            hmi_registers[start_addr + i] = (h_hmi.rx_buffer[data_idx] << 8) | h_hmi.rx_buffer[data_idx + 1];
-            data_idx += 2;
+            hmi_registers[start_addr + i] = (process_buffer[7 + i*2] << 8) | process_buffer[8 + i*2];
         }
         
         // Trả lời lệnh 0x10
         h_hmi.tx_buffer[0] = h_hmi.slave_address;
         h_hmi.tx_buffer[1] = 0x10;
-        h_hmi.tx_buffer[2] = h_hmi.rx_buffer[2];
-        h_hmi.tx_buffer[3] = h_hmi.rx_buffer[3];
-        h_hmi.tx_buffer[4] = h_hmi.rx_buffer[4];
-        h_hmi.tx_buffer[5] = h_hmi.rx_buffer[5];
+        h_hmi.tx_buffer[2] = process_buffer[2];
+        h_hmi.tx_buffer[3] = process_buffer[3];
+        h_hmi.tx_buffer[4] = process_buffer[4];
+        h_hmi.tx_buffer[5] = process_buffer[5];
         
         uint16_t crc = Modbus_CalcCRC(h_hmi.tx_buffer, 6);
         h_hmi.tx_buffer[6] = crc & 0xFF;
@@ -135,8 +181,42 @@ void HMI_Process(void) {
     }
 
     if (tx_len > 0) {
-        // Nếu dùng vi mạch MAX485 thì set cờ DE lên cao ở đây, truyền xong hạ xuống
+        // === Bảo vệ: Cấm ErrorCallback can thiệp DMA trong quá trình TX ===
+        extern volatile bool hmi_tx_in_progress;
+        hmi_tx_in_progress = true;
+        
+        // Tắt DMA RX trước khi truyền (RS485 half-duplex)
+        HAL_UART_AbortReceive(h_hmi.huart);
+        
+        // Ép trạng thái UART TX về READY
+        h_hmi.huart->gState = HAL_UART_STATE_READY;
+        __HAL_UNLOCK(h_hmi.huart);
+        
+        // RS485 Turnaround Delay
+        HAL_Delay(3);
+        
+        // Truyền dữ liệu
         HAL_UART_Transmit(h_hmi.huart, h_hmi.tx_buffer, tx_len, 100);
+        
+        // Chờ byte cuối cùng ra khỏi shift register (TC = Transmission Complete)
+        while (!__HAL_UART_GET_FLAG(h_hmi.huart, UART_FLAG_TC)) {}
+        
+        // Chờ bus RS485 ổn định sau khi truyền
+        HAL_Delay(2);
+        
+        // Xóa toàn bộ lỗi và dữ liệu echo còn sót trong RX
+        __HAL_UART_CLEAR_FLAG(h_hmi.huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF | UART_CLEAR_IDLEF);
+        __HAL_UART_SEND_REQ(h_hmi.huart, UART_RXDATA_FLUSH_REQUEST);
+        
+        // Khởi động lại DMA RX
+        HAL_UARTEx_ReceiveToIdle_DMA(h_hmi.huart, h_hmi.rx_buffer, sizeof(h_hmi.rx_buffer));
+        need_restart_dma = false;
+        
+        // === Gỡ bảo vệ: Cho phép ErrorCallback hoạt động bình thường ===
+        hmi_tx_in_progress = false;
+        
+        // Nháy LED3 báo hiệu truyền xong
+        HAL_GPIO_TogglePin(SYS_LED3_GPIO_Port, SYS_LED3_Pin);
     }
 }
 
@@ -146,7 +226,25 @@ void HMI_SyncData(void) {
     hmi_registers[REG_AGV_MODE] = agv_run_mode;
     hmi_registers[REG_CURRENT_NODE] = current_node;
     hmi_registers[REG_PATH_LENGTH] = path_length;
-    hmi_registers[REG_AGV_STATUS] = agv_follow_line_enable ? 1 : 0;
+    extern volatile uint8_t agv_indicator_state;
+
+    // Cập nhật trạng thái chạy của AGV (0: Idle, 1: Running, 2: Error)
+    if (agv_indicator_state == 3) {
+        hmi_registers[REG_AGV_STATUS] = 2; // HMI Error
+    } else if (agv_follow_line_enable) {
+        hmi_registers[REG_AGV_STATUS] = 1; // HMI Running
+    } else {
+        hmi_registers[REG_AGV_STATUS] = 0; // HMI Idle
+    }
+    
+    // Cập nhật đèn trạng thái HMI (0: Off/Normal, 1: Turning Blink Green, 2: Error Blink Red)
+    if (agv_indicator_state == 3) {
+        hmi_registers[REG_INDICATOR] = 2;  // HMI: Error
+    } else if (agv_indicator_state == 2) {
+        hmi_registers[REG_INDICATOR] = 1;  // HMI: Turning
+    } else {
+        hmi_registers[REG_INDICATOR] = 0;  // HMI: Off/Normal
+    }
     
     for (int i = 0; i < path_length && i < 20; i++) {
         hmi_registers[REG_PATH_START + i] = current_path[i];
@@ -157,21 +255,28 @@ void HMI_SyncData(void) {
         prev_dest_node = hmi_registers[REG_DEST_NODE];
         destination_node = prev_dest_node;
         
-        // Cập nhật lại đường đi ngay lập tức
-        extern AGV_Map_t factory_map;
-        bool found = Routing_Dijkstra(&factory_map, current_node, destination_node, current_path, (uint16_t *)&path_length);
-        if (found) {
-            extern volatile uint16_t path_index;
-            path_index = 0;
-        }
+        // Đặt cờ để tính toán lại quỹ đạo trong hàm while(1) của main.c
+        extern volatile bool need_recalculate_path;
+        need_recalculate_path = true;
     }
 
     if (hmi_registers[REG_COMMAND] != prev_command) {
         prev_command = hmi_registers[REG_COMMAND];
         if (prev_command == 1) {
             agv_follow_line_enable = true; // Chạy
+            agv_indicator_state = 0;       // Xóa lỗi
+            
+            // Nháy LED1 để báo hiệu đã nhận lệnh START từ màn hình
+            HAL_GPIO_TogglePin(SYS_LED1_GPIO_Port, SYS_LED1_Pin);
+            
+            extern volatile uint32_t last_leave_intersection_time;
+            extern volatile uint32_t last_qr_time;
+            last_leave_intersection_time = HAL_GetTick(); // Reset blind zone để không bị dừng ngay lập tức
+            last_qr_time = HAL_GetTick(); // Reset watchdog QR để xe không bị tắt ngay
         } else if (prev_command == 2) {
             agv_follow_line_enable = false; // Dừng
+        } else if (prev_command == 3) {
+            agv_indicator_state = 0; // Xóa lỗi
         }
         hmi_registers[REG_COMMAND] = 0; // Xóa lệnh sau khi thực hiện
         prev_command = 0;
