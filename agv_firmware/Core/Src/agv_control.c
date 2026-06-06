@@ -168,8 +168,9 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
       Motor_SetSpeed(hagv->motor_right, speed_r);
     }
   } else if (hagv->direction == -1) {
-    int16_t speed_l = (int16_t)(-hagv->base_speed - output);
-    int16_t speed_r = (int16_t)(-hagv->base_speed + output);
+    // Đảo dấu logic PID khi đi lùi (do cảm biến nằm ở mũi xe nhưng xe lùi)
+    int16_t speed_l = (int16_t)(-hagv->base_speed + output);
+    int16_t speed_r = (int16_t)(-hagv->base_speed - output);
 
     if (speed_l < -999) speed_l = -999;
     if (speed_r < -999) speed_r = -999;
@@ -198,6 +199,14 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
   bool center_found = false;
   uint32_t start = HAL_GetTick();
 
+  // Cấp xung mạnh (Kick-start) 700PWM trong 80ms để thắng lực ma sát tĩnh lúc xe đang đứng im
+  int16_t kick_l = (speed_l > 0) ? 700 : -700;
+  int16_t kick_r = (speed_r > 0) ? 700 : -700;
+  Motor_SetSpeed(hagv->motor_left, kick_l);
+  Motor_SetSpeed(hagv->motor_right, kick_r);
+  HAL_Delay(80);
+
+  // Trả về tốc độ quay chậm (calib_speed = 150) để xe quay mượt mà, dò vạch không bị văng lố
   Motor_SetSpeed(hagv->motor_left, speed_l);
   Motor_SetSpeed(hagv->motor_right, speed_r);
 
