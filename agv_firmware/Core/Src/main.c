@@ -100,7 +100,7 @@ volatile uint32_t calib_time_forward = 2000; // Thời gian chạy thẳng/lùi 
 volatile uint32_t calib_time_turn_90 =
     3500; // Thời gian xoay 90 độ (tăng theo speed 150)
 volatile uint32_t calib_time_turn_180 =
-    7000; // Thời gian xoay 180 độ (gấp đôi quay 90 độ)
+    6200; // Thời gian xoay 180 độ (gấp đôi quay 90 độ)
 volatile int16_t calib_speed =
     150; // Tốc độ quay (giảm từ 300 để quay chậm, mượt hơn)
 
@@ -303,6 +303,37 @@ int main(void)
       bool found = Routing_Dijkstra(&factory_map, current_node, destination_node, current_path, &path_length);
       if (found) {
         path_index = 0;
+        
+        // KIỂM TRA HƯỚNG VÀ XOAY NGAY LẬP TỨC NẾU CẦN THIẾT TRƯỚC KHI CHẠY
+        if (path_length > 1) {
+          uint16_t next_node = current_path[1];
+          AGV_Heading_t target_heading =
+              Routing_GetHeading(&factory_map, current_node, next_node);
+
+          int diff = (target_heading - current_heading + 4) % 4;
+          AGV_Action_t next_action = (AGV_Action_t)diff;
+
+          switch (next_action) {
+          case ACT_TURN_LEFT:
+            h_agv.direction = 1;
+            AGV_TurnLeft(&h_agv);
+            break;
+          case ACT_TURN_RIGHT:
+            h_agv.direction = 1;
+            AGV_TurnRight(&h_agv);
+            break;
+          case ACT_BACKWARD:
+            h_agv.direction = 1;
+            AGV_Turn180(&h_agv);
+            break;
+          case ACT_STRAIGHT:
+          case ACT_STOP:
+          default:
+            break;
+          }
+          current_heading = target_heading;
+        }
+
         // Tự động chạy luôn khi nhận được đường đi mới (do không có nút Start trên HMI)
         agv_follow_line_enable = true;
         agv_indicator_state = 0;
