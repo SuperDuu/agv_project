@@ -16,7 +16,7 @@ Hệ thống phân chia thành 7 chế độ chính để phục vụ quá trìn
 | **MODE 4** | `MODE_4_FULL_RUN` | Chạy thực tế tự động: Tích hợp định tuyến Dijkstra + Camera đọc mã QR ở mỗi ngã tư để tự động rẽ về đích. |
 | **MODE 5** | `MODE_5_CALIBRATE_MOTORS` | Chạy tiến/lùi/rẽ liên tục theo thời gian cấu hình sẵn để đo đạc và tinh chỉnh thông số cơ khí. |
 | **MODE 6** | `MODE_6_TEST_TURN_RIGHT` | Chạy bám vạch, cứ gặp ngã tư bất kỳ là tự động rẽ phải rồi đi tiếp. |
-| **MODE 7** | `MODE_7_DEBUG_NO_QR` | **Chế độ Debug định tuyến**: Chạy tự động theo lộ trình đa điểm thử nghiệm (N00 -> N06 -> dừng 3s -> N03 -> dừng 3s -> N01), tự động giả lập mã QR kế tiếp khi chạm ngã tư mà không cần camera quét QR thật. |
+| **MODE 7** | `MODE_7_DEBUG_NO_QR` | **Chế độ Debug định tuyến động**: Nhận điểm đích từ màn hình HMI qua Modbus (địa chỉ 4x_5). Tự động tính toán đường đi bằng thuật toán Dijkstra, kiểm tra hướng để quay xe tại chỗ nếu cần, và tự động bám vạch chạy tới đích. Giả lập mã QR kế tiếp khi chạm ngã tư mà không cần camera quét mã QR. |
 
 ---
 
@@ -60,12 +60,13 @@ graph TD
 
 ### Các Thông số Cấu hình Động học (Calib trong `main.c`)
 - **Tốc độ quay (`calib_speed = 150`)**: Quay chậm để cảm biến quét vạch không bị văng lố.
-- **Thời gian bù vào tâm (`1000ms`)**: Chạy mù thẳng lên phía trước sau khi phát hiện ngã tư để tâm quay của xe trùng khớp với tâm ngã tư. Đối với quay đầu 180 độ (`AGV_Turn180`), xe sẽ quay ngay tại tâm ngã tư (không tiến thẳng lên 1000ms trước khi quay).
+- **Thời gian bù vào tâm (`1000ms`)**: Chạy mù thẳng lên phía trước sau khi phát hiện ngã tư để đưa tâm quay của trục bánh sau trùng khớp với tâm ngã tư. Bất kể là bẻ lái trái/phải hay **quay đầu 180 độ**, xe đều phải tiến lên để đảm bảo cảm biến mũi xe văng theo hình vòng cung chuẩn xác và không bị văng khỏi vạch.
 - **Thời gian phanh tiêu tán quán tính (`300ms`)**: Giúp xe dừng hẳn trước khi quay, bảo vệ mạch công suất động cơ khỏi dòng điện ngược (back EMF).
-- **Xoay tại chỗ (Spin Turn)**: Quay bánh trái và bánh phải ngược chiều nhau (`speed` và `-speed`).
+- **Xoay tại chỗ (Spin Turn)**: Xoay 2 pha. Pha 1 (kick-start) cấp PWM 700 trong 80ms để thắng lực ma sát tĩnh. Pha 2 quay chậm bằng `calib_speed`.
 - **Thời gian mù khi quay (`1500ms`)**: Trong 1.5 giây đầu tiên khi đang xoay, xe bỏ qua hoàn toàn các tín hiệu cảm biến để tránh nhận nhầm chính cái vạch dọc mà xe vừa đi qua.
+- **Thời gian quay 180 độ (`calib_time_turn_180 = 6200`)**: Cấu hình thời gian cụ thể để hoàn thành góc xoay 180 độ.
 - **Phase 2 (Quay tìm vạch - Timeout 800ms)**: Nếu quay hết thời gian dự kiến (`calib_time_turn_90` hoặc `calib_time_turn_180`) mà chưa chạm vạch, xe sẽ tiếp tục quay chậm thêm tối đa 800ms nữa để dò tìm vạch đích.
-- **Vùng mù sau ngã tư (`800ms`)**: Sau khi hoàn thành rẽ và bật lại chế độ bám vạch, xe sẽ khóa chức năng phát hiện ngã tư trong vòng 800ms để không bị nhận diện nhầm ngã tư cũ vừa đi qua.
+- **Vùng mù sau ngã tư (`800ms`)**: Sau khi hoàn thành rẽ và bật lại chế độ bám vạch, xe sẽ khóa chức năng phát hiện ngã tư trong vòng 800ms để không bị nhận diện nhầm ngã tư cũ vừa đi qua. Mọi cờ `last_leave_intersection_time` sẽ được reset ngay khi HMI gửi lệnh Start hoặc khi tự động chạy.
 - **Bảo vệ mất vạch (Lost Line Protection)**: Nếu xe bị mất vạch hoàn toàn (`0xFFFF` hoặc `0x0000`) liên tục quá **1000ms**, hệ thống tự động ngắt động cơ dừng khẩn cấp để tránh đâm va.
 
 ---
