@@ -60,7 +60,7 @@ graph TD
 
 ### Các Thông số Cấu hình Động học (Calib trong `main.c`)
 - **Tốc độ quay (`calib_speed = 150`)**: Quay chậm để cảm biến quét vạch không bị văng lố.
-- **Thời gian bù vào tâm (`1000ms`)**: Chạy mù thẳng lên phía trước sau khi phát hiện ngã tư để đưa tâm quay của trục bánh sau trùng khớp với tâm ngã tư. Bất kể là bẻ lái trái/phải hay **quay đầu 180 độ**, xe đều phải tiến lên để đảm bảo cảm biến mũi xe văng theo hình vòng cung chuẩn xác và không bị văng khỏi vạch.
+- **Thời gian bù vào tâm (`1000ms`)**: Chạy mù thẳng lên phía trước sau khi phát hiện ngã tư để đưa tâm quay của trục bánh sau trùng khớp với tâm ngã tư khi bẻ lái Trái/Phải. Tuy nhiên, đối với **quay đầu 180 độ**, xe KHÔNG tiến lên mà xoay tại chỗ ngay lập tức. Lý do động học: Vì tâm quay là trục 2 bánh sau, nếu xoay ngay tại mép ngã tư, tâm đường tròn văng của mũi xe sẽ bị lùi lại, giúp xe không bao giờ quét qua ngã tư và tránh tuyệt đối va chạm với bức tường phía trước. Mũi xe sau khi quay xong sẽ đáp đúng về vạch dọc cũ để chạy tiếp.
 - **Thời gian phanh tiêu tán quán tính (`300ms`)**: Giúp xe dừng hẳn trước khi quay, bảo vệ mạch công suất động cơ khỏi dòng điện ngược (back EMF).
 - **Xoay tại chỗ (Spin Turn)**: Xoay 2 pha. Pha 1 (kick-start) cấp PWM 700 trong 80ms để thắng lực ma sát tĩnh. Pha 2 quay chậm bằng `calib_speed`.
 - **Thời gian mù khi quay (`1500ms`)**: Trong 1.5 giây đầu tiên khi đang xoay, xe bỏ qua hoàn toàn các tín hiệu cảm biến để tránh nhận nhầm chính cái vạch dọc mà xe vừa đi qua.
