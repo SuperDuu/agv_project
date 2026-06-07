@@ -15,6 +15,8 @@
 #define TXD2 17
 #define UART_BAUDRATE 115200
 
+#define RS485_ADDR 0x63  // Địa chỉ 99 cho Master-Slave IMU
+
 // ==========================================
 // KHAI BÁO BIẾN TOÀN CỤC
 // ==========================================
@@ -38,6 +40,51 @@ unsigned long lastSendTime = 0;
 unsigned long lastCheckTime = 0;
 const int FIREBASE_CHECK_INTERVAL = 2000; 
 bool isConfigMode = false; // Cờ kiểm tra đang ở chế độ Web hay chế độ Chạy
+
+// Biến cho giao thức Master-Slave IMU (RS485)
+uint16_t current_node = 0xFFFF;
+float current_yaw = 0.0f; // Góc mô phỏng BNO055
+uint8_t rs485_rx_buffer[10];
+uint8_t rs485_rx_index = 0;
+unsigned long last_rs485_rx_time = 0;
+
+// Hàm tính XOR Checksum cho khung nhị phân
+uint8_t calculate_checksum(uint8_t *data, uint8_t start, uint8_t end) {
+  uint8_t cs = 0;
+  for (uint8_t i = start; i <= end; i++) cs ^= data[i];
+  return cs;
+}
+
+// Xử lý gói tin nhị phân nhận từ STM32
+void parse_rs485_frame() {
+  if (rs485_rx_index == 7) {
+    if (rs485_rx_buffer[0] == 0xAA && rs485_rx_buffer[1] == 0x55) {
+      if (rs485_rx_buffer[2] == RS485_ADDR) {
+        if (calculate_checksum(rs485_rx_buffer, 2, 5) == rs485_rx_buffer[6]) {
+          // STM32 yêu cầu lấy Yaw và gửi Node hiện tại
+          if (rs485_rx_buffer[3] == 0x01) {
+            current_node = (rs485_rx_buffer[4] << 8) | rs485_rx_buffer[5];
+            
+            // TODO: Ở đây bạn đọc góc thực tế từ BNO055
+            current_yaw += 0.5f; // Chạy giả lập góc
+            if (current_yaw > 360.0f) current_yaw -= 360.0f;
+
+            uint8_t tx_frame[7];
+            tx_frame[0] = 0xAA; tx_frame[1] = 0x55;
+            tx_frame[2] = RS485_ADDR; tx_frame[3] = 0x01;
+            int16_t yaw_int = (int16_t)(current_yaw * 10.0f);
+            tx_frame[4] = (yaw_int >> 8) & 0xFF;
+            tx_frame[5] = yaw_int & 0xFF;
+            tx_frame[6] = calculate_checksum(tx_frame, 2, 5);
+            
+            Serial2.write(tx_frame, 7);
+          }
+        }
+      }
+    }
+  }
+  rs485_rx_index = 0;
+}
 
 // ==========================================
 // GIAO DIỆN WEB (HTML + CSS CƠ BẢN)
@@ -263,13 +310,28 @@ void loop() {
     Serial.println("Dang gui lenh xuong STM32... (Cho ACK)");
   }
 
-  // ĐỌC PHẢN HỒI TỪ STM32
-  if (Serial2.available()) {
-    String response = Serial2.readStringUntil('\n');
-    response.trim();
-    if (response == "OK" || response == "ACK") {
-      isAckReceived = true;
-      Serial.println("STM32 DA XAC NHAN (ACK)!");
+  // ==========================================
+  // XỬ LÝ NHẬN DATA RS485 (MASTER-SLAVE + FIREBASE ACK)
+  // ==========================================
+  // ĐỌC PHẢN HỒI TỪ STM32 (Dạng chuỗi ASCII hoặc Khung nhị phân)
+  while (Serial2.available() > 0) {
+    // Để tránh kẹt vòng lặp do dùng readStringUntil, chúng ta đọc từng byte
+    // và phân biệt đâu là chuỗi ACK, đâu là gói tin nhị phân 0xAA 0x55.
+    
+    uint8_t b = Serial2.read();
+    
+    // Xử lý gói nhị phân (Polling 50ms)
+    if (millis() - last_rs485_rx_time > 10) rs485_rx_index = 0;
+    if (rs485_rx_index < sizeof(rs485_rx_buffer)) {
+      rs485_rx_buffer[rs485_rx_index++] = b;
     }
+    last_rs485_rx_time = millis();
+    if (rs485_rx_index == 7) {
+      parse_rs485_frame();
+    }
+    
+    // (Tạm thời bỏ khối check ASCII "OK/ACK" vì nó sẽ xung đột với gói nhị phân)
+    // Nếu bạn muốn giữ lại Firebase Command, nên gộp lệnh Firebase vào 
+    // gói truyền nhị phân từ STM32 để đồng bộ 100%.
   }
 }
