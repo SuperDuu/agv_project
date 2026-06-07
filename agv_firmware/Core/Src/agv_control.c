@@ -59,55 +59,92 @@ static float AGV_ComputePID(Pid_data *pid, float setpoint) {
 
 float AGV_GetLineError(uint16_t line_value, float current_error) {
   switch (line_value) {
-  case 0xFC3F: return 0.0f;
+  case 0xFC3F:
+    return 0.0f;
 
   // Left deviation 4 units
-  case 0xF87F: return -1.0f;
-  case 0xF0FF: return -1.5f;
-  case 0xE1FF: return -2.0f;
-  case 0xC3FF: return -2.5f;
-  case 0x87FF: return -3.0f;
-  case 0x0FFF: return -3.5f;
+  case 0xF87F:
+    return -1.0f;
+  case 0xF0FF:
+    return -1.5f;
+  case 0xE1FF:
+    return -2.0f;
+  case 0xC3FF:
+    return -2.5f;
+  case 0x87FF:
+    return -3.0f;
+  case 0x0FFF:
+    return -3.5f;
 
   // Left deviation 3 units
-  case 0xFC7F: return -1.0f;
-  case 0xF8FF: return -1.5f;
-  case 0xF1FF: return -2.0f;
-  case 0xE3FF: return -2.5f;
-  case 0xC7FF: return -3.0f;
-  case 0x8FFF: return -3.5f;
-  case 0x1FFF: return -4.0f;
+  case 0xFC7F:
+    return -1.0f;
+  case 0xF8FF:
+    return -1.5f;
+  case 0xF1FF:
+    return -2.0f;
+  case 0xE3FF:
+    return -2.5f;
+  case 0xC7FF:
+    return -3.0f;
+  case 0x8FFF:
+    return -3.5f;
+  case 0x1FFF:
+    return -4.0f;
 
   // Left deviation 5 units
-  case 0xF07F: return -1.0f;
-  case 0xE0FF: return -1.5f;
-  case 0xC1FF: return -2.0f;
-  case 0x83FF: return -2.5f;
-  case 0x07FF: return -3.0f;
+  case 0xF07F:
+    return -1.0f;
+  case 0xE0FF:
+    return -1.5f;
+  case 0xC1FF:
+    return -2.0f;
+  case 0x83FF:
+    return -2.5f;
+  case 0x07FF:
+    return -3.0f;
 
   // Right deviation 4 units
-  case 0xFE1F: return 1.0f;
-  case 0xFF0F: return 1.5f;
-  case 0xFF87: return 2.0f;
-  case 0xFFC3: return 2.5f;
-  case 0xFFE1: return 3.0f;
-  case 0xFFF0: return 3.5f;
+  case 0xFE1F:
+    return 1.0f;
+  case 0xFF0F:
+    return 1.5f;
+  case 0xFF87:
+    return 2.0f;
+  case 0xFFC3:
+    return 2.5f;
+  case 0xFFE1:
+    return 3.0f;
+  case 0xFFF0:
+    return 3.5f;
 
   // Right deviation 3 units
-  case 0xFE3F: return 1.0f;
-  case 0xFF1F: return 1.5f;
-  case 0xFF8F: return 2.0f;
-  case 0xFFC7: return 2.5f;
-  case 0xFFE3: return 3.0f;
-  case 0xFFF1: return 3.5f;
-  case 0xFFF8: return 4.0f;
+  case 0xFE3F:
+    return 1.0f;
+  case 0xFF1F:
+    return 1.5f;
+  case 0xFF8F:
+    return 2.0f;
+  case 0xFFC7:
+    return 2.5f;
+  case 0xFFE3:
+    return 3.0f;
+  case 0xFFF1:
+    return 3.5f;
+  case 0xFFF8:
+    return 4.0f;
 
   // Right deviation 5 units
-  case 0xFE0F: return 1.0f;
-  case 0xFF07: return 1.5f;
-  case 0xFF83: return 2.0f;
-  case 0xFFC1: return 2.5f;
-  case 0xFFE0: return 3.0f;
+  case 0xFE0F:
+    return 1.0f;
+  case 0xFF07:
+    return 1.5f;
+  case 0xFF83:
+    return 2.0f;
+  case 0xFFC1:
+    return 2.5f;
+  case 0xFFE0:
+    return 3.0f;
 
   default:
     return current_error;
@@ -160,10 +197,14 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     int16_t speed_l = (int16_t)(hagv->base_speed - output);
     int16_t speed_r = (int16_t)(hagv->base_speed + output);
 
-    if (speed_l > 999) speed_l = 999;
-    if (speed_r > 999) speed_r = 999;
-    if (speed_l < -300) speed_l = -300;
-    if (speed_r < -300) speed_r = -300;
+    if (speed_l > 999)
+      speed_l = 999;
+    if (speed_r > 999)
+      speed_r = 999;
+    if (speed_l < -300)
+      speed_l = -300;
+    if (speed_r < -300)
+      speed_r = -300;
 
     if (agv_run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
       Motor_SetSpeed(hagv->motor_left, speed_l);
@@ -174,10 +215,14 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     int16_t speed_l = (int16_t)(-hagv->base_speed + output);
     int16_t speed_r = (int16_t)(-hagv->base_speed - output);
 
-    if (speed_l < -999) speed_l = -999;
-    if (speed_r < -999) speed_r = -999;
-    if (speed_l > 300) speed_l = 300;
-    if (speed_r > 300) speed_r = 300;
+    if (speed_l < -999)
+      speed_l = -999;
+    if (speed_r < -999)
+      speed_r = -999;
+    if (speed_l > 300)
+      speed_l = 300;
+    if (speed_r > 300)
+      speed_r = 300;
 
     if (agv_run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
       Motor_SetSpeed(hagv->motor_left, speed_l);
@@ -201,17 +246,19 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
   bool center_found = false;
   uint32_t start = HAL_GetTick();
 
-  // Cấp xung mạnh (Kick-start) 700PWM trong 80ms để thắng lực ma sát tĩnh lúc xe đang đứng im
+  // Cấp xung mạnh (Kick-start) 700PWM trong 80ms để thắng lực ma sát tĩnh lúc
+  // xe đang đứng im
   int16_t kick_l = (speed_l > 0) ? 700 : -700;
   int16_t kick_r = (speed_r > 0) ? 700 : -700;
-  
+
   agv_indicator_state = 2; // State 2: Turning
-  
+
   Motor_SetSpeed(hagv->motor_left, kick_l);
   Motor_SetSpeed(hagv->motor_right, kick_r);
   HAL_Delay(80);
 
-  // Trả về tốc độ quay chậm (calib_speed = 150) để xe quay mượt mà, dò vạch không bị văng lố
+  // Trả về tốc độ quay chậm (calib_speed = 150) để xe quay mượt mà, dò vạch
+  // không bị văng lố
   Motor_SetSpeed(hagv->motor_left, speed_l);
   Motor_SetSpeed(hagv->motor_right, speed_r);
 
@@ -219,7 +266,8 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
 
   while (HAL_GetTick() - start < total_time) {
     HMI_Process(); // Keep Modbus alive during blocking turn
-    // Blind turn time: wait 1500ms before checking center sensors to clear original line
+    // Blind turn time: wait 1500ms before checking center sensors to clear
+    // original line
     if (HAL_GetTick() - start > 1500) {
       uint16_t val = LineSensor_Read(hagv->line_sensor);
       if ((val & CENTER_MASK) != CENTER_MASK) {
@@ -288,17 +336,11 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
   extern volatile uint32_t calib_time_turn_180;
   extern volatile int16_t calib_speed;
 
-  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
-  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(1000);
-
   AGV_Stop(hagv);
   HAL_Delay(300);
 
   // Chọn chiều quay (phải) để quay 180 độ
   Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_180);
 }
-
-
 
 /* USER CODE END 1 */
