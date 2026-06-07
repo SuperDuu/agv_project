@@ -89,7 +89,13 @@ Bản đồ nhà xưởng được mô hình hóa dưới dạng Danh sách kề
 
 ---
 
-## 5. Kiến trúc Dữ liệu và An toàn (Refactoring)
+## 5. Cấu trúc Code và Debugging
+
+- Các biến global quan trọng như `agv_state`, `agv_config`, `esp32_data`, `h_agv`, `pid_ctrl` được nhóm toàn bộ vào khối `/* USER CODE BEGIN PFP */` trong `main.c`. Việc quy hoạch này giúp cho việc Add to Live Expressions trong STM32CubeIDE khi debug trực tiếp trên mạch nhanh chóng và tập trung hơn.
+
+---
+
+## 6. Kiến trúc Dữ liệu và An toàn (Refactoring)
 
 Để giải quyết các vấn đề về biến toàn cục (global variables) phân mảnh và rủi ro race condition, hệ thống đã được refactor với các tiêu chuẩn sau:
 
