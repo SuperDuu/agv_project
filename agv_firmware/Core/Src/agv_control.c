@@ -10,16 +10,33 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "agv_control.h"
+#include "esp32_hub.h"
 #include <stdbool.h>
 #include <stddef.h>
+#include <math.h>
 
-extern volatile bool agv_follow_line_enable;
-extern volatile bool is_at_intersection;
-extern volatile uint32_t intersection_time;
-extern volatile uint32_t last_leave_intersection_time;
+AGV_State_t agv_state = {
+    .run_mode = MODE_7_DEBUG_NO_QR,
+    .indicator_state = 0,
+    .follow_line_enable = false,
+    .is_at_intersection = false,
+    .intersection_time = 0,
+    .last_leave_intersection_time = 0,
+    .current_node = 0,
+    .destination_node = 0,
+    .need_recalculate_path = false,
+    .last_qr_time = 0,
+    .path_index = 0
+};
 
-volatile AGV_RunMode_t agv_run_mode = MODE_7_DEBUG_NO_QR;
-volatile uint8_t agv_indicator_state = 0; // 0: Normal, 2: Turning, 3: Error
+AGV_Config_t agv_config = {
+    .time_offset = 600,
+    .time_forward = 2000,
+    .time_turn_90 = 3100,
+    .time_turn_180 = 6200,
+    .turn_speed = 150,
+    .base_speed = 300
+};
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
@@ -47,12 +64,12 @@ static float AGV_ComputePID(Pid_data *pid, float setpoint) {
   if (pid == NULL)
     return 0.0f;
 
-  pid->er = setpoint - pid->gtht;
-  pid->i += pid->er * Delta_t;
-  pid->d = (pid->er - pid->pre_er) / Delta_t;
+  pid->error = setpoint - pid->current_val;
+  pid->i += pid->error * Delta_t;
+  pid->d = (pid->error - pid->prev_error) / Delta_t;
 
-  float output = (pid->Kp * pid->er) + (pid->Kd * pid->d) + (pid->Ki * pid->i);
-  pid->pre_er = pid->er;
+  float output = (pid->Kp * pid->error) + (pid->Kd * pid->d) + (pid->Ki * pid->i);
+  pid->prev_error = pid->error;
 
   return output;
 }
@@ -164,9 +181,9 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
       lost_line_time = HAL_GetTick();
 
     if (HAL_GetTick() - lost_line_time > 1000) {
-      if (agv_run_mode == MODE_4_FULL_RUN) {
-        agv_follow_line_enable = false;
-        agv_indicator_state = 3; // Lỗi mất line (State 3: Error)
+      if (agv_state.run_mode == MODE_4_FULL_RUN) {
+        agv_state.follow_line_enable = false;
+        agv_state.indicator_state = 3; // Lỗi mất line (State 3: Error)
       }
       AGV_Stop(hagv);
     }
@@ -176,21 +193,21 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
   }
 
   // Intersection check: Bit 15 and Bit 0
-  if (agv_run_mode != MODE_1_LINE_ONLY &&
-      agv_run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
+  if (agv_state.run_mode != MODE_1_LINE_ONLY &&
+      agv_state.run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
     if (((line_val & 0x8001) != 0x8001) &&
-        (HAL_GetTick() - last_leave_intersection_time > 800)) {
+        (HAL_GetTick() - agv_state.last_leave_intersection_time > AGV_LINE_RECOVERY_TIME)) {
       AGV_Stop(hagv);
-      agv_follow_line_enable = false;
-      is_at_intersection = true;
-      intersection_time = HAL_GetTick();
+      agv_state.follow_line_enable = false;
+      agv_state.is_at_intersection = true;
+      agv_state.intersection_time = HAL_GetTick();
       lost_line_time = 0;
       return;
     }
   }
 
   hagv->current_error = AGV_GetLineError(line_val, hagv->current_error);
-  hagv->pid_controller->gtht = hagv->current_error;
+  hagv->pid_controller->current_val = hagv->current_error;
   float output = AGV_ComputePID(hagv->pid_controller, 0.0f);
 
   if (hagv->direction == 1) {
@@ -206,7 +223,7 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     if (speed_r < -300)
       speed_r = -300;
 
-    if (agv_run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
+    if (agv_state.run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
       Motor_SetSpeed(hagv->motor_left, speed_l);
       Motor_SetSpeed(hagv->motor_right, speed_r);
     }
@@ -224,7 +241,7 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     if (speed_r > 300)
       speed_r = 300;
 
-    if (agv_run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
+    if (agv_state.run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
       Motor_SetSpeed(hagv->motor_left, speed_l);
       Motor_SetSpeed(hagv->motor_right, speed_r);
     }
@@ -251,13 +268,13 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
   int16_t kick_l = (speed_l > 0) ? 700 : -700;
   int16_t kick_r = (speed_r > 0) ? 700 : -700;
 
-  agv_indicator_state = 2; // State 2: Turning
+  agv_state.indicator_state = 2; // State 2: Turning
 
   Motor_SetSpeed(hagv->motor_left, kick_l);
   Motor_SetSpeed(hagv->motor_right, kick_r);
   HAL_Delay(80);
 
-  // Trả về tốc độ quay chậm (calib_speed = 150) để xe quay mượt mà, dò vạch
+  // Trả về tốc độ quay chậm (agv_config.turn_speed = 150) để xe quay mượt mà, dò vạch
   // không bị văng lố
   Motor_SetSpeed(hagv->motor_left, speed_l);
   Motor_SetSpeed(hagv->motor_right, speed_r);
@@ -266,9 +283,8 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
 
   while (HAL_GetTick() - start < total_time) {
     HMI_Process(); // Keep Modbus alive during blocking turn
-    // Blind turn time: wait 1500ms before checking center sensors to clear
-    // original line
-    if (HAL_GetTick() - start > 1500) {
+    // Blind turn time before checking center sensors to clear original line
+    if (HAL_GetTick() - start > AGV_TURN_BLIND_TIME) {
       uint16_t val = LineSensor_Read(hagv->line_sensor);
       if ((val & CENTER_MASK) != CENTER_MASK) {
         center_found = true;
@@ -291,16 +307,13 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
   }
 
   AGV_Stop(hagv);
-  agv_indicator_state = 0; // Turn complete
+  agv_state.indicator_state = 0; // Turn complete
   HAL_Delay(200);
 }
 
 void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
-  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
+  if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
-
-  extern volatile uint32_t calib_time_turn_90;
-  extern volatile int16_t calib_speed;
 
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
@@ -309,15 +322,12 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  Turn_Time_Based(hagv, -calib_speed, calib_speed, calib_time_turn_90);
+  Turn_Time_Based(hagv, -agv_config.turn_speed, agv_config.turn_speed, agv_config.time_turn_90);
 }
 
 void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
-  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
+  if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
-
-  extern volatile uint32_t calib_time_turn_90;
-  extern volatile int16_t calib_speed;
 
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
@@ -326,27 +336,23 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_90);
+  Turn_Time_Based(hagv, agv_config.turn_speed, -agv_config.turn_speed, agv_config.time_turn_90);
 }
 
 void AGV_Turn180(AGV_HandleTypeDef *hagv) {
-  if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
+  if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
-
-  extern volatile uint32_t calib_time_turn_90;
-  extern volatile uint32_t calib_time_turn_180;
-  extern volatile int16_t calib_speed;
 
   AGV_Stop(hagv);
   HAL_Delay(300);
 
   // 1. Quay mù 45 độ sang phải (bằng nửa thời gian quay 90 độ)
-  uint32_t time_45 = calib_time_turn_90 / 2;
+  uint32_t time_45 = agv_config.time_turn_90 / 2;
   Motor_SetSpeed(hagv->motor_left, 700); // Kick-start
   Motor_SetSpeed(hagv->motor_right, -700);
   HAL_Delay(80);
-  Motor_SetSpeed(hagv->motor_left, calib_speed);
-  Motor_SetSpeed(hagv->motor_right, -calib_speed);
+  Motor_SetSpeed(hagv->motor_left, agv_config.turn_speed);
+  Motor_SetSpeed(hagv->motor_right, -agv_config.turn_speed);
   HAL_Delay(time_45 - 80);
 
   AGV_Stop(hagv);
@@ -361,8 +367,126 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
   HAL_Delay(300);
 
   // 3. Chọn chiều quay (phải) để quay tiếp 135 độ còn lại và dò vạch
-  uint32_t time_135 = calib_time_turn_180 - time_45;
-  Turn_Time_Based(hagv, calib_speed, -calib_speed, time_135);
+  uint32_t time_135 = agv_config.time_turn_180 - time_45;
+  Turn_Time_Based(hagv, agv_config.turn_speed, -agv_config.turn_speed, time_135);
+}
+
+static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle, int16_t speed_l, int16_t speed_r) {
+  bool center_found = false;
+  uint32_t start_time = HAL_GetTick();
+  float start_yaw = ESP32_GetSafeData().Yaw;
+
+  int16_t kick_l = (speed_l > 0) ? 700 : -700;
+  int16_t kick_r = (speed_r > 0) ? 700 : -700;
+
+  agv_state.indicator_state = 2; // State 2: Turning
+
+  Motor_SetSpeed(hagv->motor_left, kick_l);
+  Motor_SetSpeed(hagv->motor_right, kick_r);
+  HAL_Delay(80);
+
+  Motor_SetSpeed(hagv->motor_left, speed_l);
+  Motor_SetSpeed(hagv->motor_right, speed_r);
+
+  extern void HMI_Process(void);
+
+  while (1) {
+    HMI_Process();
+    
+    // Tính độ lệch góc tuyệt đối so với lúc bắt đầu
+    float current_yaw = ESP32_GetSafeData().Yaw;
+    float diff = fabs(current_yaw - start_yaw);
+    while (diff > 180.0f) diff = 360.0f - diff;
+    
+    // Dừng khi đạt được góc yêu cầu (cho phép sai số 2 độ)
+    if (diff >= (target_angle - 2.0f)) {
+        break;
+    }
+    
+    // Timeout safeguard phòng khi IMU lỗi hoặc xe bị kẹt (giả sử timeout 5 giây)
+    if (HAL_GetTick() - start_time > 5000) {
+        break;
+    }
+
+    // Vẫn kết hợp dò line (bỏ qua AGV_TURN_BLIND_TIME đầu để xe thoát khỏi line cũ)
+    // Nếu rẽ 90 độ, thời gian quay thực tế thường > 1.5s
+    if (HAL_GetTick() - start_time > AGV_TURN_BLIND_TIME) {
+        uint16_t val = LineSensor_Read(hagv->line_sensor);
+        if ((val & CENTER_MASK) != CENTER_MASK) {
+            center_found = true;
+            break;
+        }
+    }
+    
+    HAL_Delay(5);
+  }
+  
+  // Phase 2: Dò line bổ sung nếu góc đã đạt nhưng chưa thấy vạch
+  if (!center_found) {
+    uint32_t search_start = HAL_GetTick();
+    while (HAL_GetTick() - search_start < 800) {
+        HMI_Process();
+        uint16_t val = LineSensor_Read(hagv->line_sensor);
+        if ((val & CENTER_MASK) != CENTER_MASK) {
+            break;
+        }
+        HAL_Delay(5);
+    }
+  }
+
+  AGV_Stop(hagv);
+  agv_state.indicator_state = 0; // Turn complete
+  HAL_Delay(200);
+}
+
+void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv) {
+  if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
+    return;
+
+  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
+  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
+  HAL_Delay(1000);
+
+  AGV_Stop(hagv);
+  HAL_Delay(300);
+
+  Turn_IMU_Based(hagv, 90.0f, -agv_config.turn_speed, agv_config.turn_speed);
+}
+
+void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
+  if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
+    return;
+
+  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
+  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
+  HAL_Delay(1000);
+
+  AGV_Stop(hagv);
+  HAL_Delay(300);
+
+  Turn_IMU_Based(hagv, 90.0f, agv_config.turn_speed, -agv_config.turn_speed);
+}
+
+void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
+  if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
+    return;
+
+  AGV_Stop(hagv);
+  HAL_Delay(300);
+
+  // 1. Quay IMU 45 độ sang phải
+  Turn_IMU_Based(hagv, 45.0f, agv_config.turn_speed, -agv_config.turn_speed);
+
+  // 2. Lùi thẳng lại 1 giây (kéo xe về hướng Tây Nam để né tường phải và tường trước)
+  Motor_SetSpeed(hagv->motor_left, -hagv->base_speed);
+  Motor_SetSpeed(hagv->motor_right, -hagv->base_speed);
+  HAL_Delay(1000);
+
+  AGV_Stop(hagv);
+  HAL_Delay(300);
+
+  // 3. Quay tiếp 135 độ còn lại và dò vạch
+  Turn_IMU_Based(hagv, 135.0f, agv_config.turn_speed, -agv_config.turn_speed);
 }
 
 /* USER CODE END 1 */
