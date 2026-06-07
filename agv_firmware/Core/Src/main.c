@@ -304,6 +304,32 @@ int main(void)
   while (1) {
     HMI_Process();
     
+    // ==========================================
+    // FAIL-SAFE: KIỂM TRA PHẦN CỨNG CẢM BIẾN
+    // ==========================================
+    if (esp32_data.IsConnected) {
+      if (esp32_data.Yaw == 65535.0f || esp32_data.ObstacleDistance == 0xFFFF) {
+        // Nếu nhận mã lỗi từ ESP32 (đứt dây I2C BNO055 hoặc VL53L5)
+        extern volatile bool agv_follow_line_enable;
+        if (agv_follow_line_enable) {
+          agv_follow_line_enable = false;
+          AGV_Stop(&h_agv);
+        }
+        // Bỏ qua các logic di chuyển bên dưới nếu đang lỗi
+        continue;
+      }
+      
+      // LOGIC CHỐNG VA CHẠM (COLLISION AVOIDANCE) BẰNG SIÊU ÂM
+      // Nếu có vật cản gần hơn 300mm (30cm), lập tức phanh khẩn cấp
+      if (esp32_data.ObstacleDistance != 65534 && esp32_data.ObstacleDistance < 300) {
+        extern volatile bool agv_follow_line_enable;
+        if (agv_follow_line_enable) {
+          agv_follow_line_enable = false;
+          AGV_Stop(&h_agv);
+        }
+      }
+    }
+    
     // Yêu cầu dữ liệu từ ESP32 mỗi 50ms
     if (HAL_GetTick() - last_esp32_req_time > 50) {
       last_esp32_req_time = HAL_GetTick();

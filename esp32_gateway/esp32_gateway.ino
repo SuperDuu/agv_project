@@ -2,6 +2,9 @@
 #include <WebServer.h>
 #include <Preferences.h>
 #include <FirebaseESP32.h> // Cài đặt thư viện "Firebase ESP32 Client" của Mobizt
+#include <Wire.h>
+#include "src/bno055.h"
+#include "src/SparkFun_VL53L5CX_Library.h"
 
 // ==========================================
 // CẤU HÌNH PHẦN CỨNG & MẶC ĐỊNH
@@ -54,6 +57,14 @@ unsigned long last_rs485_rx_time = 0;
 uint8_t firebase_node = 255;  // 255 = Không có lệnh
 uint8_t firebase_h_cmd = 255; // 255 = Không có lệnh
 
+// Biến quản lý trạng thái cảm biến (Fail-safe)
+SparkFun_VL53L5CX myImager;
+VL53L5CX_ResultsData measurementData;
+
+bool bno055_ok = false;
+bool vl53_ok = false;
+uint16_t obstacle_distance = 0xFFFF; // 0xFFFF = Báo lỗi xuống STM32 nếu đứt dây
+
 // Hàm tính XOR Checksum cho khung nhị phân
 uint8_t calculate_checksum(uint8_t *data, uint8_t start, uint8_t end) {
   uint8_t cs = 0;
@@ -71,14 +82,16 @@ void parse_rs485_frame() {
           if (rs485_rx_buffer[3] == 0x01) {
             current_node = (rs485_rx_buffer[4] << 8) | rs485_rx_buffer[5];
             
-            // TODO: Ở đây bạn đọc góc thực tế từ BNO055
-            current_yaw += 0.5f; // Chạy giả lập góc
-            if (current_yaw > 360.0f) current_yaw -= 360.0f;
+            // Đọc thực tế từ BNO055
+            int16_t yaw_int = 0xFFFF; // Mặc định là lỗi đứt dây
+            if (bno055_ok) {
+              bno055_vector_t v = bno055_getVectorEuler();
+              yaw_int = (int16_t)(v.x * 10.0f);
+            }
 
-            uint8_t tx_frame[9];
+            uint8_t tx_frame[11];
             tx_frame[0] = 0xAA; tx_frame[1] = 0x55;
             tx_frame[2] = RS485_ADDR; tx_frame[3] = 0x01;
-            int16_t yaw_int = (int16_t)(current_yaw * 10.0f);
             tx_frame[4] = (yaw_int >> 8) & 0xFF;
             tx_frame[5] = yaw_int & 0xFF;
             
@@ -86,9 +99,13 @@ void parse_rs485_frame() {
             tx_frame[6] = firebase_node;
             tx_frame[7] = firebase_h_cmd;
             
-            tx_frame[8] = calculate_checksum(tx_frame, 2, 7);
+            // Gửi kèm khoảng cách siêu âm
+            tx_frame[8] = (obstacle_distance >> 8) & 0xFF;
+            tx_frame[9] = obstacle_distance & 0xFF;
             
-            Serial2.write(tx_frame, 9);
+            tx_frame[10] = calculate_checksum(tx_frame, 2, 9);
+            
+            Serial2.write(tx_frame, 11);
             
             // Xóa cờ sau khi đã gửi để tránh AGV hiểu nhầm gửi liên tục
             firebase_node = 255;
@@ -277,9 +294,41 @@ void setup() {
   Serial.begin(115200);
   Serial2.begin(UART_BAUDRATE, SERIAL_8N1, RXD2, TXD2);
   
+  // Khởi tạo I2C cho các cảm biến
+  Wire.begin(); 
+  Wire.setClock(400000); // 400kHz cho VL53L5CX
+
   // Kích hoạt điện trở nội kéo lên (Pull-up) cho nút BOOT
   pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
   delay(100); 
+
+  // ==========================================
+  // KHỞI TẠO CẢM BIẾN (NON-BLOCKING FAIL-SAFE)
+  // ==========================================
+  Serial.println("\n--- Kiem tra ket noi Cam bien ---");
+  
+  bno055_setup();
+  bno055_setOperationModeNDOF();
+  uint8_t bno_id = 0;
+  bno055_readData(BNO055_CHIP_ID, &bno_id, 1);
+  if (bno_id == BNO055_ID) {
+    bno055_ok = true;
+    Serial.println("[OK] BNO055 ket noi thanh cong!");
+  } else {
+    Serial.printf("[LOI] BNO055 khong phan hoi! (ID = 0x%02X)\n", bno_id);
+  }
+
+  Serial.println("Dang nap 90KB Firmware cho VL53L5CX (Se mat ~0.6s)...");
+  if (myImager.begin()) {
+    myImager.setResolution(8 * 8); // 64 vùng
+    myImager.setRangingFrequency(15); // 15Hz
+    myImager.startRanging();
+    vl53_ok = true;
+    Serial.println("[OK] VL53L5CX ket noi thanh cong!");
+  } else {
+    Serial.println("[LOI] VL53L5CX khong phan hoi hoac loi nap Firmware!");
+  }
+  Serial.println("---------------------------------\n");
 
   // Lấy dữ liệu cũ từ bộ nhớ
   loadConfig();
@@ -348,6 +397,36 @@ void loop() {
   // LOGIC RS485 & FIREBASE COMMAND
   // ==========================================
   // Đoạn đọc Firebase đã được chuyển sang Core 0 (FirebaseTask) để không làm kẹt vòng lặp này!
+  
+  // ==========================================
+  // LOGIC ĐỌC SIÊU ÂM (VL53L5CX)
+  // ==========================================
+  if (vl53_ok) {
+    if (myImager.isDataReady()) {
+      myImager.getRangingData(&measurementData);
+      
+      // Lấy khoảng cách ngắn nhất trong 64 vùng để làm Cảnh báo vật cản
+      uint16_t min_dist = 65534; 
+      for (int i = 0; i < 64; i++) {
+        // Kiểm tra xem dữ liệu có hợp lệ (TargetStatus)
+        if (measurementData.target_status[i] == 5 || measurementData.target_status[i] == 9) {
+          uint16_t dist = measurementData.distance_mm[i];
+          if (dist > 0 && dist < min_dist) {
+            min_dist = dist;
+          }
+        }
+      }
+      
+      // Nếu không có vật cản nào, gán 65534 (Vô cực). 65535 là mã Lỗi.
+      if (min_dist == 65534) {
+        obstacle_distance = 65534; 
+      } else {
+        obstacle_distance = min_dist;
+      }
+    }
+  } else {
+    obstacle_distance = 0xFFFF; // Gửi mã lỗi xuống STM32
+  }
 
   // CƠ CHẾ GỬI LẠI UART (CHỜ ACK TỪ STM32)
   if (!isAckReceived && (millis() - lastSendTime >= 1000)) {

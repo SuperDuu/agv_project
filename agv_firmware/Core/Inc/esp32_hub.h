@@ -18,11 +18,12 @@ typedef struct {
     uint8_t TargetNode;
     uint8_t H_Command;
     bool HasNewCommand;
+    uint16_t ObstacleDistance;
 } ESP32_SensorData_t;
 
 // Khai báo biến toàn cục
 extern ESP32_SensorData_t esp32_data;
-extern uint8_t esp32_rx_buffer[10];
+extern uint8_t esp32_rx_buffer[15];
 
 // Các hàm API
 void ESP32_Init(UART_HandleTypeDef *huart);

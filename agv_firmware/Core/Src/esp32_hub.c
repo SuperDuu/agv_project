@@ -2,7 +2,7 @@
 #include <string.h>
 
 ESP32_SensorData_t esp32_data = {0};
-uint8_t esp32_rx_buffer[10];
+uint8_t esp32_rx_buffer[15];
 
 static UART_HandleTypeDef *esp32_huart;
 
@@ -45,21 +45,27 @@ void ESP32_RequestData(uint16_t current_node) {
 
 // Được gọi trong ngắt HAL_UARTEx_RxEventCallback khi nhận xong 1 frame từ ESP32
 void ESP32_ParseResponse(uint16_t length) {
-    // Khung truyền cố định 9 byte
-    if (length == 9) {
+    // Khung truyền cố định 11 byte
+    if (length == 11) {
         if (esp32_rx_buffer[0] == 0xAA && esp32_rx_buffer[1] == 0x55) {
             if (esp32_rx_buffer[2] == ESP32_ADDR && esp32_rx_buffer[3] == ESP32_CMD_READ_IMU) {
-                uint8_t calc_cs = Calculate_Checksum(esp32_rx_buffer, 2, 7);
-                if (calc_cs == esp32_rx_buffer[8]) {
+                uint8_t calc_cs = Calculate_Checksum(esp32_rx_buffer, 2, 9);
+                if (calc_cs == esp32_rx_buffer[10]) {
                     // Dữ liệu hợp lệ
                     int16_t yaw_int = (esp32_rx_buffer[4] << 8) | esp32_rx_buffer[5];
-                    esp32_data.Yaw = (float)yaw_int / 10.0f;
+                    if (yaw_int == (int16_t)0xFFFF) {
+                        esp32_data.Yaw = 0xFFFF; // Cờ báo lỗi BNO055
+                    } else {
+                        esp32_data.Yaw = (float)yaw_int / 10.0f;
+                    }
                     
                     if (esp32_rx_buffer[6] != 255) {
                         esp32_data.TargetNode = esp32_rx_buffer[6];
                         esp32_data.H_Command = esp32_rx_buffer[7];
                         esp32_data.HasNewCommand = true;
                     }
+                    
+                    esp32_data.ObstacleDistance = (esp32_rx_buffer[8] << 8) | esp32_rx_buffer[9];
                     
                     esp32_data.LastUpdateTick = HAL_GetTick();
                     esp32_data.IsConnected = true;
