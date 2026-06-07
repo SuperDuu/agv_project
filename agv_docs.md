@@ -102,6 +102,10 @@ Bản đồ nhà xưởng được mô hình hóa dưới dạng Danh sách kề
 - Dữ liệu IMU và cảm biến siêu âm từ mạch ESP32 được nhận qua UART DMA liên tục vào struct `esp32_data`.
 - Hàm **`ESP32_GetSafeData()`**: Sử dụng lệnh khóa ngắt (`__disable_irq()`) để copy toàn bộ struct sang một biến tạm trước khi xử lý, ngăn chặn hoàn toàn hiện tượng xé rách dữ liệu (Tearing) khi ngắt UART xảy ra giữa chừng.
 
+### Logic Tránh Vật Cản (Collision Avoidance)
+- Cảm biến khoảng cách (đọc từ ESP32) chỉ kích hoạt phanh khẩn cấp khi xe **đang đi thẳng** (`fabs(current_error) <= 1.5f`).
+- Khi xe đang đi vào đoạn cua hoặc lắc đuôi để dò vạch (`current_error` > 1.5), cảm biến siêu âm có thể bị văng chéo và vô tình bắt trúng bức tường nằm bên hông. Do đó, logic đã được cải tiến để bỏ qua các khoảng cách báo ảo này trong lúc xe đang đánh lái mạnh.
+
 ### Clamping Duty Cycle Động Cơ
 - Hàm `Motor_SetSpeed` được bổ sung giới hạn phần cứng cứng ngắc (`MOTOR_MAX_DUTY = 999`).
 - Mọi giá trị tốc độ tính toán từ PID hoặc cấu hình thủ công đều bị cắt (clamp) về ngưỡng an toàn này để tránh tràn bộ đếm Timer (gây ra hiện tượng khựng hoặc đảo chiều không mong muốn do tràn số).
