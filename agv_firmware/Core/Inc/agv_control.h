@@ -20,6 +20,7 @@ extern "C" {
 #include "main.h"
 #include "motor.h"
 #include "sensor.h"
+#include <stdbool.h>
 
 /* USER CODE BEGIN Includes */
 
@@ -40,13 +41,36 @@ typedef enum {
     MODE_7_DEBUG_NO_QR = 7
 } AGV_RunMode_t;
 
-extern volatile AGV_RunMode_t agv_run_mode;
-extern volatile uint8_t agv_indicator_state; // 0: Normal, 1: Turning, 2: Error
+typedef struct {
+    volatile AGV_RunMode_t run_mode;
+    volatile uint8_t indicator_state; // 0: Normal, 1: Turning, 2: Error
+    volatile bool follow_line_enable;
+    volatile bool is_at_intersection;
+    volatile uint32_t intersection_time;
+    volatile uint32_t last_leave_intersection_time;
+    volatile uint16_t current_node;
+    volatile uint16_t destination_node;
+    volatile bool need_recalculate_path;
+    volatile uint32_t last_qr_time;
+    volatile uint16_t path_index;
+} AGV_State_t;
 
 typedef struct {
-  volatile float gtht;
-  volatile float er;
-  volatile float pre_er;
+    uint32_t time_offset;
+    uint32_t time_forward;
+    uint32_t time_turn_90;
+    uint32_t time_turn_180;
+    int16_t turn_speed;
+    int16_t base_speed;
+} AGV_Config_t;
+
+extern AGV_State_t agv_state;
+extern AGV_Config_t agv_config;
+
+typedef struct {
+  volatile float current_val;
+  volatile float error;
+  volatile float prev_error;
   volatile float Kp;
   volatile float Kd;
   volatile float Ki;
@@ -67,6 +91,10 @@ typedef struct {
 
 /* USER CODE BEGIN Exported constants */
 extern float Delta_t;
+
+#define AGV_LINE_RECOVERY_TIME 800
+#define AGV_TURN_BLIND_TIME 1500
+
 /* USER CODE END Exported constants */
 
 /* USER CODE BEGIN Exported macro */
@@ -82,6 +110,10 @@ void AGV_Stop(AGV_HandleTypeDef *hagv);
 void AGV_TurnLeft(AGV_HandleTypeDef *hagv);
 void AGV_TurnRight(AGV_HandleTypeDef *hagv);
 void AGV_Turn180(AGV_HandleTypeDef *hagv);
+
+void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv);
+void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv);
+void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv);
 
 /* USER CODE BEGIN EFP */
 
