@@ -61,6 +61,9 @@ void Motor_SetSpeed(Motor_HandleTypeDef *hmotor, int16_t speed)
     }
     
     uint32_t duty = (physical_speed >= 0) ? physical_speed : -physical_speed;
+    if (duty > MOTOR_MAX_DUTY) {
+        duty = MOTOR_MAX_DUTY;
+    }
     __HAL_TIM_SET_COMPARE(hmotor->htim, hmotor->Channel, duty);
 }
 
