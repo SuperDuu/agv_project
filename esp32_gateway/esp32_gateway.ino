@@ -124,34 +124,44 @@ void parse_rs485_frame() {
 // Dùng Raw String Literal (R"=====(...)=====") để viết HTML ngay trong code C++ mà không cần escape ký tự
 const char* HTML_CONTENT = R"=====(
 <!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cấu Hình AGV Gateway</title>
+<title>AGV Gateway Setup</title>
 <style>
-  body { font-family: Arial, sans-serif; padding: 20px; background-color: #f0f2f5; }
-  .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-  h2 { text-align: center; color: #333; }
-  label { font-weight: bold; font-size: 14px; display: block; margin-top: 15px; }
-  input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 16px; }
-  button { width: 100%; padding: 12px; margin-top: 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; }
-  button:hover { background-color: #0056b3; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+  body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #1e293b, #0f172a); color: #f8fafc; margin: 0; padding: 20px; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 35px 30px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); width: 100%; max-width: 400px; border: 1px solid rgba(255, 255, 255, 0.1); }
+  .header { text-align: center; margin-bottom: 30px; }
+  .header h2 { margin: 0; color: #38bdf8; font-weight: 700; letter-spacing: 1.5px; font-size: 24px; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+  .header p { color: #94a3b8; font-size: 14px; margin-top: 8px; }
+  label { font-weight: 600; font-size: 13px; color: #cbd5e1; display: block; margin-top: 18px; margin-bottom: 6px; }
+  input, select { width: 100%; padding: 12px 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid #334155; border-radius: 10px; color: #fff; font-size: 15px; transition: all 0.3s ease; box-sizing: border-box; }
+  input:focus, select:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2); background: rgba(0, 0, 0, 0.4); }
+  button { width: 100%; padding: 14px; margin-top: 30px; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); }
+  button:hover { background: linear-gradient(135deg, #38bdf8, #0ea5e9); transform: translateY(-2px); box-shadow: 0 6px 15px rgba(14, 165, 233, 0.4); }
+  button:active { transform: translateY(0); box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3); }
+  .footer { text-align: center; margin-top: 25px; font-size: 12px; color: #64748b; }
 </style>
 </head><body>
 <div class="card">
-  <h2>AGV Gateway Setup</h2>
+  <div class="header">
+    <h2>AGV GATEWAY</h2>
+    <p>Smart Configuration Panel</p>
+  </div>
   <form action="/save" method="POST">
     <label>Tên WiFi (Bấm để chọn):</label>
     <select name="ssid">%SSID_OPTIONS%</select>
     
     <label>Mật khẩu WiFi:</label>
-    <input type="password" name="pass" value="%WIFI_PASS%" placeholder="Để trống nếu WiFi không có pass">
+    <input type="password" name="pass" value="%WIFI_PASS%" placeholder="Để trống nếu không có pass">
     
     <label>Firebase Host (Bỏ https:// và /):</label>
     <input type="text" name="fb_host" value="%FB_HOST%" required placeholder="VD: agv-test.firebaseio.com">
     
-    <label>Firebase Auth (Secret Token):</label>
-    <input type="text" name="fb_auth" value="%FB_AUTH%" required>
+    <label>Firebase API Key:</label>
+    <input type="text" name="fb_auth" value="%FB_AUTH%" required placeholder="Nhập API Key">
     
     <button type="submit">Lưu & Khởi Động Lại</button>
   </form>
+  <div class="footer">Deepmind AGV Systems &copy; 2026</div>
 </div>
 </body></html>
 )=====";
@@ -216,9 +226,12 @@ void handleSave() {
   saveConfig(new_ssid, new_pass, new_host, new_auth);
   
   // Phản hồi cho trình duyệt
-  String successPage = "<html><body style='font-family:Arial;text-align:center;margin-top:50px;'>"
-                       "<h2>Đã lưu cấu hình thành công!</h2>"
-                       "<p>Mạch ESP32 đang khởi động lại. Vui lòng tắt WiFi này và chờ xe AGV kết nối mạng.</p>"
+  String successPage = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1'><style>"
+                       "body{font-family:'Inter',sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}"
+                       ".box{background:rgba(255,255,255,0.05);padding:40px;border-radius:16px;text-align:center;border:1px solid rgba(255,255,255,0.1);box-shadow:0 10px 30px rgba(0,0,0,0.5);}"
+                       "h2{color:#10b981;margin-top:0;}</style></head><body>"
+                       "<div class='box'><h2>Đã lưu cấu hình thành công!</h2>"
+                       "<p style='color:#94a3b8;line-height:1.6;'>Mạch ESP32 đang khởi động lại...<br>Vui lòng tắt WiFi này và chờ xe AGV kết nối vào mạng.</p></div>"
                        "</body></html>";
   server.send(200, "text/html", successPage);
   
