@@ -23,6 +23,8 @@
 Preferences preferences; // Thư viện NVS thay thế EEPROM
 WebServer server(80);    // Khởi tạo WebServer ở cổng 80
 
+TaskHandle_t FirebaseTaskHandle; // Task đa luồng cho Firebase
+
 // Biến lưu trữ cấu hình mạng (Sẽ được nạp từ bộ nhớ)
 String wifi_ssid = "";
 String wifi_pass = "";
@@ -214,6 +216,34 @@ void enterConfigMode() {
 }
 
 // ==========================================
+// TASK ĐA LUỒNG: CHẠY FIREBASE TRÊN CORE 0
+// ==========================================
+void FirebaseTask(void *pvParameters) {
+  for (;;) {
+    if (!isConfigMode && WiFi.status() == WL_CONNECTED) {
+      if (millis() - lastCheckTime >= FIREBASE_CHECK_INTERVAL) {
+        lastCheckTime = millis();
+
+        if (Firebase.ready()) {
+          if (Firebase.getString(firebaseData, "/AGV_01/TargetCommand")) {
+            if (firebaseData.dataType() == "string") {
+              String newCommand = firebaseData.stringData();
+              if (newCommand != currentCommand && newCommand != "") {
+                currentCommand = newCommand;
+                isAckReceived = false;
+                Serial.print("Nhan duoc lenh moi tu Firebase: ");
+                Serial.println(currentCommand);
+              }
+            }
+          }
+        }
+      }
+    }
+    vTaskDelay(10 / portTICK_PERIOD_MS); // Nhường CPU 10ms để Watchdog không reset
+  }
+}
+
+// ==========================================
 // CHƯƠNG TRÌNH CHÍNH
 // ==========================================
 void setup() {
@@ -267,40 +297,30 @@ void setup() {
       }
     }
   }
+
+  // Khởi tạo Task Firebase chạy riêng biệt trên Core 0 (Core 1 để dành cho Loop chính xử lý RS485)
+  xTaskCreatePinnedToCore(
+    FirebaseTask,   // Hàm chạy Task
+    "FirebaseTask", // Tên Task
+    8192,           // Kích thước Stack (Firebase cần nhiều RAM)
+    NULL,           // Tham số
+    1,              // Độ ưu tiên
+    &FirebaseTaskHandle, 
+    0               // Chạy trên Core 0 (Core xử lý WiFi mặc định)
+  );
 }
 
 void loop() {
   // NẾU ĐANG Ở CHẾ ĐỘ CẤU HÌNH -> CHỈ CHẠY WEBSERVER
   if (isConfigMode) {
     server.handleClient();
-    return; // Dừng lại ở đây, tuyệt đối không chạy code Firebase bên dưới
+    return; // Dừng lại ở đây
   }
 
   // ==========================================
-  // NẾU CHẠY BÌNH THƯỜNG -> LOGIC FIREBASE NHƯ CŨ
+  // LOGIC RS485 & FIREBASE COMMAND
   // ==========================================
-  if (millis() - lastCheckTime >= FIREBASE_CHECK_INTERVAL) {
-    lastCheckTime = millis();
-
-    if (Firebase.ready()) {
-      if (Firebase.getString(firebaseData, "/AGV_01/TargetCommand")) {
-        if (firebaseData.dataType() == "string") {
-          String newCommand = firebaseData.stringData();
-          
-          if (newCommand != currentCommand && newCommand != "") {
-            currentCommand = newCommand;
-            isAckReceived = false;
-            
-            Serial.print("Nhan duoc lenh moi tu Firebase: ");
-            Serial.println(currentCommand);
-          }
-        }
-      } else {
-        Serial.print("Loi doc Firebase: ");
-        Serial.println(firebaseData.errorReason());
-      }
-    }
-  }
+  // Đoạn đọc Firebase đã được chuyển sang Core 0 (FirebaseTask) để không làm kẹt vòng lặp này!
 
   // CƠ CHẾ GỬI LẠI UART (CHỜ ACK TỪ STM32)
   if (!isAckReceived && (millis() - lastSendTime >= 1000)) {
