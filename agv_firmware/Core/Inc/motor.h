@@ -43,7 +43,7 @@ typedef struct {
 /* USER CODE END Exported types */
 
 /* USER CODE BEGIN Exported constants */
-
+#define MOTOR_MAX_DUTY 999
 /* USER CODE END Exported constants */
 
 /* USER CODE BEGIN Exported macro */
