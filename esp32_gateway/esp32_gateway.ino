@@ -268,7 +268,7 @@ void FirebaseTask(void *pvParameters) {
         lastCheckTime = millis();
 
         if (Firebase.ready()) {
-          if (Firebase.getString(firebaseData, "/robot/camera_command")) {
+          if (Firebase.getString(firebaseData, "/robot/camera_command/command")) {
             if (firebaseData.dataType() == "string") {
               String newCommand = firebaseData.stringData();
               if (newCommand != currentCommand && newCommand != "") {
