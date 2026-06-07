@@ -21,6 +21,7 @@ void ESP32_Init(UART_HandleTypeDef *huart) {
     esp32_data.IsConnected = false;
     esp32_data.Yaw = 0.0f;
     esp32_data.LastUpdateTick = 0;
+    esp32_data.HasNewCommand = false;
 
     // Kích hoạt DMA nhận chuỗi
     HAL_UARTEx_ReceiveToIdle_DMA(esp32_huart, esp32_rx_buffer, sizeof(esp32_rx_buffer));
@@ -44,15 +45,22 @@ void ESP32_RequestData(uint16_t current_node) {
 
 // Được gọi trong ngắt HAL_UARTEx_RxEventCallback khi nhận xong 1 frame từ ESP32
 void ESP32_ParseResponse(uint16_t length) {
-    // Khung truyền cố định 7 byte
-    if (length == 7) {
+    // Khung truyền cố định 9 byte
+    if (length == 9) {
         if (esp32_rx_buffer[0] == 0xAA && esp32_rx_buffer[1] == 0x55) {
             if (esp32_rx_buffer[2] == ESP32_ADDR && esp32_rx_buffer[3] == ESP32_CMD_READ_IMU) {
-                uint8_t calc_cs = Calculate_Checksum(esp32_rx_buffer, 2, 5);
-                if (calc_cs == esp32_rx_buffer[6]) {
+                uint8_t calc_cs = Calculate_Checksum(esp32_rx_buffer, 2, 7);
+                if (calc_cs == esp32_rx_buffer[8]) {
                     // Dữ liệu hợp lệ
                     int16_t yaw_int = (esp32_rx_buffer[4] << 8) | esp32_rx_buffer[5];
                     esp32_data.Yaw = (float)yaw_int / 10.0f;
+                    
+                    if (esp32_rx_buffer[6] != 255) {
+                        esp32_data.TargetNode = esp32_rx_buffer[6];
+                        esp32_data.H_Command = esp32_rx_buffer[7];
+                        esp32_data.HasNewCommand = true;
+                    }
+                    
                     esp32_data.LastUpdateTick = HAL_GetTick();
                     esp32_data.IsConnected = true;
                 }

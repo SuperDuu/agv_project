@@ -50,6 +50,10 @@ uint8_t rs485_rx_buffer[10];
 uint8_t rs485_rx_index = 0;
 unsigned long last_rs485_rx_time = 0;
 
+// Lưu trữ lệnh bóc tách từ Firebase
+uint8_t firebase_node = 255;  // 255 = Không có lệnh
+uint8_t firebase_h_cmd = 255; // 255 = Không có lệnh
+
 // Hàm tính XOR Checksum cho khung nhị phân
 uint8_t calculate_checksum(uint8_t *data, uint8_t start, uint8_t end) {
   uint8_t cs = 0;
@@ -71,15 +75,24 @@ void parse_rs485_frame() {
             current_yaw += 0.5f; // Chạy giả lập góc
             if (current_yaw > 360.0f) current_yaw -= 360.0f;
 
-            uint8_t tx_frame[7];
+            uint8_t tx_frame[9];
             tx_frame[0] = 0xAA; tx_frame[1] = 0x55;
             tx_frame[2] = RS485_ADDR; tx_frame[3] = 0x01;
             int16_t yaw_int = (int16_t)(current_yaw * 10.0f);
             tx_frame[4] = (yaw_int >> 8) & 0xFF;
             tx_frame[5] = yaw_int & 0xFF;
-            tx_frame[6] = calculate_checksum(tx_frame, 2, 5);
             
-            Serial2.write(tx_frame, 7);
+            // Gửi kèm lệnh Firebase mới nhất
+            tx_frame[6] = firebase_node;
+            tx_frame[7] = firebase_h_cmd;
+            
+            tx_frame[8] = calculate_checksum(tx_frame, 2, 7);
+            
+            Serial2.write(tx_frame, 9);
+            
+            // Xóa cờ sau khi đã gửi để tránh AGV hiểu nhầm gửi liên tục
+            firebase_node = 255;
+            firebase_h_cmd = 255;
           }
         }
       }
@@ -225,7 +238,7 @@ void FirebaseTask(void *pvParameters) {
         lastCheckTime = millis();
 
         if (Firebase.ready()) {
-          if (Firebase.getString(firebaseData, "/AGV_01/TargetCommand")) {
+          if (Firebase.getString(firebaseData, "/robot/camera_command")) {
             if (firebaseData.dataType() == "string") {
               String newCommand = firebaseData.stringData();
               if (newCommand != currentCommand && newCommand != "") {
@@ -233,6 +246,20 @@ void FirebaseTask(void *pvParameters) {
                 isAckReceived = false;
                 Serial.print("Nhan duoc lenh moi tu Firebase: ");
                 Serial.println(currentCommand);
+                
+                // Bóc tách chuỗi NxxHyy
+                int nIndex = currentCommand.indexOf("N");
+                int hIndex = currentCommand.indexOf("H");
+                
+                if (nIndex != -1 && hIndex != -1 && hIndex > nIndex) {
+                  String nStr = currentCommand.substring(nIndex + 1, hIndex);
+                  String hStr = currentCommand.substring(hIndex + 1);
+                  
+                  firebase_node = (uint8_t)nStr.toInt();
+                  firebase_h_cmd = (uint8_t)hStr.toInt();
+                  
+                  Serial.printf("=> Node: %d, H_Cmd: %d\n", firebase_node, firebase_h_cmd);
+                }
               }
             }
           }
@@ -289,8 +316,8 @@ void setup() {
         Serial.print("IP Address: "); Serial.println(WiFi.localIP());
         
         // 4. BẮT ĐẦU CHẠY FIREBASE
-        config.host = fb_host;
-        config.signer.tokens.legacy_token = fb_auth.c_str(); // Cần ép kiểu String sang const char*
+        config.database_url = fb_host.c_str();
+        config.api_key = fb_auth.c_str(); // Dùng API Key thay cho Secret Token cũ
         
         Firebase.begin(&config, &auth);
         Firebase.reconnectWiFi(true); // Tự động reconnect nếu rớt mạng trong lúc đang chạy

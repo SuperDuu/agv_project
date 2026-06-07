@@ -15,6 +15,9 @@ typedef struct {
     float Yaw;
     uint32_t LastUpdateTick;
     bool IsConnected;
+    uint8_t TargetNode;
+    uint8_t H_Command;
+    bool HasNewCommand;
 } ESP32_SensorData_t;
 
 // Khai báo biến toàn cục

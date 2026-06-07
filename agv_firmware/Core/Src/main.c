@@ -310,44 +310,80 @@ int main(void)
       // Gửi current_node hiện tại xuống cho ESP32
       ESP32_RequestData(current_node);
     }
+    
+    // Bắt lệnh mới từ ESP32 (Firebase / Web đẩy xuống)
+    if (esp32_data.HasNewCommand) {
+      esp32_data.HasNewCommand = false;
+      if (esp32_data.TargetNode != destination_node) {
+        destination_node = esp32_data.TargetNode;
+        extern volatile bool need_recalculate_path;
+        need_recalculate_path = true; // Kích hoạt sinh quỹ đạo
+        // TODO: Lưu esp32_data.H_Command để xử lý nâng hạ sau
+      }
+    }
+    
     HMI_SyncData();
     
     extern volatile bool need_recalculate_path;
     if (need_recalculate_path) {
       need_recalculate_path = false;
-      bool found = Routing_Dijkstra(&factory_map, current_node, destination_node, current_path, &path_length);
-      if (found) {
-        path_index = 0;
-        
-        // KIỂM TRA HƯỚNG VÀ XOAY NGAY LẬP TỨC NẾU CẦN THIẾT TRƯỚC KHI CHẠY
-        if (path_length > 1) {
-          uint16_t next_node = current_path[1];
-          AGV_Heading_t target_heading =
-              Routing_GetHeading(&factory_map, current_node, next_node);
-
-          int diff = (target_heading - current_heading + 4) % 4;
-          AGV_Action_t next_action = (AGV_Action_t)diff;
-
-          switch (next_action) {
-          case ACT_TURN_LEFT:
-            h_agv.direction = 1;
-            AGV_TurnLeft(&h_agv);
-            break;
-          case ACT_TURN_RIGHT:
-            h_agv.direction = 1;
-            AGV_TurnRight(&h_agv);
-            break;
-          case ACT_BACKWARD:
-            h_agv.direction = 1;
-            AGV_Turn180(&h_agv);
-            break;
-          case ACT_STRAIGHT:
-          case ACT_STOP:
-          default:
-            break;
+      
+      // LOGIC SINH QUỸ ĐẠO ĐỘNG (Dynamic Trajectory)
+      extern volatile bool agv_follow_line_enable;
+      if (agv_follow_line_enable && path_length > 0 && path_index < path_length - 1) {
+          // 1. Xe đang chạy giữa chừng, lấy ngã tư tiếp theo làm điểm bắt đầu
+          uint16_t next_node = current_path[path_index + 1];
+          uint16_t new_path[MAX_NODES];
+          uint16_t new_len = 0;
+          
+          bool found = Routing_Dijkstra(&factory_map, next_node, destination_node, new_path, &new_len);
+          if (found) {
+              // 2. Nối mảng: Đè từ vị trí next_node (path_index + 1) bằng mảng mới
+              for (uint16_t i = 0; i < new_len; i++) {
+                  if (path_index + 1 + i < MAX_NODES) {
+                      current_path[path_index + 1 + i] = new_path[i];
+                  }
+              }
+              path_length = path_index + 1 + new_len;
+              // path_index giữ nguyên, xe sẽ đi nốt đến next_node và rẽ theo đường mới!
           }
-          current_heading = target_heading;
-        }
+      } else {
+          // Xe đang đứng yên hoặc chưa có đường
+          bool found = Routing_Dijkstra(&factory_map, current_node, destination_node, current_path, &path_length);
+          if (found) {
+            path_index = 0;
+            
+            // KIỂM TRA HƯỚNG VÀ XOAY NGAY LẬP TỨC NẾU CẦN THIẾT TRƯỚC KHI CHẠY
+            if (path_length > 1) {
+              uint16_t next_node = current_path[1];
+              AGV_Heading_t target_heading =
+                  Routing_GetHeading(&factory_map, current_node, next_node);
+
+              int diff = (target_heading - current_heading + 4) % 4;
+              AGV_Action_t next_action = (AGV_Action_t)diff;
+
+              switch (next_action) {
+              case ACT_TURN_LEFT:
+                h_agv.direction = 1;
+                AGV_TurnLeft(&h_agv);
+                break;
+              case ACT_TURN_RIGHT:
+                h_agv.direction = 1;
+                AGV_TurnRight(&h_agv);
+                break;
+              case ACT_BACKWARD:
+                h_agv.direction = 1;
+                AGV_Turn180(&h_agv);
+                break;
+              case ACT_STRAIGHT:
+              case ACT_STOP:
+              default:
+                break;
+              }
+              current_heading = target_heading;
+            }
+          }
+      }
 
         // Tự động chạy luôn khi nhận được đường đi mới (do không có nút Start trên HMI)
         agv_follow_line_enable = true;
