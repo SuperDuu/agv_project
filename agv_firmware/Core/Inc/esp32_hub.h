@@ -30,6 +30,7 @@ extern uint8_t esp32_rx_buffer[15];
 void ESP32_Init(UART_HandleTypeDef *huart);
 void ESP32_RequestData(uint16_t current_node);
 void ESP32_ParseResponse(uint16_t length);
+ESP32_SensorData_t ESP32_GetSafeData(void);
 
 #ifdef __cplusplus
 }
