@@ -81,32 +81,15 @@ char debug_line_binary[17] = "0000000000000000";
 AGV_Map_t factory_map;
 uint16_t current_path[MAX_NODES];
 uint16_t path_length = 0;
-volatile uint16_t path_index = 0;
-volatile uint16_t current_node = 0;
-volatile uint16_t destination_node = 0;
-volatile bool need_recalculate_path = false;
-volatile uint32_t last_qr_time = 0;
-AGV_Heading_t current_heading =
-    HEAD_NORTH;
-volatile bool agv_follow_line_enable = false; // Phải đợi HMI gửi lệnh Start mới chạy
+AGV_Heading_t current_heading = HEAD_NORTH;
 static uint16_t last_processed_node = 0xFFFF;
 
-volatile bool is_at_intersection = false; // Cờ báo hiệu chạm ngã tư
-volatile uint32_t intersection_time = 0;
 uint16_t pending_qr_node = 0xFFFF; // Bộ đệm chứa mã QR chờ xử lý
-volatile uint32_t last_leave_intersection_time =
-    0; // Blind zone: Hẹn giờ mù ngã tư cũ
+uint32_t blind_zone_end_time = 0;   // Hẹn giờ mù ngã tư cũ
 
 // Các biến cấu hình cho chế độ MODE_5_CALIBRATE_MOTORS
-volatile uint32_t calib_time_offset =
-    750; // Thời gian bù trừ tiến lên tâm ngã tư (ms)
-volatile uint32_t calib_time_forward = 2000; // Thời gian chạy thẳng/lùi (ms)
-volatile uint32_t calib_time_turn_90 =
-    3500; // Thời gian xoay 90 độ (tăng theo speed 150)
-volatile uint32_t calib_time_turn_180 =
-    6200; // Thời gian xoay 180 độ (gấp đôi quay 90 độ)
-volatile int16_t calib_speed =
-    150; // Tốc độ quay (giảm từ 300 để quay chậm, mượt hơn)
+uint32_t calib_time_offset = 750;   // Thời gian bù trừ tiến lên tâm ngã tư (ms)
+uint32_t calib_time_turn_90 = 3500;  // Thời gian xoay 90 độ (tăng theo speed 150)
 
 volatile uint32_t mode6_stop_time = 0; // Biến hẹn giờ 3s cho MODE 6
 
@@ -293,9 +276,9 @@ int main(void)
   Load_Factory_Map();
   // Khởi động với đường đi trống - chờ HMI đặt đích mới tính
   path_length = 0;
-  path_index = 0;
+  agv_state.path_index = 0;
 
-  last_qr_time = HAL_GetTick();
+  agv_state.last_qr_time = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -307,15 +290,15 @@ int main(void)
   /* USER CODE BEGIN 3 */
     HMI_Process();
     
+    ESP32_SensorData_t safe_esp32_data = ESP32_GetSafeData();
     // ==========================================
     // FAIL-SAFE: KIỂM TRA PHẦN CỨNG CẢM BIẾN
     // ==========================================
-    if (esp32_data.IsConnected) {
-      if (esp32_data.Yaw == 65535.0f || esp32_data.ObstacleDistance == 0xFFFF) {
+    if (safe_esp32_data.IsConnected) {
+      if (safe_esp32_data.Yaw == 65535.0f || safe_esp32_data.ObstacleDistance == 0xFFFF) {
         // Nếu nhận mã lỗi từ ESP32 (đứt dây I2C BNO055 hoặc VL53L5)
-        extern volatile bool agv_follow_line_enable;
-        if (agv_follow_line_enable) {
-          agv_follow_line_enable = false;
+        if (agv_state.follow_line_enable) {
+          agv_state.follow_line_enable = false;
           AGV_Stop(&h_agv);
         }
         // Bỏ qua các logic di chuyển bên dưới nếu đang lỗi
@@ -324,10 +307,9 @@ int main(void)
       
       // LOGIC CHỐNG VA CHẠM (COLLISION AVOIDANCE) BẰNG SIÊU ÂM
       // Nếu có vật cản gần hơn 300mm (30cm), lập tức phanh khẩn cấp
-      if (esp32_data.ObstacleDistance != 65534 && esp32_data.ObstacleDistance < 300) {
-        extern volatile bool agv_follow_line_enable;
-        if (agv_follow_line_enable) {
-          agv_follow_line_enable = false;
+      if (safe_esp32_data.ObstacleDistance != 65534 && safe_esp32_data.ObstacleDistance < 300) {
+        if (agv_state.follow_line_enable) {
+          agv_state.follow_line_enable = false;
           AGV_Stop(&h_agv);
         }
       }
@@ -336,57 +318,54 @@ int main(void)
     // Yêu cầu dữ liệu từ ESP32 mỗi 50ms
     if (HAL_GetTick() - last_esp32_req_time > 50) {
       last_esp32_req_time = HAL_GetTick();
-      // Gửi current_node hiện tại xuống cho ESP32
-      ESP32_RequestData(current_node);
+      // Gửi agv_state.current_node hiện tại xuống cho ESP32
+      ESP32_RequestData(agv_state.current_node);
     }
     
     // Bắt lệnh mới từ ESP32 (Firebase / Web đẩy xuống)
-    if (esp32_data.HasNewCommand) {
-      esp32_data.HasNewCommand = false;
-      if (esp32_data.TargetNode != destination_node) {
-        destination_node = esp32_data.TargetNode;
-        extern volatile bool need_recalculate_path;
-        need_recalculate_path = true; // Kích hoạt sinh quỹ đạo
-        // TODO: Lưu esp32_data.H_Command để xử lý nâng hạ sau
+    if (safe_esp32_data.HasNewCommand) {
+      esp32_data.HasNewCommand = false; // Clear real flag
+      if (safe_esp32_data.TargetNode != agv_state.destination_node) {
+        agv_state.destination_node = safe_esp32_data.TargetNode;
+        agv_state.need_recalculate_path = true; // Kích hoạt sinh quỹ đạo
+        // TODO: Lưu safe_esp32_data.H_Command để xử lý nâng hạ sau
       }
     }
     
     HMI_SyncData();
     
-    extern volatile bool need_recalculate_path;
-    if (need_recalculate_path) {
-      need_recalculate_path = false;
+    if (agv_state.need_recalculate_path) {
+      agv_state.need_recalculate_path = false;
       
       // LOGIC SINH QUỸ ĐẠO ĐỘNG (Dynamic Trajectory)
-      extern volatile bool agv_follow_line_enable;
-      if (agv_follow_line_enable && path_length > 0 && path_index < path_length - 1) {
+      if (agv_state.follow_line_enable && path_length > 0 && agv_state.path_index < path_length - 1) {
           // 1. Xe đang chạy giữa chừng, lấy ngã tư tiếp theo làm điểm bắt đầu
-          uint16_t next_node = current_path[path_index + 1];
+          uint16_t next_node = current_path[agv_state.path_index + 1];
           uint16_t new_path[MAX_NODES];
           uint16_t new_len = 0;
           
-          bool found = Routing_Dijkstra(&factory_map, next_node, destination_node, new_path, &new_len);
+          bool found = Routing_Dijkstra(&factory_map, next_node, agv_state.destination_node, new_path, &new_len);
           if (found) {
-              // 2. Nối mảng: Đè từ vị trí next_node (path_index + 1) bằng mảng mới
+              // 2. Nối mảng: Đè từ vị trí next_node (agv_state.path_index + 1) bằng mảng mới
               for (uint16_t i = 0; i < new_len; i++) {
-                  if (path_index + 1 + i < MAX_NODES) {
-                      current_path[path_index + 1 + i] = new_path[i];
+                  if (agv_state.path_index + 1 + i < MAX_NODES) {
+                      current_path[agv_state.path_index + 1 + i] = new_path[i];
                   }
               }
-              path_length = path_index + 1 + new_len;
-              // path_index giữ nguyên, xe sẽ đi nốt đến next_node và rẽ theo đường mới!
+              path_length = agv_state.path_index + 1 + new_len;
+              // agv_state.path_index giữ nguyên, xe sẽ đi nốt đến next_node và rẽ theo đường mới!
           }
       } else {
           // Xe đang đứng yên hoặc chưa có đường
-          bool found = Routing_Dijkstra(&factory_map, current_node, destination_node, current_path, &path_length);
+          bool found = Routing_Dijkstra(&factory_map, agv_state.current_node, agv_state.destination_node, current_path, &path_length);
           if (found) {
-            path_index = 0;
+            agv_state.path_index = 0;
             
             // KIỂM TRA HƯỚNG VÀ XOAY NGAY LẬP TỨC NẾU CẦN THIẾT TRƯỚC KHI CHẠY
             if (path_length > 1) {
               uint16_t next_node = current_path[1];
               AGV_Heading_t target_heading =
-                  Routing_GetHeading(&factory_map, current_node, next_node);
+                  Routing_GetHeading(&factory_map, agv_state.current_node, next_node);
 
               int diff = (target_heading - current_heading + 4) % 4;
               AGV_Action_t next_action = (AGV_Action_t)diff;
@@ -412,18 +391,18 @@ int main(void)
               current_heading = target_heading;
             }
             
-            agv_follow_line_enable = true;
-            agv_indicator_state = 0;
-            last_leave_intersection_time = HAL_GetTick();
-            last_qr_time = HAL_GetTick();
+            agv_state.follow_line_enable = true;
+            agv_state.indicator_state = 0;
+            agv_state.last_leave_intersection_time = HAL_GetTick();
+            agv_state.last_qr_time = HAL_GetTick();
           } else {
             path_length = 0;
           }
       }
     }
     // STATE MACHINE CHUYÊN DỤNG CHO CALIBRATION (MODE 5)
-    if (agv_run_mode == MODE_5_CALIBRATE_MOTORS) {
-      agv_follow_line_enable = false;
+    if (agv_state.run_mode == MODE_5_CALIBRATE_MOTORS) {
+      agv_state.follow_line_enable = false;
       static uint8_t calib_state = 0;
       static uint32_t state_start_time = 0;
 
@@ -440,9 +419,9 @@ int main(void)
         }
         break;
       case 1:
-        Motor_SetSpeed(&m_left, calib_speed);
-        Motor_SetSpeed(&m_right, calib_speed);
-        if (elapsed > calib_time_forward) {
+        Motor_SetSpeed(&m_left, agv_config.turn_speed);
+        Motor_SetSpeed(&m_right, agv_config.turn_speed);
+        if (elapsed > agv_config.time_forward) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
@@ -455,9 +434,9 @@ int main(void)
         }
         break;
       case 3:
-        Motor_SetSpeed(&m_left, -calib_speed);
-        Motor_SetSpeed(&m_right, -calib_speed);
-        if (elapsed > calib_time_forward) {
+        Motor_SetSpeed(&m_left, -agv_config.turn_speed);
+        Motor_SetSpeed(&m_right, -agv_config.turn_speed);
+        if (elapsed > agv_config.time_forward) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
@@ -470,9 +449,9 @@ int main(void)
         }
         break;
       case 5:
-        Motor_SetSpeed(&m_left, -calib_speed);
-        Motor_SetSpeed(&m_right, calib_speed);
-        if (elapsed > calib_time_turn_90) {
+        Motor_SetSpeed(&m_left, -agv_config.turn_speed);
+        Motor_SetSpeed(&m_right, agv_config.turn_speed);
+        if (elapsed > agv_config.time_turn_90) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
@@ -485,9 +464,9 @@ int main(void)
         }
         break;
       case 7:
-        Motor_SetSpeed(&m_left, calib_speed);
-        Motor_SetSpeed(&m_right, -calib_speed);
-        if (elapsed > calib_time_turn_90) {
+        Motor_SetSpeed(&m_left, agv_config.turn_speed);
+        Motor_SetSpeed(&m_right, -agv_config.turn_speed);
+        if (elapsed > agv_config.time_turn_90) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
@@ -500,9 +479,9 @@ int main(void)
         }
         break;
       case 9:
-        Motor_SetSpeed(&m_left, -calib_speed);
-        Motor_SetSpeed(&m_right, calib_speed);
-        if (elapsed > calib_time_turn_180) {
+        Motor_SetSpeed(&m_left, -agv_config.turn_speed);
+        Motor_SetSpeed(&m_right, agv_config.turn_speed);
+        if (elapsed > agv_config.time_turn_180) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
@@ -515,9 +494,9 @@ int main(void)
         }
         break;
       case 11:
-        Motor_SetSpeed(&m_left, calib_speed);
-        Motor_SetSpeed(&m_right, -calib_speed);
-        if (elapsed > calib_time_turn_180) {
+        Motor_SetSpeed(&m_left, agv_config.turn_speed);
+        Motor_SetSpeed(&m_right, -agv_config.turn_speed);
+        if (elapsed > agv_config.time_turn_180) {
           calib_state++;
           state_start_time = HAL_GetTick();
         }
@@ -529,9 +508,9 @@ int main(void)
       continue;
     }
 
-    if (agv_run_mode == MODE_4_FULL_RUN) {
-      if (agv_follow_line_enable && (HAL_GetTick() - last_qr_time > 15000)) {
-        agv_follow_line_enable = false;
+    if (agv_state.run_mode == MODE_4_FULL_RUN) {
+      if (agv_state.follow_line_enable && (HAL_GetTick() - agv_state.last_qr_time > 15000)) {
+        agv_state.follow_line_enable = false;
         AGV_Stop(&h_agv);
       }
     }
@@ -540,7 +519,7 @@ int main(void)
       qr50.Data.New_Data_Flag = false;
 
       if (qr50.Data.Data_Buffer[0] == 'N') {
-        last_qr_time = HAL_GetTick();
+        agv_state.last_qr_time = HAL_GetTick();
 
         uint16_t read_node_id = atoi((char *)&qr50.Data.Data_Buffer[1]);
 
@@ -550,24 +529,24 @@ int main(void)
       }
     }
 
-    if (is_at_intersection) {
-      if (agv_run_mode == MODE_2_LINE_INTERSECTION) {
+    if (agv_state.is_at_intersection) {
+      if (agv_state.run_mode == MODE_2_LINE_INTERSECTION) {
         continue;
       }
 
-      if (agv_run_mode == MODE_6_TEST_TURN_RIGHT) {
+      if (agv_state.run_mode == MODE_6_TEST_TURN_RIGHT) {
         AGV_TurnRight(&h_agv);
-        last_leave_intersection_time = HAL_GetTick();
-        is_at_intersection = false;
-        agv_follow_line_enable = true;
+        agv_state.last_leave_intersection_time = HAL_GetTick();
+        agv_state.is_at_intersection = false;
+        agv_state.follow_line_enable = true;
         continue;
       }
 
-      if (agv_run_mode == MODE_7_DEBUG_NO_QR) {
-        if (path_length > 0 && path_index < path_length - 1) {
-          pending_qr_node = current_path[path_index + 1];
+      if (agv_state.run_mode == MODE_7_DEBUG_NO_QR) {
+        if (path_length > 0 && agv_state.path_index < path_length - 1) {
+          pending_qr_node = current_path[agv_state.path_index + 1];
         } else {
-          pending_qr_node = destination_node;
+          pending_qr_node = agv_state.destination_node;
         }
       }
 
@@ -575,44 +554,44 @@ int main(void)
         uint16_t read_node_id = pending_qr_node;
         pending_qr_node = 0xFFFF;
         last_processed_node = read_node_id;
-        is_at_intersection = false;
+        agv_state.is_at_intersection = false;
 
-        if (read_node_id == destination_node) {
+        if (read_node_id == agv_state.destination_node) {
           // Đến đích -> Cập nhật vị trí hiện tại và dừng chờ lệnh mới
-          current_node = read_node_id;
-          path_index = 0;
-          agv_follow_line_enable = false;
+          agv_state.current_node = read_node_id;
+          agv_state.path_index = 0;
+          agv_state.follow_line_enable = false;
           AGV_Stop(&h_agv);
           continue;
         }
 
-        if (path_length > 0 && path_index < path_length - 1 &&
-            read_node_id == current_path[path_index + 1]) {
-          path_index++;
-          current_node = read_node_id;
-        } else if (read_node_id != current_node) {
-          current_node = read_node_id;
+        if (path_length > 0 && agv_state.path_index < path_length - 1 &&
+            read_node_id == current_path[agv_state.path_index + 1]) {
+          agv_state.path_index++;
+          agv_state.current_node = read_node_id;
+        } else if (read_node_id != agv_state.current_node) {
+          agv_state.current_node = read_node_id;
           bool found_path =
-              Routing_Dijkstra(&factory_map, current_node, destination_node,
+              Routing_Dijkstra(&factory_map, agv_state.current_node, agv_state.destination_node,
                                current_path, &path_length);
           if (found_path) {
-            path_index = 0;
+            agv_state.path_index = 0;
           } else {
-            agv_follow_line_enable = false;
+            agv_state.follow_line_enable = false;
             AGV_Stop(&h_agv);
             continue;
           }
         }
 
-        if (path_length > 0 && path_index < path_length - 1) {
-          uint16_t next_node = current_path[path_index + 1];
+        if (path_length > 0 && agv_state.path_index < path_length - 1) {
+          uint16_t next_node = current_path[agv_state.path_index + 1];
           AGV_Heading_t target_heading =
-              Routing_GetHeading(&factory_map, current_node, next_node);
+              Routing_GetHeading(&factory_map, agv_state.current_node, next_node);
 
           int diff = (target_heading - current_heading + 4) % 4;
           AGV_Action_t next_action = (AGV_Action_t)diff;
 
-          agv_follow_line_enable = false;
+          agv_state.follow_line_enable = false;
 
           switch (next_action) {
           case ACT_TURN_LEFT:
@@ -642,22 +621,22 @@ int main(void)
 
           // Cập nhật lại hướng hiện tại sau khi đã xoay xong (kể cả quay 180)
           current_heading = target_heading;
-          last_leave_intersection_time = HAL_GetTick();
-          agv_follow_line_enable = true;
+          agv_state.last_leave_intersection_time = HAL_GetTick();
+          agv_state.follow_line_enable = true;
         }
-      } else if (HAL_GetTick() - intersection_time > 2000) {
+      } else if (HAL_GetTick() - agv_state.intersection_time > 2000) {
         AGV_Stop(&h_agv);
-        is_at_intersection = false;
+        agv_state.is_at_intersection = false;
 
-        if (agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR) {
+        if (agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR) {
           // Trong chế độ Test, nếu không cắm QR thì tự động nhả phanh đi tiếp
           // để người dùng có thể test các ngã tư tiếp theo mà không bị treo
           // cứng
-          agv_follow_line_enable = true;
-          last_leave_intersection_time = HAL_GetTick();
+          agv_state.follow_line_enable = true;
+          agv_state.last_leave_intersection_time = HAL_GetTick();
         } else {
           // Chạy thật: Hỏng camera, rách tem QR, hoặc chạm nhầm vạch rác
-          agv_follow_line_enable = false; // Tắt xe chờ xử lý sự cố
+          agv_state.follow_line_enable = false; // Tắt xe chờ xử lý sự cố
                                           // Bật còi/đèn nháy báo lỗi tại đây
         }
       }
@@ -1413,7 +1392,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     debug_line_binary[16] = '\0';
 
     // Ngắt PID mỗi 10ms - Chỉ điều khiển Motor nếu cờ được bật
-    if (agv_follow_line_enable) {
+    if (agv_state.follow_line_enable) {
       AGV_FollowLine(&h_agv);
     }
   }
