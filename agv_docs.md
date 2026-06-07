@@ -60,7 +60,8 @@ graph TD
 
 ### Các Thông số Cấu hình Động học (Calib trong `main.c`)
 - **Tốc độ quay (`calib_speed = 150`)**: Quay chậm để cảm biến quét vạch không bị văng lố.
-- **Thời gian bù vào tâm (`1000ms`)**: Chạy mù thẳng lên phía trước sau khi phát hiện ngã tư để đưa tâm quay của trục bánh sau trùng khớp với tâm ngã tư khi bẻ lái Trái/Phải. Tuy nhiên, đối với **quay đầu 180 độ**, xe KHÔNG tiến lên mà xoay tại chỗ ngay lập tức. Lý do động học: Vì tâm quay là trục 2 bánh sau, nếu xoay ngay tại mép ngã tư, tâm đường tròn văng của mũi xe sẽ bị lùi lại, giúp xe không bao giờ quét qua ngã tư và tránh tuyệt đối va chạm với bức tường phía trước. Mũi xe sau khi quay xong sẽ đáp đúng về vạch dọc cũ để chạy tiếp.
+- **Thời gian bù vào tâm (`1000ms`)**: Chạy mù thẳng lên phía trước sau khi phát hiện ngã tư để đưa tâm quay của trục bánh sau trùng khớp với tâm ngã tư khi bẻ lái Trái/Phải.
+- **Thủ thuật lùi xe cho góc 180 độ**: Đối với quay đầu 180 độ ở các góc hẹp/chân tường, vì tâm quay nằm ở bánh sau nên phần mũi xe quét một bán kính rất lớn và dễ đập tường. Do đó, xe sẽ **cài số lùi (chạy lùi lại 1000ms)** dọc theo vạch từ để lùi ra khu vực rộng rãi hơn, sau đó mới xoay 180 độ. Xoay xong, xe sẽ đáp lại đúng vạch từ cũ để chạy tiếp. Đây là giải pháp phần mềm triệt để cho vấn đề cơ khí của xe Differential Drive.
 - **Thời gian phanh tiêu tán quán tính (`300ms`)**: Giúp xe dừng hẳn trước khi quay, bảo vệ mạch công suất động cơ khỏi dòng điện ngược (back EMF).
 - **Xoay tại chỗ (Spin Turn)**: Xoay 2 pha. Pha 1 (kick-start) cấp PWM 700 trong 80ms để thắng lực ma sát tĩnh. Pha 2 quay chậm bằng `calib_speed`.
 - **Thời gian mù khi quay (`1500ms`)**: Trong 1.5 giây đầu tiên khi đang xoay, xe bỏ qua hoàn toàn các tín hiệu cảm biến để tránh nhận nhầm chính cái vạch dọc mà xe vừa đi qua.
