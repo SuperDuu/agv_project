@@ -28,6 +28,7 @@
 #include "qr50_reader.h"
 #include "sensor.h"
 #include <stdlib.h> // Để sử dụng hàm atoi
+#include "esp32_hub.h" // Thư viện giao tiếp ESP32
 
 /* USER CODE END Includes */
 
@@ -58,6 +59,9 @@ UART_HandleTypeDef huart5;
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
+DMA_NodeTypeDef Node_GPDMA1_Channel2;
+DMA_QListTypeDef List_GPDMA1_Channel2;
+DMA_HandleTypeDef handle_GPDMA1_Channel2;
 DMA_NodeTypeDef Node_GPDMA1_Channel1;
 DMA_QListTypeDef List_GPDMA1_Channel1;
 DMA_HandleTypeDef handle_GPDMA1_Channel1;
@@ -283,6 +287,9 @@ int main(void)
   // QR50_Init(&qr50, &huart2, 255); // Tạm khóa QR50 để HMI không bị nhiễu (Device no response)
   // DMA đã được HMI_Init khởi động, QR50 chỉ cần parse dữ liệu khi callback gọi
 
+  // Khởi tạo kênh giao tiếp Master-Slave với ESP32 qua UART5 (RS485_2)
+  ESP32_Init(&huart5);
+
   Load_Factory_Map();
   // Khởi động với đường đi trống - chờ HMI đặt đích mới tính
   path_length = 0;
@@ -293,8 +300,16 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint32_t last_esp32_req_time = 0;
   while (1) {
     HMI_Process();
+    
+    // Yêu cầu dữ liệu từ ESP32 mỗi 50ms
+    if (HAL_GetTick() - last_esp32_req_time > 50) {
+      last_esp32_req_time = HAL_GetTick();
+      // Gửi current_node hiện tại xuống cho ESP32
+      ESP32_RequestData(current_node);
+    }
     HMI_SyncData();
     
     extern volatile bool need_recalculate_path;
@@ -691,6 +706,8 @@ static void MX_GPDMA1_Init(void)
     HAL_NVIC_EnableIRQ(GPDMA1_Channel0_IRQn);
     HAL_NVIC_SetPriority(GPDMA1_Channel1_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(GPDMA1_Channel1_IRQn);
+    HAL_NVIC_SetPriority(GPDMA1_Channel2_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(GPDMA1_Channel2_IRQn);
 
   /* USER CODE BEGIN GPDMA1_Init 1 */
 
@@ -1305,6 +1322,13 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
     HAL_UART_AbortReceive(huart);
     extern HMI_HandleTypeDef h_hmi;
     HAL_UARTEx_ReceiveToIdle_DMA(h_hmi.huart, h_hmi.rx_buffer, sizeof(h_hmi.rx_buffer));
+  } else if (huart->Instance == UART5) {
+    // Xóa cờ lỗi UART
+    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
+    
+    HAL_UART_AbortReceive(huart);
+    extern uint8_t esp32_rx_buffer[10];
+    HAL_UARTEx_ReceiveToIdle_DMA(huart, esp32_rx_buffer, sizeof(esp32_rx_buffer));
   }
 }
 
@@ -1312,6 +1336,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
   if (huart->Instance == USART2) { // RS485_1 (Cổng ISO đang sống)
     // Tạm bỏ tính năng ghép kênh QR50 để HMI không bị treo
     HMI_RxCallback(huart, Size);
+  } else if (huart->Instance == UART5) { // RS485_2 (ESP32 Sensor Hub)
+    ESP32_ParseResponse(Size);
   } else if (huart->Instance == USART3) { // RS485_0 (Cổng bị hỏng vật lý)
     // Tạm thời vô hiệu hóa cổng này
   }
