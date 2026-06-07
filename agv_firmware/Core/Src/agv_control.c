@@ -333,14 +333,26 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
+  extern volatile uint32_t calib_time_turn_90;
   extern volatile uint32_t calib_time_turn_180;
   extern volatile int16_t calib_speed;
 
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  // LÙI LẠI TRƯỚC KHI QUAY ĐỂ NÉ TƯỜNG
-  // Chạy ngược lại khoảng 1 giây để thoát khỏi mép tường rồi mới quay
+  // 1. Quay mù 45 độ sang phải (bằng nửa thời gian quay 90 độ)
+  uint32_t time_45 = calib_time_turn_90 / 2;
+  Motor_SetSpeed(hagv->motor_left, 700); // Kick-start
+  Motor_SetSpeed(hagv->motor_right, -700);
+  HAL_Delay(80);
+  Motor_SetSpeed(hagv->motor_left, calib_speed);
+  Motor_SetSpeed(hagv->motor_right, -calib_speed);
+  HAL_Delay(time_45 - 80);
+
+  AGV_Stop(hagv);
+  HAL_Delay(300);
+
+  // 2. Lùi thẳng lại 1 giây (kéo xe về hướng Tây Nam để né tường phải và tường trước)
   Motor_SetSpeed(hagv->motor_left, -hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, -hagv->base_speed);
   HAL_Delay(1000);
@@ -348,8 +360,9 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  // Chọn chiều quay (phải) để quay 180 độ
-  Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_180);
+  // 3. Chọn chiều quay (phải) để quay tiếp 135 độ còn lại và dò vạch
+  uint32_t time_135 = calib_time_turn_180 - time_45;
+  Turn_Time_Based(hagv, calib_speed, -calib_speed, time_135);
 }
 
 /* USER CODE END 1 */
