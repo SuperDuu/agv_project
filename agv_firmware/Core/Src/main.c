@@ -70,38 +70,7 @@ DMA_QListTypeDef List_GPDMA1_Channel0;
 DMA_HandleTypeDef handle_GPDMA1_Channel0;
 
 /* USER CODE BEGIN PV */
-AGV_HandleTypeDef h_agv;
-Motor_HandleTypeDef m_left, m_right;
-LineSensor_HandleTypeDef line_ss;
-Pid_data pid_ctrl;
-extern HMI_HandleTypeDef h_hmi;
-// (Đã xóa rx_scan vì USART3 chuyển sang cho HMI Weinview)
-QR50_Handler_t qr50; // Đầu đọc QR50 trên USART2
-char debug_line_binary[17] = "0000000000000000";
-AGV_Map_t factory_map;
-uint16_t current_path[MAX_NODES];
-uint16_t path_length = 0;
-AGV_Heading_t current_heading = HEAD_NORTH;
-static uint16_t last_processed_node = 0xFFFF;
 
-uint16_t pending_qr_node = 0xFFFF; // Bộ đệm chứa mã QR chờ xử lý
-uint32_t blind_zone_end_time = 0;   // Hẹn giờ mù ngã tư cũ
-
-// Các biến cấu hình cho chế độ MODE_5_CALIBRATE_MOTORS
-uint32_t calib_time_offset = 750;   // Thời gian bù trừ tiến lên tâm ngã tư (ms)
-uint32_t calib_time_turn_90 = 3500;  // Thời gian xoay 90 độ (tăng theo speed 150)
-
-volatile uint32_t mode6_stop_time = 0; // Biến hẹn giờ 3s cho MODE 6
-
-GPIO_TypeDef *sensor_ports[16] = {
-    B_In35_GPIO_Port, B_In34_GPIO_Port, B_In33_GPIO_Port, B_In32_GPIO_Port,
-    B_In31_GPIO_Port, B_In30_GPIO_Port, B_In27_GPIO_Port, B_In26_GPIO_Port,
-    B_In25_GPIO_Port, B_In24_GPIO_Port, B_In23_GPIO_Port, B_In22_GPIO_Port,
-    B_In21_GPIO_Port, B_In20_GPIO_Port, B_In17_GPIO_Port, B_In16_GPIO_Port};
-uint16_t sensor_pins[16] = {B_In35_Pin, B_In34_Pin, B_In33_Pin, B_In32_Pin,
-                            B_In31_Pin, B_In30_Pin, B_In27_Pin, B_In26_Pin,
-                            B_In25_Pin, B_In24_Pin, B_In23_Pin, B_In22_Pin,
-                            B_In21_Pin, B_In20_Pin, B_In17_Pin, B_In16_Pin};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -119,7 +88,41 @@ static void MX_USART3_UART_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
+// === BIẾN GLOBAL ĐỂ DEBUG TRÊN LIVE EXPRESSION ===
+AGV_HandleTypeDef h_agv;
+Motor_HandleTypeDef m_left, m_right;
+LineSensor_HandleTypeDef line_ss;
+Pid_data pid_ctrl;
+extern HMI_HandleTypeDef h_hmi;
+QR50_Handler_t qr50;
+char debug_line_binary[17] = "0000000000000000";
+AGV_Map_t factory_map;
+uint16_t current_path[MAX_NODES];
+uint16_t path_length = 0;
+AGV_Heading_t current_heading = HEAD_NORTH;
+static uint16_t last_processed_node = 0xFFFF;
 
+uint16_t pending_qr_node = 0xFFFF;
+uint32_t blind_zone_end_time = 0;
+
+uint32_t calib_time_offset = 750;
+uint32_t calib_time_turn_90 = 3500;
+
+volatile uint32_t mode6_stop_time = 0;
+
+GPIO_TypeDef *sensor_ports[16] = {
+    B_In35_GPIO_Port, B_In34_GPIO_Port, B_In33_GPIO_Port, B_In32_GPIO_Port,
+    B_In31_GPIO_Port, B_In30_GPIO_Port, B_In27_GPIO_Port, B_In26_GPIO_Port,
+    B_In25_GPIO_Port, B_In24_GPIO_Port, B_In23_GPIO_Port, B_In22_GPIO_Port,
+    B_In21_GPIO_Port, B_In20_GPIO_Port, B_In17_GPIO_Port, B_In16_GPIO_Port};
+uint16_t sensor_pins[16] = {B_In35_Pin, B_In34_Pin, B_In33_Pin, B_In32_Pin,
+                            B_In31_Pin, B_In30_Pin, B_In27_Pin, B_In26_Pin,
+                            B_In25_Pin, B_In24_Pin, B_In23_Pin, B_In22_Pin,
+                            B_In21_Pin, B_In20_Pin, B_In17_Pin, B_In16_Pin};
+
+extern AGV_State_t agv_state;
+extern AGV_Config_t agv_config;
+extern ESP32_SensorData_t esp32_data;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
