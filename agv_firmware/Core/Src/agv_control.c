@@ -339,6 +339,15 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
   AGV_Stop(hagv);
   HAL_Delay(300);
 
+  // LÙI LẠI TRƯỚC KHI QUAY ĐỂ NÉ TƯỜNG
+  // Chạy ngược lại khoảng 1 giây để thoát khỏi mép tường rồi mới quay
+  Motor_SetSpeed(hagv->motor_left, -hagv->base_speed);
+  Motor_SetSpeed(hagv->motor_right, -hagv->base_speed);
+  HAL_Delay(1000);
+
+  AGV_Stop(hagv);
+  HAL_Delay(300);
+
   // Chọn chiều quay (phải) để quay 180 độ
   Turn_Time_Based(hagv, calib_speed, -calib_speed, calib_time_turn_180);
 }
