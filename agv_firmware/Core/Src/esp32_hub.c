@@ -82,3 +82,11 @@ void ESP32_ParseResponse(uint16_t length) {
     // Luôn luôn khởi động lại DMA để đón gói tiếp theo
     HAL_UARTEx_ReceiveToIdle_DMA(esp32_huart, esp32_rx_buffer, sizeof(esp32_rx_buffer));
 }
+
+ESP32_SensorData_t ESP32_GetSafeData(void) {
+    ESP32_SensorData_t copy;
+    __disable_irq();
+    copy = esp32_data;
+    __enable_irq();
+    return copy;
+}
