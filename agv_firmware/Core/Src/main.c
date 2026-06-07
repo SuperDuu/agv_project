@@ -307,8 +307,9 @@ int main(void)
       
       // LOGIC CHỐNG VA CHẠM (COLLISION AVOIDANCE) BẰNG SIÊU ÂM
       // Nếu có vật cản gần hơn 300mm (30cm), lập tức phanh khẩn cấp
+      // CHỈ kiểm tra khi xe đang đi thẳng (sai số vạch <= 1.5) để tránh bắt nhầm tường lúc đang cua/lắc đuôi
       if (safe_esp32_data.ObstacleDistance != 65534 && safe_esp32_data.ObstacleDistance < 300) {
-        if (agv_state.follow_line_enable) {
+        if (agv_state.follow_line_enable && fabs(h_agv.current_error) <= 1.5f) {
           agv_state.follow_line_enable = false;
           AGV_Stop(&h_agv);
         }
