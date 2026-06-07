@@ -129,4 +129,4 @@ Hệ thống mã nguồn C được thiết kế theo dạng Module hóa để d
 * **`MODE_4_FULL_RUN`**: Chạy tự động toàn diện (Định tuyến Dijkstra + Camera đọc QR ở mỗi ngã tư + Tự động bám vạch).
 * **`MODE_5_CALIBRATE_MOTORS`**: Chạy tiến/lùi/rẽ theo chu trình thời gian để calib cơ khí.
 * **`MODE_6_TEST_TURN_RIGHT`**: Chạy bám vạch, cứ gặp ngã tư bất kỳ là tự động rẽ phải.
-* **`MODE_7_DEBUG_NO_QR`**: **Định tuyến động không cần QR (Mặc định)**. Người dùng nhập điểm đến trên màn hình HMI. Xe tự tính toán Dijkstra, tự động kiểm tra hướng và quay xe (nếu cần), sau đó tự động phóng đi bám vạch tới đích. Các ngã tư trên đường được tự động giả lập đi qua mà không cần camera mã QR quét thực tế.
+* **`MODE_7_DYNAMIC_TRAJECTORY`**: **Quỹ đạo động qua Firebase (Mới nhất)**. Khi nhận được tín hiệu đích mới (Nxx) từ Firebase thông qua gói RS485 9-byte, xe sẽ tự động nội suy ngã tư tiếp theo (`next_node`), chạy thuật toán Dijkstra để tìm đường mới và "nối" liền mạch vào quỹ đạo hiện tại. Xe có khả năng tự động bẻ lái sang lộ trình mới mà không cần phải dừng lại ở giao lộ! Lệnh nâng hạ `Hxx` cũng được xử lý lưu trữ song song.
