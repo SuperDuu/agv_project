@@ -10,15 +10,11 @@ HMI_HandleTypeDef h_hmi;
 static uint16_t prev_dest_node = 0xFFFF;
 static uint16_t prev_command = 0;
 
-// Các biến từ main.c
-extern volatile uint16_t current_node;
-extern volatile uint16_t destination_node;
+// Các biến từ main.c / agv_control.c
 extern uint16_t current_path[];
 extern uint16_t path_length;
-extern volatile uint16_t path_index;
-extern volatile AGV_RunMode_t agv_run_mode;
-extern volatile bool agv_follow_line_enable;
-extern volatile uint32_t last_leave_intersection_time;
+extern AGV_State_t agv_state;
+extern volatile bool hmi_tx_in_progress;
 extern void Route_Recalculate(void); // Cần định nghĩa hoặc dùng flag trong main
 
 // Tính mã CRC16 cho Modbus RTU
@@ -51,11 +47,11 @@ void HMI_Init(UART_HandleTypeDef *huart, uint8_t slave_address) {
     h_hmi.frame_ready = false;
     
     // Đồng bộ các biến mặc định lên HMI khi khởi tạo để tránh bị ghi đè về 0
-    hmi_registers[REG_AGV_MODE] = agv_run_mode;
-    hmi_registers[REG_DEST_NODE] = destination_node;
-    hmi_registers[REG_CURRENT_NODE] = current_node;
+    hmi_registers[REG_AGV_MODE] = agv_state.run_mode;
+    hmi_registers[REG_DEST_NODE] = agv_state.destination_node;
+    hmi_registers[REG_CURRENT_NODE] = agv_state.current_node;
     
-    prev_dest_node = destination_node; // Đồng bộ để không tự tính đường đi khi khởi động
+    prev_dest_node = agv_state.destination_node; // Đồng bộ để không tự tính đường đi khi khởi động
     prev_command = 0;
     
     // Kích hoạt ngắt toàn cục UART để bắt sự kiện IDLE LINE
@@ -223,24 +219,23 @@ void HMI_Process(void) {
 // Đồng bộ dữ liệu HMI với hệ thống
 void HMI_SyncData(void) {
     // 1. STM32 -> HMI (Cập nhật dữ liệu từ biến vào mảng)
-    hmi_registers[REG_AGV_MODE] = agv_run_mode;
-    hmi_registers[REG_CURRENT_NODE] = current_node;
+    hmi_registers[REG_AGV_MODE] = agv_state.run_mode;
+    hmi_registers[REG_CURRENT_NODE] = agv_state.current_node;
     hmi_registers[REG_PATH_LENGTH] = path_length;
-    extern volatile uint8_t agv_indicator_state;
 
     // Cập nhật trạng thái chạy của AGV (0: Idle, 1: Running, 2: Error)
-    if (agv_indicator_state == 3) {
+    if (agv_state.indicator_state == 3) {
         hmi_registers[REG_AGV_STATUS] = 2; // HMI Error
-    } else if (agv_follow_line_enable) {
+    } else if (agv_state.follow_line_enable) {
         hmi_registers[REG_AGV_STATUS] = 1; // HMI Running
     } else {
         hmi_registers[REG_AGV_STATUS] = 0; // HMI Idle
     }
     
     // Cập nhật đèn trạng thái HMI (0: Off/Normal, 1: Turning Blink Green, 2: Error Blink Red)
-    if (agv_indicator_state == 3) {
+    if (agv_state.indicator_state == 3) {
         hmi_registers[REG_INDICATOR] = 2;  // HMI: Error
-    } else if (agv_indicator_state == 2) {
+    } else if (agv_state.indicator_state == 2) {
         hmi_registers[REG_INDICATOR] = 1;  // HMI: Turning
     } else {
         hmi_registers[REG_INDICATOR] = 0;  // HMI: Off/Normal
@@ -253,30 +248,27 @@ void HMI_SyncData(void) {
     // 2. HMI -> STM32 (Lắng nghe lệnh từ màn hình)
     if (hmi_registers[REG_DEST_NODE] != prev_dest_node) {
         prev_dest_node = hmi_registers[REG_DEST_NODE];
-        destination_node = prev_dest_node;
+        agv_state.destination_node = prev_dest_node;
         
         // Đặt cờ để tính toán lại quỹ đạo trong hàm while(1) của main.c
-        extern volatile bool need_recalculate_path;
-        need_recalculate_path = true;
+        agv_state.need_recalculate_path = true;
     }
 
     if (hmi_registers[REG_COMMAND] != prev_command) {
         prev_command = hmi_registers[REG_COMMAND];
         if (prev_command == 1) {
-            agv_follow_line_enable = true; // Chạy
-            agv_indicator_state = 0;       // Xóa lỗi
+            agv_state.follow_line_enable = true; // Chạy
+            agv_state.indicator_state = 0;       // Xóa lỗi
             
             // Nháy LED1 để báo hiệu đã nhận lệnh START từ màn hình
             HAL_GPIO_TogglePin(SYS_LED1_GPIO_Port, SYS_LED1_Pin);
             
-            extern volatile uint32_t last_leave_intersection_time;
-            extern volatile uint32_t last_qr_time;
-            last_leave_intersection_time = HAL_GetTick(); // Reset blind zone để không bị dừng ngay lập tức
-            last_qr_time = HAL_GetTick(); // Reset watchdog QR để xe không bị tắt ngay
+            agv_state.last_leave_intersection_time = HAL_GetTick(); // Reset blind zone để không bị dừng ngay lập tức
+            agv_state.last_qr_time = HAL_GetTick(); // Reset watchdog QR để xe không bị tắt ngay
         } else if (prev_command == 2) {
-            agv_follow_line_enable = false; // Dừng
+            agv_state.follow_line_enable = false; // Dừng
         } else if (prev_command == 3) {
-            agv_indicator_state = 0; // Xóa lỗi
+            agv_state.indicator_state = 0; // Xóa lỗi
         }
         hmi_registers[REG_COMMAND] = 0; // Xóa lệnh sau khi thực hiện
         prev_command = 0;
