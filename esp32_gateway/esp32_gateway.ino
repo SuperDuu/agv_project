@@ -10,8 +10,12 @@
 // CẤU HÌNH PHẦN CỨNG & MẶC ĐỊNH
 // ==========================================
 #define BOOT_BUTTON_PIN 0 // Chân nút BOOT trên ESP32 (Thường là GPIO 0)
-#define AP_SSID "AGV_Config"
-#define AP_PASS "12345678"
+#define AP_SSID "Viet PCCC"
+#define AP_PASS "viet123456"
+
+// Cấu hình chân I2C cho các cảm biến (BNO055, VL53L5CX)
+#define I2C_SDA 21
+#define I2C_SCL 22
 
 // Sử dụng Hardware Serial 2 của ESP32 để giao tiếp STM32
 #define RXD2 16
@@ -308,7 +312,7 @@ void setup() {
   Serial2.begin(UART_BAUDRATE, SERIAL_8N1, RXD2, TXD2);
   
   // Khởi tạo I2C cho các cảm biến
-  Wire.begin(); 
+  Wire.begin(I2C_SDA, I2C_SCL); 
   Wire.setClock(400000); // 400kHz cho VL53L5CX
 
   // Kích hoạt điện trở nội kéo lên (Pull-up) cho nút BOOT
