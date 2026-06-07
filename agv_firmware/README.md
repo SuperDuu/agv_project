@@ -119,13 +119,14 @@ Hệ thống mã nguồn C được thiết kế theo dạng Module hóa để d
 
 ---
 
-## 6. Hệ Thống 4 Chế Độ Debug Thực Tế (AGV Run Modes)
+## 6. Hệ Thống 7 Chế Độ Vận Hành (AGV Run Modes)
 
-Để việc test xe trên sa bàn thực tế an toàn và chia nhỏ thành từng bước, firmware được tích hợp 4 chế độ chạy. Bạn có thể thay đổi chế độ bằng cách sửa biến `agv_run_mode` ở đầu file `agv_control.c` trước khi biên dịch:
+Để việc test xe trên sa bàn thực tế an toàn và chia nhỏ thành từng bước, firmware được tích hợp 7 chế độ chạy. Bạn có thể thay đổi chế độ bằng cách sửa biến `agv_run_mode` ở đầu file `agv_control.c` trước khi biên dịch:
 
 * **`MODE_1_LINE_ONLY`**: Xe chỉ bám theo vạch từ, lờ đi hoàn toàn tín hiệu ngã tư và mã QR. Phù hợp để tinh chỉnh PID bám vạch.
-* **`MODE_2_LINE_INTERSECTION`**: Xe bám vạch và phanh cứng (đứng yên vĩnh viễn) khi 2 mắt rìa chạm ngã tư. Phù hợp để đo đạc sai số cơ khí tại ngã tư.
-* **`MODE_3_TEST_SENSORS_NO_MOTOR`**: Động cơ bị ngắt điện hoàn toàn. Các thuật toán định tuyến và đọc QR vẫn chạy bình thường. Người dùng có thể đẩy xe qua ngã tư để xem biến số nhảy trên Debugger (Live Watch) mà không sợ xe đâm vào tường.
-* **`MODE_4_FULL_RUN`**: Chế độ chạy tự động toàn diện (Mặc định).
-
-
+* **`MODE_2_LINE_INTERSECTION`**: Xe bám vạch và phanh cứng (đứng yên vĩnh viễn) khi mắt rìa chạm ngã tư. Phù hợp để đo đạc sai số cơ khí tại ngã tư.
+* **`MODE_3_TEST_SENSORS_NO_MOTOR`**: Động cơ bị ngắt điện hoàn toàn. Các thuật toán định tuyến và đọc QR vẫn chạy bình thường. Phù hợp để đẩy tay qua ngã tư test sensor.
+* **`MODE_4_FULL_RUN`**: Chạy tự động toàn diện (Định tuyến Dijkstra + Camera đọc QR ở mỗi ngã tư + Tự động bám vạch).
+* **`MODE_5_CALIBRATE_MOTORS`**: Chạy tiến/lùi/rẽ theo chu trình thời gian để calib cơ khí.
+* **`MODE_6_TEST_TURN_RIGHT`**: Chạy bám vạch, cứ gặp ngã tư bất kỳ là tự động rẽ phải.
+* **`MODE_7_DEBUG_NO_QR`**: **Định tuyến động không cần QR (Mặc định)**. Người dùng nhập điểm đến trên màn hình HMI. Xe tự tính toán Dijkstra, tự động kiểm tra hướng và quay xe (nếu cần), sau đó tự động phóng đi bám vạch tới đích. Các ngã tư trên đường được tự động giả lập đi qua mà không cần camera mã QR quét thực tế.
