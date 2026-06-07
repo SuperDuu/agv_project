@@ -302,6 +302,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   uint32_t last_esp32_req_time = 0;
   while (1) {
+  /* USER CODE END WHILE */
+
+  /* USER CODE BEGIN 3 */
     HMI_Process();
     
     // ==========================================
@@ -408,22 +411,16 @@ int main(void)
               }
               current_heading = target_heading;
             }
+            
+            agv_follow_line_enable = true;
+            agv_indicator_state = 0;
+            last_leave_intersection_time = HAL_GetTick();
+            last_qr_time = HAL_GetTick();
+          } else {
+            path_length = 0;
           }
       }
-
-        // Tự động chạy luôn khi nhận được đường đi mới (do không có nút Start trên HMI)
-        agv_follow_line_enable = true;
-        agv_indicator_state = 0;
-        last_leave_intersection_time = HAL_GetTick();
-        last_qr_time = HAL_GetTick();
-      } else {
-        path_length = 0;
-      }
     }
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-
     // STATE MACHINE CHUYÊN DỤNG CHO CALIBRATION (MODE 5)
     if (agv_run_mode == MODE_5_CALIBRATE_MOTORS) {
       agv_follow_line_enable = false;
@@ -1389,7 +1386,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
     __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
     
     HAL_UART_AbortReceive(huart);
-    extern uint8_t esp32_rx_buffer[10];
+    extern uint8_t esp32_rx_buffer[15];
     HAL_UARTEx_ReceiveToIdle_DMA(huart, esp32_rx_buffer, sizeof(esp32_rx_buffer));
   }
 }

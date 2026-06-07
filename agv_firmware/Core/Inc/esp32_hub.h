@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include "main.h"
+#include <stdbool.h>
 
 #define ESP32_ADDR 0x63  // 99
 #define ESP32_CMD_READ_IMU 0x01
