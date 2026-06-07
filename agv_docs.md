@@ -85,5 +85,23 @@ Bản đồ nhà xưởng được mô hình hóa dưới dạng Danh sách kề
 ### Bản đồ thử nghiệm hiện tại (15 Nodes: N00 đến N14)
 - **Cột dọc**: Gồm 5 cột dọc song song song (Cột 0 đến Cột 4), mỗi cột có 3 nodes liên kết dọc với nhau.
 - **Đường ngang**: Chỉ có 1 đường ngang duy nhất kết nối các node trên cùng (`N02 <-> N05 <-> N08 <-> N11 <-> N14`).
-- **Định vị điểm N11**:
   - Để chạy từ `N00` (giữa N00 và N01) tới `N11`, xe sẽ đi theo lộ trình: `N00 -> N01 -> N02 -> (Rẽ Phải sang Đông) -> N05 -> N08 -> N11 (Đích)`.
+
+---
+
+## 5. Kiến trúc Dữ liệu và An toàn (Refactoring)
+
+Để giải quyết các vấn đề về biến toàn cục (global variables) phân mảnh và rủi ro race condition, hệ thống đã được refactor với các tiêu chuẩn sau:
+
+### Gom nhóm Biến Trạng thái và Cấu hình
+- **`AGV_State_t agv_state`**: Lưu trữ toàn bộ các biến trạng thái runtime của xe (`run_mode`, `indicator_state`, `is_at_intersection`, `current_node`, `destination_node`, v.v.).
+- **`AGV_Config_t agv_config`**: Lưu trữ các thông số cấu hình và thời gian xoay (`time_forward`, `time_turn_90`, `turn_speed`, v.v.) thay cho các "magic numbers" rải rác.
+- **Lợi ích**: Code dễ bảo trì hơn, giảm thiểu khai báo `extern volatile` lộn xộn trong nhiều file.
+
+### An toàn Dữ liệu ESP32 (Chống Race Condition)
+- Dữ liệu IMU và cảm biến siêu âm từ mạch ESP32 được nhận qua UART DMA liên tục vào struct `esp32_data`.
+- Hàm **`ESP32_GetSafeData()`**: Sử dụng lệnh khóa ngắt (`__disable_irq()`) để copy toàn bộ struct sang một biến tạm trước khi xử lý, ngăn chặn hoàn toàn hiện tượng xé rách dữ liệu (Tearing) khi ngắt UART xảy ra giữa chừng.
+
+### Clamping Duty Cycle Động Cơ
+- Hàm `Motor_SetSpeed` được bổ sung giới hạn phần cứng cứng ngắc (`MOTOR_MAX_DUTY = 999`).
+- Mọi giá trị tốc độ tính toán từ PID hoặc cấu hình thủ công đều bị cắt (clamp) về ngưỡng an toàn này để tránh tràn bộ đếm Timer (gây ra hiện tượng khựng hoặc đảo chiều không mong muốn do tràn số).
