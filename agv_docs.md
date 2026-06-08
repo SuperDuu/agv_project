@@ -129,3 +129,11 @@ Bản đồ nhà xưởng được mô hình hóa dưới dạng Danh sách kề
 ### Lỗi Tràn Kiểu Dữ Liệu `0xFFFF` (Đã Fix)
 - **Vấn đề**: Khi xe quay trái nhẹ tạo ra góc âm, ví dụ `-0.1` độ. Giao thức truyền UART nhân 10 và ép sang `int16_t` thành `-1`. Trong hệ 16-bit, `-1` biểu diễn là `0xFFFF`. Tuy nhiên, MCU STM32 lại dùng mã `0xFFFF` để định nghĩa trạng thái "Mất kết nối cảm biến" và gán thẳng `Yaw = 65535.0f`. Việc góc đột ngột nhảy lên 65535 làm lỗi vòng lặp dò góc PID và treo toàn bộ firmware.
 - **Cách khắc phục**: Mã lỗi đứt kết nối đã được dời sang `0x7FFF` (32767). Các góc âm hợp lệ sẽ được truyền và tính toán bình thường.
+
+### Lỗi Cảm Biến VL53L5CX Bị Giới Hạn 15cm (Crosstalk / Góc Nhìn FOV)
+- **Hiện tượng**: Khi gắn VL53L5CX sau một lớp vỏ/chắn có khoét lỗ nhỏ, cảm biến chỉ đo được tối đa khoảng 15cm (150mm) dù phía trước không có vật cản.
+- **Nguyên nhân Vật lý**: VL53L5CX có góc nhìn (FOV - Field of View) dạng hình nón rộng tới **45° x 45°**. Nếu lỗ khoét quá nhỏ hoặc độ dày của tấm chắn quá lớn, các tia laser phát ra ở rìa (outer zones) sẽ đập vào thành của lỗ khoét và phản xạ ngược lại (crosstalk). Cảm biến sẽ nhận diện chính tấm chắn là vật cản ở khoảng cách gần (~15cm).
+- **Cách khắc phục Phần cứng (Khuyến nghị)**: 
+  1. Nới rộng lỗ khoét trên vỏ robot sao cho không lọt vào góc 45 độ của cảm biến. Lỗ nên được vát dạng hình phễu (cone) hướng ra ngoài.
+  2. Dời cảm biến tiến ra sát mặt ngoài của tấm chắn (flush mount), không để chìm bên trong lõm.
+- **Cách khắc phục Phần mềm (Workaround tạm thời)**: Có thể sửa mảng quét trong `esp32_gateway.ino` để chỉ lấy khoảng cách từ 4 vùng trung tâm (index 5, 6, 9, 10 trong grid 4x4) và bỏ qua các vùng rìa bị vướng tấm chắn. Tuy nhiên cách này làm giảm góc tránh vật cản của AGV.
