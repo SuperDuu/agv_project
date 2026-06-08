@@ -395,15 +395,15 @@ int main(void)
               switch (next_action) {
               case ACT_TURN_LEFT:
                 h_agv.direction = 1;
-                AGV_TurnLeft(&h_agv);
+                AGV_TurnLeft_IMU(&h_agv);
                 break;
               case ACT_TURN_RIGHT:
                 h_agv.direction = 1;
-                AGV_TurnRight(&h_agv);
+                AGV_TurnRight_IMU(&h_agv);
                 break;
               case ACT_BACKWARD:
                 h_agv.direction = 1;
-                AGV_Turn180(&h_agv);
+                AGV_Turn180_IMU(&h_agv);
                 break;
               case ACT_STRAIGHT:
               case ACT_STOP:
@@ -558,7 +558,7 @@ int main(void)
       }
 
       if (agv_state.run_mode == MODE_6_TEST_TURN_RIGHT) {
-        AGV_TurnRight(&h_agv);
+        AGV_TurnRight_IMU(&h_agv);
         agv_state.last_leave_intersection_time = HAL_GetTick();
         agv_state.is_at_intersection = false;
         agv_state.follow_line_enable = true;
@@ -619,11 +619,11 @@ int main(void)
           switch (next_action) {
           case ACT_TURN_LEFT:
             h_agv.direction = 1;
-            AGV_TurnLeft(&h_agv);
+            AGV_TurnLeft_IMU(&h_agv);
             break;
           case ACT_TURN_RIGHT:
             h_agv.direction = 1;
-            AGV_TurnRight(&h_agv);
+            AGV_TurnRight_IMU(&h_agv);
             break;
           case ACT_STRAIGHT:
             h_agv.direction = 1;
@@ -633,7 +633,7 @@ int main(void)
             break;
           case ACT_BACKWARD:
             h_agv.direction = 1; // Giữ hướng tiến tới
-            AGV_Turn180(&h_agv);
+            AGV_Turn180_IMU(&h_agv);
             break;
           case ACT_STOP:
             AGV_Stop(&h_agv);
