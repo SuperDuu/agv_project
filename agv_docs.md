@@ -136,4 +136,4 @@ Bản đồ nhà xưởng được mô hình hóa dưới dạng Danh sách kề
 - **Cách khắc phục Phần cứng (Khuyến nghị)**: 
   1. Nới rộng lỗ khoét trên vỏ robot sao cho không lọt vào góc 45 độ của cảm biến. Lỗ nên được vát dạng hình phễu (cone) hướng ra ngoài.
   2. Dời cảm biến tiến ra sát mặt ngoài của tấm chắn (flush mount), không để chìm bên trong lõm.
-- **Cách khắc phục Phần mềm (Workaround tạm thời)**: Có thể sửa mảng quét trong `esp32_gateway.ino` để chỉ lấy khoảng cách từ 4 vùng trung tâm (index 5, 6, 9, 10 trong grid 4x4) và bỏ qua các vùng rìa bị vướng tấm chắn. Tuy nhiên cách này làm giảm góc tránh vật cản của AGV.
+- **Cách khắc phục Phần mềm (Workaround tạm thời)**: Đã update code `esp32_gateway.ino` sang chế độ quét 64 điểm (8x8) nhưng chỉ lấy giá trị `min` từ lõi 16 điểm ở giữa (row 2..5, col 2..5). Các điểm rìa bị bỏ qua để tránh phản xạ từ lỗ khoét. Tuy nhiên cách này làm giảm góc tránh vật cản của AGV.
