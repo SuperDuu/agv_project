@@ -439,7 +439,7 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
     uint32_t search_start = HAL_GetTick();
     while (HAL_GetTick() - search_start < 1000) {
       HMI_Process();
-      
+
       if (HAL_GetTick() - last_esp_req > 50) {
         last_esp_req = HAL_GetTick();
         ESP32_RequestData(agv_state.current_node);
@@ -462,6 +462,8 @@ void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
+  bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
+
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
   HAL_Delay(1000);
@@ -469,13 +471,15 @@ void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv) {
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  Turn_IMU_Based(hagv, 75.0f, -agv_config.turn_speed, agv_config.turn_speed);
+  Turn_IMU_Based(hagv, 70.0f, -agv_config.turn_speed, agv_config.turn_speed, enable_search);
 }
 
 void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
+  bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
+
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
   HAL_Delay(1000);
@@ -483,21 +487,23 @@ void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  Turn_IMU_Based(hagv, 75.0f, agv_config.turn_speed, -agv_config.turn_speed);
+  Turn_IMU_Based(hagv, 70.0f, agv_config.turn_speed, -agv_config.turn_speed, enable_search);
 }
 
 void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
-	  if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
-	    return;
+  if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
+    return;
 
-	  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
-	  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-	  HAL_Delay(1000);
+  bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-	  AGV_Stop(hagv);
-	  HAL_Delay(300);
+  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
+  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
+  HAL_Delay(1000);
 
-	  Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed);
+  AGV_Stop(hagv);
+  HAL_Delay(300);
+
+  Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed, enable_search);
 }
 
 /* USER CODE END 1 */
