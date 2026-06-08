@@ -393,8 +393,16 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
 
   extern void HMI_Process(void);
 
+  static uint32_t last_esp_req = 0;
+
   while (1) {
     HMI_Process();
+
+    // Liên tục gửi tín hiệu Request để ESP32 cập nhật giá trị IMU
+    if (HAL_GetTick() - last_esp_req > 50) {
+      last_esp_req = HAL_GetTick();
+      ESP32_RequestData(agv_state.current_node);
+    }
 
     // Tính độ lệch góc tuyệt đối so với lúc bắt đầu
     float current_yaw = ESP32_GetSafeData().Yaw;
@@ -431,6 +439,12 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
     uint32_t search_start = HAL_GetTick();
     while (HAL_GetTick() - search_start < 800) {
       HMI_Process();
+      
+      if (HAL_GetTick() - last_esp_req > 50) {
+        last_esp_req = HAL_GetTick();
+        ESP32_RequestData(agv_state.current_node);
+      }
+
       uint16_t val = LineSensor_Read(hagv->line_sensor);
       if ((val & CENTER_MASK) != CENTER_MASK) {
         break;
