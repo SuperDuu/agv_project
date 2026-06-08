@@ -607,6 +607,13 @@ void setup() {
       Serial.println("[WIFI] Auto reconnect da duoc bat.");
         
       // 4. BẮT ĐẦU CHẠY FIREBASE
+      // Làm sạch chuỗi fb_host và fb_auth (Tránh lỗi do user copy/paste dư khoảng trắng hoặc https://)
+      fb_host.trim();
+      if (fb_host.startsWith("https://")) fb_host = fb_host.substring(8);
+      if (fb_host.startsWith("http://")) fb_host = fb_host.substring(7);
+      if (fb_host.endsWith("/")) fb_host = fb_host.substring(0, fb_host.length() - 1);
+      fb_auth.trim();
+      
       config.database_url = fb_host.c_str();
       config.api_key = fb_auth.c_str();
       
