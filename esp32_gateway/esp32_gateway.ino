@@ -603,6 +603,10 @@ void setup() {
       config.database_url = fb_host.c_str();
       config.api_key = fb_auth.c_str();
       
+      // Bật chế độ Test Mode (không cần đăng nhập Email/Pass) 
+      // Rất quan trọng nếu chỉ dùng API Key với Realtime DB đang mở Rules
+      config.signer.test_mode = true;
+      
       Firebase.begin(&config, &auth);
       Firebase.reconnectWiFi(true);
     }
