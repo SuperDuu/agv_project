@@ -257,9 +257,9 @@ int main(void)
 
   m_right.InvertDirection = 1;
 
-  pid_ctrl.Kp = 85.0f;
+  pid_ctrl.Kp = 65.0f;
   pid_ctrl.Ki = 0.0f;
-  pid_ctrl.Kd = 0.5f;
+  pid_ctrl.Kd = 1.5f;
   pid_ctrl.i = 0.0f;
 
   AGV_Init(&h_agv, &m_left, &m_right, &line_ss, &pid_ctrl, 300.0f);
