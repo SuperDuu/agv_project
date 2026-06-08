@@ -619,6 +619,9 @@ void setup() {
       firebaseData.setBSSLBufferSize(2048, 1024);
       firebaseData.setResponseSize(1024);
 
+      Serial.printf("[MEM] Free Heap before Firebase: %u bytes\n", ESP.getFreeHeap());
+      Serial.printf("[MEM] Max Free Block: %u bytes\n", ESP.getMaxAllocHeap());
+
       Firebase.begin(&config, &auth);
       Firebase.reconnectWiFi(true);
     }
