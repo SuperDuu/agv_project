@@ -607,6 +607,11 @@ void setup() {
       // Rất quan trọng nếu chỉ dùng API Key với Realtime DB đang mở Rules
       config.signer.test_mode = true;
       
+      // RẤT QUAN TRỌNG: Giảm kích thước bộ đệm SSL và Response
+      // VL53L5CX đã ngốn gần hết RAM (90KB firmware). Nếu không giảm, mbedtls sẽ báo lỗi "Failed to initialize the SSL layer" do cạn kiệt Heap.
+      firebaseData.setBSSLBufferSize(2048, 1024);
+      firebaseData.setResponseSize(1024);
+
       Firebase.begin(&config, &auth);
       Firebase.reconnectWiFi(true);
     }
