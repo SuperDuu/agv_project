@@ -415,9 +415,9 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
       break;
     }
 
-    // Timeout safeguard phòng khi IMU lỗi hoặc xe bị kẹt (giả sử timeout 8
-    // giây)
-    if (HAL_GetTick() - start_time > 8000) {
+    // Timeout safeguard phòng khi IMU lỗi hoặc xe bị kẹt
+    uint32_t timeout_limit = (target_angle > 120.0f) ? 8000 : 5500;
+    if (HAL_GetTick() - start_time > timeout_limit) {
       break;
     }
 
