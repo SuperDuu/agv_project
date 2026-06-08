@@ -537,12 +537,12 @@ void setup() {
 
   Serial.println("Dang nap 90KB Firmware cho VL53L5CX (Se mat ~0.6s)...");
   if (myImager.begin()) {
-    // Cau hinh uu tien do xa on dinh hon: giam mat do do + giam tan so lay mau
-    myImager.setResolution(4 * 4); // 16 vung, de tang do on dinh khi do xa ~1m
-    myImager.setRangingFrequency(10); // 10Hz, co nhieu thoi gian tich luy tin hieu hon 15Hz
+    // Cau hinh 64 vung (8x8) de co the loc duoc cac vung ria bi che
+    myImager.setResolution(8 * 8); 
+    myImager.setRangingFrequency(10); 
     myImager.startRanging();
     vl53_ok = true;
-    Serial.println("[OK] VL53L5CX ket noi thanh cong! (Mode 4x4, 10Hz)");
+    Serial.println("[OK] VL53L5CX ket noi thanh cong! (Mode 8x8, 10Hz)");
   } else {
     Serial.println("[LOI] VL53L5CX khong phan hoi hoac loi nap Firmware!");
   }
@@ -638,8 +638,13 @@ void loop() {
     myImager.getRangingData(&measurementData);
 
     uint16_t min_dist = 65534;
-    const int vl53_zone_count = 16;
+    const int vl53_zone_count = 64;
     for (int i = 0; i < vl53_zone_count; i++) {
+      int row = i / 8;
+      int col = i % 8;
+      
+      if (row < 2 || row > 5 || col < 2 || col > 5) continue;
+
       uint8_t st = measurementData.target_status[i];
       uint16_t dist = measurementData.distance_mm[i];
       if ((st == 5 || st == 9 || st == 6 || st == 0) && dist > 0 && dist < min_dist) {
