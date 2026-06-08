@@ -493,15 +493,67 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  // 1. Quay phải 90 độ đầu tiên: Bánh trái đứng im, bánh phải quay lùi nhanh hơn 1 chút
-  int16_t fast_turn = agv_config.turn_speed + 50; // Nhanh hơn 1 chút
-  Turn_IMU_Based(hagv, 90.0f, 0, -fast_turn);
+  uint32_t start_time = HAL_GetTick();
+  float start_yaw = ESP32_GetSafeData().Yaw;
+
+  agv_state.indicator_state = 2; // State 2: Turning
+
+  // Pha 1: Bánh trái đứng yên, bánh phải quay lùi nhanh hơn 1 chút
+  int16_t speed_l = 0;
+  int16_t speed_r = -(agv_config.turn_speed + 50);
+
+  // Kick-start
+  Motor_SetSpeed(hagv->motor_left, 0);
+  Motor_SetSpeed(hagv->motor_right, -700);
+  HAL_Delay(80);
+
+  Motor_SetSpeed(hagv->motor_left, speed_l);
+  Motor_SetSpeed(hagv->motor_right, speed_r);
+
+  extern void HMI_Process(void);
+  static uint32_t last_esp_req = 0;
+  bool phase2_started = false;
+
+  while (1) {
+    HMI_Process();
+    
+    // Liên tục gửi tín hiệu Request để ESP32 cập nhật giá trị IMU
+    if (HAL_GetTick() - last_esp_req > 50) {
+      last_esp_req = HAL_GetTick();
+      ESP32_RequestData(agv_state.current_node);
+    }
+
+    float current_yaw = ESP32_GetSafeData().Yaw;
+    float diff = fabs(current_yaw - start_yaw);
+    while (diff > 180.0f)
+      diff = 360.0f - diff;
+
+    // Chuyển sang Pha 2 khi đạt 90 độ
+    if (diff >= 90.0f && !phase2_started) {
+      phase2_started = true;
+      // Pha 2: Quay tại tâm (Cả 2 bánh cùng quay ngược chiều)
+      speed_l = agv_config.turn_speed;
+      speed_r = -agv_config.turn_speed;
+      Motor_SetSpeed(hagv->motor_left, speed_l);
+      Motor_SetSpeed(hagv->motor_right, speed_r);
+    }
+
+    // Dừng khi đạt 180 độ (cho phép sai số 2 độ)
+    if (diff >= (180.0f - 2.0f)) {
+      break;
+    }
+
+    // Timeout safeguard 10 giây (vì quay 180 độ tốn nhiều thời gian hơn)
+    if (HAL_GetTick() - start_time > 10000) {
+      break;
+    }
+
+    HAL_Delay(5);
+  }
 
   AGV_Stop(hagv);
-  HAL_Delay(300);
-
-  // 2. Quay tại tâm 90 độ còn lại cho đến khi đủ 180 độ
-  Turn_IMU_Based(hagv, 90.0f, agv_config.turn_speed, -agv_config.turn_speed);
+  agv_state.indicator_state = 0;
+  HAL_Delay(200);
 }
 
 /* USER CODE END 1 */
