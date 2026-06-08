@@ -279,7 +279,7 @@ int main(void)
   // Khởi động với đường đi trống - chờ HMI đặt đích mới tính
   path_length = 0;
   agv_state.path_index = 0;
-
+  HAL_Delay(2000);
   agv_state.last_qr_time = HAL_GetTick();
   /* USER CODE END 2 */
 
@@ -424,6 +424,11 @@ int main(void)
     }
     // STATE MACHINE CHUYÊN DỤNG CHO CALIBRATION (MODE 5)
     if (agv_state.run_mode == MODE_5_CALIBRATE_MOTORS) {
+      if (!ESP32_GetSafeData().IsConnected) {
+        AGV_Stop(&h_agv);
+        continue;
+      }
+
       agv_state.follow_line_enable = false;
       static uint8_t calib_state = 0;
       static uint32_t state_start_time = 0;
