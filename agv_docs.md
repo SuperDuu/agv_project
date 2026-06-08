@@ -115,3 +115,17 @@ Bản đồ nhà xưởng được mô hình hóa dưới dạng Danh sách kề
 ### Clamping Duty Cycle Động Cơ
 - Hàm `Motor_SetSpeed` được bổ sung giới hạn phần cứng cứng ngắc (`MOTOR_MAX_DUTY = 999`).
 - Mọi giá trị tốc độ tính toán từ PID hoặc cấu hình thủ công đều bị cắt (clamp) về ngưỡng an toàn này để tránh tràn bộ đếm Timer (gây ra hiện tượng khựng hoặc đảo chiều không mong muốn do tràn số).
+
+---
+
+## 7. Các Lưu ý Kỹ thuật & Debugging Lịch sử
+
+### Quy ước Góc Xoay (Yaw) của BNO055
+- Theo mặc định, cảm biến IMU BNO055 sử dụng quy ước góc quay kiểu La bàn (Compass Heading):
+  - **Quay Phải (Thuận chiều kim đồng hồ - CW)**: Góc Dương (+).
+  - **Quay Trái (Ngược chiều kim đồng hồ - CCW)**: Góc Âm (-).
+- Lưu ý: Điều này ngược với quy ước tọa độ toán học tiêu chuẩn (ROS) thường dùng (Quay trái = Dương). Các thuật toán PID và rẽ góc của xe (Spin Turn) phải tuân theo quy ước Phải=Dương, Trái=Âm của cảm biến.
+
+### Lỗi Tràn Kiểu Dữ Liệu `0xFFFF` (Đã Fix)
+- **Vấn đề**: Khi xe quay trái nhẹ tạo ra góc âm, ví dụ `-0.1` độ. Giao thức truyền UART nhân 10 và ép sang `int16_t` thành `-1`. Trong hệ 16-bit, `-1` biểu diễn là `0xFFFF`. Tuy nhiên, MCU STM32 lại dùng mã `0xFFFF` để định nghĩa trạng thái "Mất kết nối cảm biến" và gán thẳng `Yaw = 65535.0f`. Việc góc đột ngột nhảy lên 65535 làm lỗi vòng lặp dò góc PID và treo toàn bộ firmware.
+- **Cách khắc phục**: Mã lỗi đứt kết nối đã được dời sang `0x7FFF` (32767). Các góc âm hợp lệ sẽ được truyền và tính toán bình thường.
