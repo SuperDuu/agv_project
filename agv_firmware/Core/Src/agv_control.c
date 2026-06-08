@@ -263,8 +263,8 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
 
   // Cấp xung mạnh (Kick-start) 700PWM trong 80ms để thắng lực ma sát tĩnh lúc
   // xe đang đứng im
-  int16_t kick_l = (speed_l > 0) ? 700 : -700;
-  int16_t kick_r = (speed_r > 0) ? 700 : -700;
+  int16_t kick_l = (speed_l > 0) ? 700 : ((speed_l < 0) ? -700 : 0);
+  int16_t kick_r = (speed_r > 0) ? 700 : ((speed_r < 0) ? -700 : 0);
 
   agv_state.indicator_state = 2; // State 2: Turning
 
@@ -379,8 +379,8 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
   uint32_t start_time = HAL_GetTick();
   float start_yaw = ESP32_GetSafeData().Yaw;
 
-  int16_t kick_l = (speed_l > 0) ? 700 : -700;
-  int16_t kick_r = (speed_r > 0) ? 700 : -700;
+  int16_t kick_l = (speed_l > 0) ? 700 : ((speed_l < 0) ? -700 : 0);
+  int16_t kick_r = (speed_r > 0) ? 700 : ((speed_r < 0) ? -700 : 0);
 
   agv_state.indicator_state = 2; // State 2: Turning
 
@@ -493,20 +493,15 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  // 1. Quay IMU 45 độ sang phải
-  Turn_IMU_Based(hagv, 45.0f, agv_config.turn_speed, -agv_config.turn_speed);
-
-  // 2. Lùi thẳng lại 1 giây (kéo xe về hướng Tây Nam để né tường phải và tường
-  // trước)
-  Motor_SetSpeed(hagv->motor_left, -hagv->base_speed);
-  Motor_SetSpeed(hagv->motor_right, -hagv->base_speed);
-  HAL_Delay(1000);
+  // 1. Quay phải 90 độ đầu tiên: Bánh trái đứng im, bánh phải quay lùi nhanh hơn 1 chút
+  int16_t fast_turn = agv_config.turn_speed + 50; // Nhanh hơn 1 chút
+  Turn_IMU_Based(hagv, 90.0f, 0, -fast_turn);
 
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  // 3. Quay tiếp 135 độ còn lại và dò vạch
-  Turn_IMU_Based(hagv, 135.0f, agv_config.turn_speed, -agv_config.turn_speed);
+  // 2. Quay tại tâm 90 độ còn lại cho đến khi đủ 180 độ
+  Turn_IMU_Based(hagv, 90.0f, agv_config.turn_speed, -agv_config.turn_speed);
 }
 
 /* USER CODE END 1 */
