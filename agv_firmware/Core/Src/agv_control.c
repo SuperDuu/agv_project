@@ -410,8 +410,8 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
     while (diff > 180.0f)
       diff = 360.0f - diff;
 
-    // Dừng khi đạt được góc yêu cầu (cho phép sai số 2 độ)
-    if (diff >= (target_angle - 2.0f)) {
+    // Dừng khi đạt được góc yêu cầu (trừ đi 10 độ để bù quán tính trượt bánh)
+    if (diff >= (target_angle - 10.0f)) {
       break;
     }
 
@@ -528,8 +528,8 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
     while (diff > 180.0f)
       diff = 360.0f - diff;
 
-    // Chuyển sang Pha 2 khi đạt 90 độ
-    if (diff >= 90.0f && !phase2_started) {
+    // Chuyển sang Pha 2 khi đạt 90 độ (trừ 10 độ bù quán tính)
+    if (diff >= (90.0f - 10.0f) && !phase2_started) {
       phase2_started = true;
       // Pha 2: Quay tại tâm (Cả 2 bánh cùng quay ngược chiều)
       speed_l = agv_config.turn_speed;
@@ -538,8 +538,8 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
       Motor_SetSpeed(hagv->motor_right, speed_r);
     }
 
-    // Dừng khi đạt 180 độ (cho phép sai số 2 độ)
-    if (diff >= (180.0f - 2.0f)) {
+    // Dừng khi đạt 180 độ (trừ đi 10 độ bù quán tính)
+    if (diff >= (180.0f - 10.0f)) {
       break;
     }
 

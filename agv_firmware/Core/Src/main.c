@@ -490,7 +490,7 @@ int main(void)
         break;
       case 7:
         // Đổi sang dùng IMU để test
-        AGV_TurnRight_IMU(&h_agv);
+        AGV_Turn180_IMU(&h_agv);
         calib_state++;
         state_start_time = HAL_GetTick();
         break;
