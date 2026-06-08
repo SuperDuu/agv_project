@@ -655,7 +655,9 @@ void loop() {
 
       uint8_t st = measurementData.target_status[i];
       uint16_t dist = measurementData.distance_mm[i];
-      if ((st == 5 || st == 9 || st == 6 || st == 0) && dist > 0 && dist < min_dist) {
+      // st == 5: OK, st == 9: OK
+      // Bỏ st == 0 và st == 6 vì đó là nhiễu / không có vật cản thực tế
+      if ((st == 5 || st == 9) && dist > 0 && dist < min_dist) {
         min_dist = dist;
       }
     }
