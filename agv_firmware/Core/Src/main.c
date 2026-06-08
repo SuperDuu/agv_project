@@ -70,6 +70,39 @@ DMA_QListTypeDef List_GPDMA1_Channel0;
 DMA_HandleTypeDef handle_GPDMA1_Channel0;
 
 /* USER CODE BEGIN PV */
+// === BIẾN GLOBAL ĐỂ DEBUG TRÊN LIVE EXPRESSION ===
+AGV_HandleTypeDef h_agv;
+Motor_HandleTypeDef m_left, m_right;
+LineSensor_HandleTypeDef line_ss;
+Pid_data pid_ctrl;
+QR50_Handler_t qr50;
+AGV_Map_t factory_map;
+AGV_Heading_t current_heading = HEAD_NORTH;
+extern AGV_State_t agv_state;
+extern AGV_Config_t agv_config;
+extern ESP32_SensorData_t esp32_data;
+extern HMI_HandleTypeDef h_hmi;
+
+uint16_t current_path[MAX_NODES];
+uint16_t path_length = 0;
+static uint16_t last_processed_node = 0xFFFF;
+char debug_line_binary[17] = "0000000000000000";
+uint16_t pending_qr_node = 0xFFFF;
+uint32_t blind_zone_end_time = 0;
+uint32_t calib_time_offset = 750;
+uint32_t calib_time_turn_90 = 3500;
+volatile uint32_t mode6_stop_time = 0;
+
+GPIO_TypeDef *sensor_ports[16] = {
+    B_In35_GPIO_Port, B_In34_GPIO_Port, B_In33_GPIO_Port, B_In32_GPIO_Port,
+    B_In31_GPIO_Port, B_In30_GPIO_Port, B_In27_GPIO_Port, B_In26_GPIO_Port,
+    B_In25_GPIO_Port, B_In24_GPIO_Port, B_In23_GPIO_Port, B_In22_GPIO_Port,
+    B_In21_GPIO_Port, B_In20_GPIO_Port, B_In17_GPIO_Port, B_In16_GPIO_Port};
+uint16_t sensor_pins[16] = {B_In35_Pin, B_In34_Pin, B_In33_Pin, B_In32_Pin,
+                            B_In31_Pin, B_In30_Pin, B_In27_Pin, B_In26_Pin,
+                            B_In25_Pin, B_In24_Pin, B_In23_Pin, B_In22_Pin,
+                            B_In21_Pin, B_In20_Pin, B_In17_Pin, B_In16_Pin};
+
 
 /* USER CODE END PV */
 
@@ -88,41 +121,7 @@ static void MX_USART3_UART_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-// === BIẾN GLOBAL ĐỂ DEBUG TRÊN LIVE EXPRESSION ===
-AGV_HandleTypeDef h_agv;
-Motor_HandleTypeDef m_left, m_right;
-LineSensor_HandleTypeDef line_ss;
-Pid_data pid_ctrl;
-extern HMI_HandleTypeDef h_hmi;
-QR50_Handler_t qr50;
-char debug_line_binary[17] = "0000000000000000";
-AGV_Map_t factory_map;
-uint16_t current_path[MAX_NODES];
-uint16_t path_length = 0;
-AGV_Heading_t current_heading = HEAD_NORTH;
-static uint16_t last_processed_node = 0xFFFF;
 
-uint16_t pending_qr_node = 0xFFFF;
-uint32_t blind_zone_end_time = 0;
-
-uint32_t calib_time_offset = 750;
-uint32_t calib_time_turn_90 = 3500;
-
-volatile uint32_t mode6_stop_time = 0;
-
-GPIO_TypeDef *sensor_ports[16] = {
-    B_In35_GPIO_Port, B_In34_GPIO_Port, B_In33_GPIO_Port, B_In32_GPIO_Port,
-    B_In31_GPIO_Port, B_In30_GPIO_Port, B_In27_GPIO_Port, B_In26_GPIO_Port,
-    B_In25_GPIO_Port, B_In24_GPIO_Port, B_In23_GPIO_Port, B_In22_GPIO_Port,
-    B_In21_GPIO_Port, B_In20_GPIO_Port, B_In17_GPIO_Port, B_In16_GPIO_Port};
-uint16_t sensor_pins[16] = {B_In35_Pin, B_In34_Pin, B_In33_Pin, B_In32_Pin,
-                            B_In31_Pin, B_In30_Pin, B_In27_Pin, B_In26_Pin,
-                            B_In25_Pin, B_In24_Pin, B_In23_Pin, B_In22_Pin,
-                            B_In21_Pin, B_In20_Pin, B_In17_Pin, B_In16_Pin};
-
-extern AGV_State_t agv_state;
-extern AGV_Config_t agv_config;
-extern ESP32_SensorData_t esp32_data;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -311,12 +310,12 @@ int main(void)
       // LOGIC CHỐNG VA CHẠM (COLLISION AVOIDANCE) BẰNG SIÊU ÂM
       // Nếu có vật cản gần hơn 300mm (30cm), lập tức phanh khẩn cấp
       // CHỈ kiểm tra khi xe đang đi thẳng (sai số vạch <= 1.5) để tránh bắt nhầm tường lúc đang cua/lắc đuôi
-      if (safe_esp32_data.ObstacleDistance != 65534 && safe_esp32_data.ObstacleDistance < 300) {
-        if (agv_state.follow_line_enable && fabs(h_agv.current_error) <= 1.5f) {
-          agv_state.follow_line_enable = false;
-          AGV_Stop(&h_agv);
-        }
-      }
+//      if (safe_esp32_data.ObstacleDistance != 65534 && safe_esp32_data.ObstacleDistance < 300) {
+//        if (agv_state.follow_line_enable && fabs(h_agv.current_error) <= 1.5f) {
+//          agv_state.follow_line_enable = false;
+//          AGV_Stop(&h_agv);
+//        }
+//      }
     }
     
     // Yêu cầu dữ liệu từ ESP32 mỗi 50ms
@@ -325,10 +324,29 @@ int main(void)
       // Gửi agv_state.current_node hiện tại xuống cho ESP32
       ESP32_RequestData(agv_state.current_node);
     }
+
+    // Nháy đèn Heartbeat mỗi 500ms để báo hiệu mạch không bị treo (HardFault)
+    static uint32_t last_led_time = 0;
+    if (HAL_GetTick() - last_led_time > 500) {
+      last_led_time = HAL_GetTick();
+      HAL_GPIO_TogglePin(SYS_LED1_GPIO_Port, SYS_LED1_Pin);
+      
+      // Auto-recovery UART5: Clear các cờ lỗi phòng trường hợp ngắt bị miss
+      __HAL_UART_CLEAR_FLAG(&huart5, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF | UART_CLEAR_PEF);
+      
+      // Nếu DMA đột ngột bị chết (không nhận được gói nào trong 2 giây), force restart
+      if (HAL_GetTick() - esp32_data.LastUpdateTick > 2000) {
+        extern uint8_t esp32_rx_buffer[15];
+        HAL_UART_AbortReceive(&huart5);
+        HAL_UARTEx_ReceiveToIdle_DMA(&huart5, esp32_rx_buffer, sizeof(esp32_rx_buffer));
+      }
+    }
     
     // Bắt lệnh mới từ ESP32 (Firebase / Web đẩy xuống)
     if (safe_esp32_data.HasNewCommand) {
       esp32_data.HasNewCommand = false; // Clear real flag
+      esp32_data.TargetNode = safe_esp32_data.TargetNode;
+      esp32_data.H_Command = safe_esp32_data.H_Command;
       if (safe_esp32_data.TargetNode != agv_state.destination_node) {
         agv_state.destination_node = safe_esp32_data.TargetNode;
         agv_state.need_recalculate_path = true; // Kích hoạt sinh quỹ đạo
@@ -453,12 +471,10 @@ int main(void)
         }
         break;
       case 5:
-        Motor_SetSpeed(&m_left, -agv_config.turn_speed);
-        Motor_SetSpeed(&m_right, agv_config.turn_speed);
-        if (elapsed > agv_config.time_turn_90) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
+        // Đổi sang dùng IMU để test
+        AGV_TurnLeft_IMU(&h_agv);
+        calib_state++;
+        state_start_time = HAL_GetTick();
         break;
       case 6:
         AGV_Stop(&h_agv);
@@ -468,12 +484,10 @@ int main(void)
         }
         break;
       case 7:
-        Motor_SetSpeed(&m_left, agv_config.turn_speed);
-        Motor_SetSpeed(&m_right, -agv_config.turn_speed);
-        if (elapsed > agv_config.time_turn_90) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
+        // Đổi sang dùng IMU để test
+        AGV_TurnRight_IMU(&h_agv);
+        calib_state++;
+        state_start_time = HAL_GetTick();
         break;
       case 8:
         AGV_Stop(&h_agv);
@@ -1355,7 +1369,7 @@ volatile bool hmi_tx_in_progress = false;
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
   if (huart->Instance == USART2) {
     // Xóa cờ lỗi UART
-    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
+    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF | UART_CLEAR_PEF);
     
     // Nếu đang trong quá trình truyền TX, KHÔNG restart DMA (để HMI_Process tự xử lý)
     if (hmi_tx_in_progress) return;
@@ -1366,7 +1380,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
     HAL_UARTEx_ReceiveToIdle_DMA(h_hmi.huart, h_hmi.rx_buffer, sizeof(h_hmi.rx_buffer));
   } else if (huart->Instance == UART5) {
     // Xóa cờ lỗi UART
-    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
+    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF | UART_CLEAR_PEF);
     
     HAL_UART_AbortReceive(huart);
     extern uint8_t esp32_rx_buffer[15];
