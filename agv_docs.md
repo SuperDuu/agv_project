@@ -130,13 +130,11 @@ Bản đồ nhà xưởng được mô hình hóa dưới dạng Danh sách kề
 - **Vấn đề**: Khi xe quay trái nhẹ tạo ra góc âm, ví dụ `-0.1` độ. Giao thức truyền UART nhân 10 và ép sang `int16_t` thành `-1`. Trong hệ 16-bit, `-1` biểu diễn là `0xFFFF`. Tuy nhiên, MCU STM32 lại dùng mã `0xFFFF` để định nghĩa trạng thái "Mất kết nối cảm biến" và gán thẳng `Yaw = 65535.0f`. Việc góc đột ngột nhảy lên 65535 làm lỗi vòng lặp dò góc PID và treo toàn bộ firmware.
 - **Cách khắc phục**: Mã lỗi đứt kết nối đã được dời sang `0x7FFF` (32767). Các góc âm hợp lệ sẽ được truyền và tính toán bình thường.
 
-### Lỗi Cảm Biến VL53L5CX Bị Giới Hạn 15cm (Crosstalk / Góc Nhìn FOV)
-- **Hiện tượng**: Khi gắn VL53L5CX sau một lớp vỏ/chắn có khoét lỗ nhỏ, cảm biến chỉ đo được tối đa khoảng 15cm (150mm) dù phía trước không có vật cản.
-- **Nguyên nhân Vật lý**: VL53L5CX có góc nhìn (FOV - Field of View) dạng hình nón rộng tới **45° x 45°**. Nếu lỗ khoét quá nhỏ hoặc độ dày của tấm chắn quá lớn, các tia laser phát ra ở rìa (outer zones) sẽ đập vào thành của lỗ khoét và phản xạ ngược lại (crosstalk). Cảm biến sẽ nhận diện chính tấm chắn là vật cản ở khoảng cách gần (~15cm).
-- **Cách khắc phục Phần cứng (Khuyến nghị)**: 
-  1. Nới rộng lỗ khoét trên vỏ robot sao cho không lọt vào góc 45 độ của cảm biến. Lỗ nên được vát dạng hình phễu (cone) hướng ra ngoài.
-  2. Dời cảm biến tiến ra sát mặt ngoài của tấm chắn (flush mount), không để chìm bên trong lõm.
-- **Cách khắc phục Phần mềm (Workaround tạm thời)**: Đã update code `esp32_gateway.ino` sang chế độ quét 64 điểm (8x8) nhưng chỉ lấy giá trị `min` từ lõi 16 điểm ở giữa (row 2..5, col 2..5). Các điểm rìa bị bỏ qua để tránh phản xạ từ lỗ khoét. Tuy nhiên cách này làm giảm góc tránh vật cản của AGV.
+### Lỗi Cảm Biến VL53L5CX Bị Giới Hạn 15cm (Crosstalk / Góc Nhìn FOV & Lỗi Status)
+- **Hiện tượng**: Khi gắn VL53L5CX sau một lớp vỏ/chắn có khoét lỗ nhỏ, cảm biến chỉ đo được tối đa khoảng 15cm (150mm) dù phía trước không có vật cản, kể cả khi đã nới rộng lỗ khoét.
+- **Nguyên nhân Vật lý**: VL53L5CX có góc nhìn (FOV - Field of View) dạng hình nón rộng tới **45° x 45°**. Nếu lỗ khoét quá nhỏ hoặc độ dày của tấm chắn quá lớn, các tia laser phát ra ở rìa sẽ phản xạ lại (crosstalk).
+- **Nguyên nhân Phần mềm (Lỗi nghiêm trọng đã fix)**: Trước đây code chấp nhận cả `target_status == 0` là hợp lệ. Trong VL53L5CX, status `0` nghĩa là "Không có vật cản" hoặc "Chưa cập nhật", nhưng mảng `distance_mm` lúc này lại chứa rác (thường là khoảng 150mm do bộ bù crosstalk bên trong chip). Vì code liên tục lấy `min` và bao gồm cả status 0, nó luôn chốt giá trị rác 15cm này.
+- **Cách khắc phục**: Đã sửa lại hàm lọc trong `esp32_gateway.ino`. Giờ đây chỉ chấp nhận `target_status == 5` (Valid) và `target_status == 9` (Valid with large pulse). Các vùng quét có status `0` (không thấy vật) sẽ bị bỏ qua hoàn toàn. Chế độ quét vẫn giữ ở 64 điểm (8x8) và lọc lõi 16 điểm trung tâm để an toàn tuyệt đối.
 
 ### Debug Kết Nối Firebase
 - Để biết ESP32 đã kết nối Firebase thành công hay chưa, hãy mở Serial Monitor (Baudrate 115200). 
