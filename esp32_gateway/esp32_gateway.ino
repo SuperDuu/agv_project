@@ -44,6 +44,7 @@ FirebaseAuth auth;
 FirebaseConfig config;
 
 String currentCommand = ""; 
+double currentTimestamp = 0;
 bool isAckReceived = true;  
 unsigned long lastSendTime = 0; 
 unsigned long lastCheckTime = 0;
@@ -477,11 +478,17 @@ void FirebaseTask(void *pvParameters) {
             Serial.println("[FIREBASE] Ket noi Server thanh cong!");
             fb_connected = true;
           }
+          double newTimestamp = 0;
+          if (Firebase.getDouble(firebaseData, "/robot/camera_command/timestamp")) {
+            newTimestamp = firebaseData.doubleData();
+          }
+
           if (Firebase.getString(firebaseData, "/robot/camera_command/command")) {
             if (firebaseData.dataType() == "string") {
               String newCommand = firebaseData.stringData();
-              if (newCommand != currentCommand && newCommand != "") {
+              if ((newCommand != currentCommand || newTimestamp != currentTimestamp) && newCommand != "") {
                 currentCommand = newCommand;
+                currentTimestamp = newTimestamp;
                 isAckReceived = false;
                 Serial.print("Nhan duoc lenh moi tu Firebase: ");
                 Serial.println(currentCommand);
