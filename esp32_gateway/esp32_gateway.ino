@@ -466,12 +466,17 @@ void enterConfigMode() {
 // TASK ĐA LUỒNG: CHẠY FIREBASE TRÊN CORE 0
 // ==========================================
 void FirebaseTask(void *pvParameters) {
+  static bool fb_connected = false;
   for (;;) {
     if (!isConfigMode && WiFi.status() == WL_CONNECTED) {
       if (millis() - lastCheckTime >= FIREBASE_CHECK_INTERVAL) {
         lastCheckTime = millis();
 
         if (Firebase.ready()) {
+          if (!fb_connected) {
+            Serial.println("[FIREBASE] Ket noi Server thanh cong!");
+            fb_connected = true;
+          }
           if (Firebase.getString(firebaseData, "/robot/camera_command/command")) {
             if (firebaseData.dataType() == "string") {
               String newCommand = firebaseData.stringData();
@@ -496,6 +501,9 @@ void FirebaseTask(void *pvParameters) {
                 }
               }
             }
+          } else {
+            Serial.print("[FIREBASE] Loi doc data: ");
+            Serial.println(firebaseData.errorReason());
           }
         }
       }
