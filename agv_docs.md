@@ -141,3 +141,4 @@ Bản đồ nhà xưởng được mô hình hóa dưới dạng Danh sách kề
 - Đã bổ sung cơ chế log tự động:
   - Khi `Firebase.ready()` báo true lần đầu tiên, mạch sẽ in ra dòng: `[FIREBASE] Ket noi Server thanh cong!`
   - Nếu kết nối được server nhưng không đọc được dữ liệu (do sai đường dẫn, sai API Key, hoặc bị chặn bởi Firebase Rules), mạch sẽ in ra lỗi cụ thể mỗi 2 giây: `[FIREBASE] Loi doc data: <Lý do lỗi>`. Nhờ đó có thể biết chính xác nguyên nhân gây mất kết nối.
+- **Lỗi không qua được bước Xác thực (Authentication)**: Đã bổ sung `config.signer.test_mode = true;` vào `setup()`. Điều này cho phép mạch ESP32 kết nối thẳng vào database đang mở Rules (`.read: true`, `.write: true`) bằng API Key mà không cần phải thiết lập tính năng đăng nhập (Email/Password hay Anonymous) trên Firebase Console.
