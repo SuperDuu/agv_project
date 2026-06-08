@@ -137,3 +137,9 @@ Bản đồ nhà xưởng được mô hình hóa dưới dạng Danh sách kề
   1. Nới rộng lỗ khoét trên vỏ robot sao cho không lọt vào góc 45 độ của cảm biến. Lỗ nên được vát dạng hình phễu (cone) hướng ra ngoài.
   2. Dời cảm biến tiến ra sát mặt ngoài của tấm chắn (flush mount), không để chìm bên trong lõm.
 - **Cách khắc phục Phần mềm (Workaround tạm thời)**: Đã update code `esp32_gateway.ino` sang chế độ quét 64 điểm (8x8) nhưng chỉ lấy giá trị `min` từ lõi 16 điểm ở giữa (row 2..5, col 2..5). Các điểm rìa bị bỏ qua để tránh phản xạ từ lỗ khoét. Tuy nhiên cách này làm giảm góc tránh vật cản của AGV.
+
+### Debug Kết Nối Firebase
+- Để biết ESP32 đã kết nối Firebase thành công hay chưa, hãy mở Serial Monitor (Baudrate 115200). 
+- Đã bổ sung cơ chế log tự động:
+  - Khi `Firebase.ready()` báo true lần đầu tiên, mạch sẽ in ra dòng: `[FIREBASE] Ket noi Server thanh cong!`
+  - Nếu kết nối được server nhưng không đọc được dữ liệu (do sai đường dẫn, sai API Key, hoặc bị chặn bởi Firebase Rules), mạch sẽ in ra lỗi cụ thể mỗi 2 giây: `[FIREBASE] Loi doc data: <Lý do lỗi>`. Nhờ đó có thể biết chính xác nguyên nhân gây mất kết nối.
