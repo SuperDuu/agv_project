@@ -15,7 +15,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-AGV_State_t agv_state = {.run_mode = MODE_5_CALIBRATE_MOTORS,
+AGV_State_t agv_state = {.run_mode = MODE_7_DEBUG_NO_QR,
                          .indicator_state = 0,
                          .follow_line_enable = false,
                          .is_at_intersection = false,
@@ -374,7 +374,7 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv) {
 }
 
 static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
-                           int16_t speed_l, int16_t speed_r) {
+                           int16_t speed_l, int16_t speed_r, bool search_line) {
   bool center_found = false;
   uint32_t start_time = HAL_GetTick();
   float start_yaw = ESP32_GetSafeData().Yaw;
@@ -423,7 +423,7 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
 
     // Vẫn kết hợp dò line (bỏ qua AGV_TURN_BLIND_TIME đầu để xe thoát khỏi line
     // cũ) Nếu rẽ 90 độ, thời gian quay thực tế thường > 1.5s
-    if (agv_state.follow_line_enable && (HAL_GetTick() - start_time > AGV_TURN_BLIND_TIME)) {
+    if (search_line && (HAL_GetTick() - start_time > AGV_TURN_BLIND_TIME)) {
       uint16_t val = LineSensor_Read(hagv->line_sensor);
       if ((val & CENTER_MASK) != CENTER_MASK) {
         center_found = true;
@@ -435,9 +435,9 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
   }
 
   // Phase 2: Dò line bổ sung nếu góc đã đạt nhưng chưa thấy vạch
-  if (agv_state.follow_line_enable && !center_found) {
+  if (search_line && !center_found) {
     uint32_t search_start = HAL_GetTick();
-    while (HAL_GetTick() - search_start < 800) {
+    while (HAL_GetTick() - search_start < 1000) {
       HMI_Process();
       
       if (HAL_GetTick() - last_esp_req > 50) {
@@ -469,7 +469,7 @@ void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv) {
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  Turn_IMU_Based(hagv, 90.0f, -agv_config.turn_speed, agv_config.turn_speed);
+  Turn_IMU_Based(hagv, 75.0f, -agv_config.turn_speed, agv_config.turn_speed);
 }
 
 void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
@@ -483,45 +483,21 @@ void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
   AGV_Stop(hagv);
   HAL_Delay(300);
 
-  Turn_IMU_Based(hagv, 90.0f, agv_config.turn_speed, -agv_config.turn_speed);
+  Turn_IMU_Based(hagv, 75.0f, agv_config.turn_speed, -agv_config.turn_speed);
 }
 
 void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
-  if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
-    return;
+	  if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
+	    return;
 
-  AGV_Stop(hagv);
-  HAL_Delay(300);
+	  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
+	  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
+	  HAL_Delay(1000);
 
-  // 1. Quay phải 45 độ (quay tại tâm)
-  Turn_IMU_Based(hagv, 45.0f, agv_config.turn_speed, -agv_config.turn_speed);
+	  AGV_Stop(hagv);
+	  HAL_Delay(300);
 
-  // 2. Đi lùi 1 giây
-  AGV_Stop(hagv);
-  HAL_Delay(300);
-  Motor_SetSpeed(hagv->motor_left, -hagv->base_speed);
-  Motor_SetSpeed(hagv->motor_right, -hagv->base_speed);
-  HAL_Delay(1000);
-
-  // 3. Quay tiếp đến khi đạt 150 độ (quay thêm 105 độ)
-  AGV_Stop(hagv);
-  HAL_Delay(300);
-  Turn_IMU_Based(hagv, 105.0f, agv_config.turn_speed, -agv_config.turn_speed);
-
-  // 4. Đi thẳng 1 giây
-  AGV_Stop(hagv);
-  HAL_Delay(300);
-  Motor_SetSpeed(hagv->motor_left, hagv->base_speed);
-  Motor_SetSpeed(hagv->motor_right, hagv->base_speed);
-  HAL_Delay(1000);
-
-  // 5. Quay tiếp để đạt 180 độ (quay thêm 30 độ)
-  AGV_Stop(hagv);
-  HAL_Delay(300);
-  Turn_IMU_Based(hagv, 30.0f, agv_config.turn_speed, -agv_config.turn_speed);
-
-  AGV_Stop(hagv);
-  HAL_Delay(300);
+	  Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed);
 }
 
 /* USER CODE END 1 */
