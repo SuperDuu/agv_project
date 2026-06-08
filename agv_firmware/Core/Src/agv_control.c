@@ -415,15 +415,15 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
       break;
     }
 
-    // Timeout safeguard phòng khi IMU lỗi hoặc xe bị kẹt (giả sử timeout 5
+    // Timeout safeguard phòng khi IMU lỗi hoặc xe bị kẹt (giả sử timeout 8
     // giây)
-    if (HAL_GetTick() - start_time > 5000) {
+    if (HAL_GetTick() - start_time > 8000) {
       break;
     }
 
-    // Vẫn kết hợp dò line (bỏ qua AGV_TURN_BLIND_TIME đầu để xe thoát khỏi line
-    // cũ) Nếu rẽ 90 độ, thời gian quay thực tế thường > 1.5s
-    if (search_line && (HAL_GetTick() - start_time > AGV_TURN_BLIND_TIME)) {
+    // Vẫn kết hợp dò line (chỉ rà vạch khi góc đã tiến gần tới đích - cách đích < 30 độ)
+    // Điều này giúp xe rẽ 180 độ không bị bắt nhầm vạch vuông góc ở 90 độ!
+    if (search_line && diff >= (target_angle - 30.0f)) {
       uint16_t val = LineSensor_Read(hagv->line_sensor);
       if ((val & CENTER_MASK) != CENTER_MASK) {
         center_found = true;
