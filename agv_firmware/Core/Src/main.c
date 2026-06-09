@@ -427,7 +427,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     uint32_t fwd_delay = 400;
     float search_ratio = 0.70f;
     if (agv_state.current_node == 8 && next_node == 7) {
-        fwd_delay = 240;
+        fwd_delay = 300;
         search_ratio = 0.50f;
     }
 
@@ -633,7 +633,7 @@ int main(void)
             uint32_t fwd_delay = 400;
             float search_ratio = 0.70f;
             if (agv_state.current_node == 8 && next_node == 7) {
-                fwd_delay = 240;
+                fwd_delay = 300;
                 search_ratio = 0.50f;
             }
 
