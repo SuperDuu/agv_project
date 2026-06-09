@@ -85,6 +85,7 @@ typedef struct {
     LineSensor_HandleTypeDef *line_sensor;
     Pid_data *pid_controller;
     float base_speed;
+    float current_speed; // Tốc độ hiện tại (cho Ramping)
     uint8_t direction; // 1: forward, 0: backward
     float current_error;
 } AGV_HandleTypeDef;
@@ -93,8 +94,8 @@ typedef struct {
 /* USER CODE BEGIN Exported constants */
 extern float Delta_t;
 
-#define AGV_LINE_RECOVERY_TIME 800
-#define AGV_TURN_BLIND_TIME 1500
+#define AGV_LINE_RECOVERY_TIME 600
+#define AGV_TURN_BLIND_TIME 800
 
 /* USER CODE END Exported constants */
 

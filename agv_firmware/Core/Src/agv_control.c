@@ -27,12 +27,12 @@ AGV_State_t agv_state = {.run_mode = MODE_7_DEBUG_NO_QR,
                          .last_qr_time = 0,
                          .path_index = 0};
 
-AGV_Config_t agv_config = {.time_offset = 600,
+AGV_Config_t agv_config = {.time_offset = 400, // Reduced from 600 because of higher speed
                            .time_forward = 2000,
                            .time_turn_90 = 3100,
                            .time_turn_180 = 6200,
-                           .turn_speed = 150,
-                           .base_speed = 300};
+                           .turn_speed = 150, // Keep turn speed moderate to avoid overshoot
+                           .base_speed = 250}; // Increased from 150 to 250
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
@@ -52,6 +52,7 @@ void AGV_Init(AGV_HandleTypeDef *hagv, Motor_HandleTypeDef *m_left,
   hagv->line_sensor = l_sensor;
   hagv->pid_controller = pid;
   hagv->base_speed = base_speed;
+  hagv->current_speed = 0.0f;
   hagv->direction = 1;
   hagv->current_error = 0.0f;
 }
@@ -208,9 +209,19 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
   hagv->pid_controller->current_val = hagv->current_error;
   float output = AGV_ComputePID(hagv->pid_controller, 0.0f);
 
+  // Ramping (Tăng/Giảm tốc mềm mại)
+  float accel_step = 1.5f; // Chỉnh gia tốc tại đây (1.5 * 100Hz = 150 PWM/s)
+  if (hagv->current_speed < hagv->base_speed) {
+    hagv->current_speed += accel_step;
+    if (hagv->current_speed > hagv->base_speed) hagv->current_speed = hagv->base_speed;
+  } else if (hagv->current_speed > hagv->base_speed) {
+    hagv->current_speed -= accel_step;
+    if (hagv->current_speed < hagv->base_speed) hagv->current_speed = hagv->base_speed;
+  }
+
   if (hagv->direction == 1) {
-    int16_t speed_l = (int16_t)(hagv->base_speed - output);
-    int16_t speed_r = (int16_t)(hagv->base_speed + output);
+    int16_t speed_l = (int16_t)(hagv->current_speed - output);
+    int16_t speed_r = (int16_t)(hagv->current_speed + output);
 
     if (speed_l > 999)
       speed_l = 999;
@@ -227,8 +238,8 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     }
   } else if (hagv->direction == -1) {
     // Đảo dấu logic PID khi đi lùi (do cảm biến nằm ở mũi xe nhưng xe lùi)
-    int16_t speed_l = (int16_t)(-hagv->base_speed + output);
-    int16_t speed_r = (int16_t)(-hagv->base_speed - output);
+    int16_t speed_l = (int16_t)(-hagv->current_speed + output);
+    int16_t speed_r = (int16_t)(-hagv->current_speed - output);
 
     if (speed_l < -999)
       speed_l = -999;
@@ -251,6 +262,7 @@ void AGV_Stop(AGV_HandleTypeDef *hagv) {
     return;
   Motor_Stop(hagv->motor_left);
   Motor_Stop(hagv->motor_right);
+  hagv->current_speed = 0.0f; // Reset speed for ramping when resuming
 }
 
 // Mask for 4 center sensors (bits 9-6): 0x03C0 = 0000001111000000
@@ -261,19 +273,8 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
   bool center_found = false;
   uint32_t start = HAL_GetTick();
 
-  // Kick-start ngắn để thắng ma sát tĩnh nhưng không giữ quá lâu gây cảm giác
-  // "đứng vài chục ms rồi mới quay".
-  int16_t kick_l = (speed_l > 0) ? 650 : ((speed_l < 0) ? -650 : 0);
-  int16_t kick_r = (speed_r > 0) ? 650 : ((speed_r < 0) ? -650 : 0);
-
   agv_state.indicator_state = 2; // State 2: Turning
 
-  Motor_SetSpeed(hagv->motor_left, kick_l);
-  Motor_SetSpeed(hagv->motor_right, kick_r);
-  HAL_Delay(30);
-
-  // Lên tốc độ quay mục tiêu ngay sau kick-start để xe bắt đầu quay liền, sau
-  // đó mới kiểm tra line theo logic hiện có.
   Motor_SetSpeed(hagv->motor_left, speed_l);
   Motor_SetSpeed(hagv->motor_right, speed_r);
 
@@ -316,10 +317,10 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
 
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(1000);
+  HAL_Delay(700);
 
   AGV_Stop(hagv);
-  HAL_Delay(300);
+  HAL_Delay(500);
 
   Turn_Time_Based(hagv, -agv_config.turn_speed, agv_config.turn_speed,
                   agv_config.time_turn_90);
@@ -331,10 +332,10 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
 
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(1000);
+  HAL_Delay(700);
 
   AGV_Stop(hagv);
-  HAL_Delay(300);
+  HAL_Delay(500);
 
   Turn_Time_Based(hagv, agv_config.turn_speed, -agv_config.turn_speed,
                   agv_config.time_turn_90);
@@ -388,14 +389,7 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
   bool line_found = false;
   bool target_reached = false;
 
-  int16_t kick_l = (speed_l > 0) ? 650 : ((speed_l < 0) ? -650 : 0);
-  int16_t kick_r = (speed_r > 0) ? 650 : ((speed_r < 0) ? -650 : 0);
-
   agv_state.indicator_state = 2;
-
-  Motor_SetSpeed(hagv->motor_left, kick_l);
-  Motor_SetSpeed(hagv->motor_right, kick_r);
-  HAL_Delay(30);
 
   Motor_SetSpeed(hagv->motor_left, speed_l);
   Motor_SetSpeed(hagv->motor_right, speed_r);
@@ -455,10 +449,10 @@ void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv) {
 
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(1200);
+  HAL_Delay(700);
 
   AGV_Stop(hagv);
-  HAL_Delay(300);
+  HAL_Delay(500);
 
   Turn_IMU_Based(hagv, 80.0f, -agv_config.turn_speed, agv_config.turn_speed,
                  enable_search);
@@ -472,10 +466,10 @@ void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
 
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(1200);
+  HAL_Delay(700);
 
   AGV_Stop(hagv);
-  HAL_Delay(300);
+  HAL_Delay(500);
 
   Turn_IMU_Based(hagv, 70.0f, agv_config.turn_speed, -agv_config.turn_speed,
                  enable_search);
@@ -489,10 +483,10 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
 
   Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(200);
+  HAL_Delay(150);
 
   AGV_Stop(hagv);
-  HAL_Delay(300);
+  HAL_Delay(500);
 
   Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed,
                  enable_search);
