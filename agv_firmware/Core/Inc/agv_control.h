@@ -115,8 +115,8 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv);
 
 void AGV_TrackLine_Sync(AGV_HandleTypeDef *hagv, uint32_t duration_ms);
 
-void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay);
-void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay);
+void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay, float search_ratio);
+void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay, float search_ratio);
 void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv);
 
 /* USER CODE BEGIN EFP */

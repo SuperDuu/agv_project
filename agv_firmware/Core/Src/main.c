@@ -425,19 +425,21 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     int diff = (target_heading - *current_heading + 4) % 4;
 
     uint32_t fwd_delay = 400;
+    float search_ratio = 0.70f;
     if (agv_state.current_node == 8 && next_node == 7) {
         fwd_delay = 240;
+        search_ratio = 0.50f;
     }
 
     agv_state.follow_line_enable = false;
     switch ((AGV_Action_t)diff) {
     case ACT_TURN_LEFT:
       h_agv.direction = 1;
-      AGV_TurnLeft_IMU(&h_agv, fwd_delay);
+      AGV_TurnLeft_IMU(&h_agv, fwd_delay, search_ratio);
       break;
     case ACT_TURN_RIGHT:
       h_agv.direction = 1;
-      AGV_TurnRight_IMU(&h_agv, fwd_delay);
+      AGV_TurnRight_IMU(&h_agv, fwd_delay, search_ratio);
       break;
     case ACT_STRAIGHT:
       h_agv.direction = 1;
@@ -629,19 +631,21 @@ int main(void)
                                    next_node);
             int diff = (target_heading - current_heading + 4) % 4;
             uint32_t fwd_delay = 400;
+            float search_ratio = 0.70f;
             if (agv_state.current_node == 8 && next_node == 7) {
                 fwd_delay = 240;
+                search_ratio = 0.50f;
             }
 
             AGV_Action_t next_action = (AGV_Action_t)diff;
             switch (next_action) {
             case ACT_TURN_LEFT:
               h_agv.direction = 1;
-              AGV_TurnLeft_IMU(&h_agv, fwd_delay);
+              AGV_TurnLeft_IMU(&h_agv, fwd_delay, search_ratio);
               break;
             case ACT_TURN_RIGHT:
               h_agv.direction = 1;
-              AGV_TurnRight_IMU(&h_agv, fwd_delay);
+              AGV_TurnRight_IMU(&h_agv, fwd_delay, search_ratio);
               break;
             case ACT_BACKWARD:
               h_agv.direction = 1;

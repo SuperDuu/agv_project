@@ -456,7 +456,7 @@ static bool Turn_FindCenterLine(AGV_HandleTypeDef *hagv) {
 }
 
 static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
-                           int16_t speed_l, int16_t speed_r, bool search_line) {
+                           int16_t speed_l, int16_t speed_r, bool search_line, float search_ratio) {
   uint32_t start_time = HAL_GetTick();
   float start_yaw = ESP32_GetSafeData().Yaw;
   bool line_search_enabled = search_line && (target_angle > 0.0f);
@@ -488,7 +488,7 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
     if (!target_reached && diff >= (target_angle - 2.0f))
       target_reached = true;
 
-    if (line_search_enabled && diff >= (target_angle * 0.70f) &&
+    if (line_search_enabled && diff >= (target_angle * search_ratio) &&
         Turn_FindCenterLine(hagv)) {
       line_found = true;
       break;
@@ -515,7 +515,7 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
   HAL_Delay(120);
 }
 
-void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay) {
+void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay, float search_ratio) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
@@ -526,10 +526,10 @@ void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay) {
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 80.0f, -agv_config.turn_speed, agv_config.turn_speed,
-                 enable_search);
+                 enable_search, search_ratio);
 }
 
-void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay) {
+void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay, float search_ratio) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
@@ -540,7 +540,7 @@ void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay) {
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 70.0f, agv_config.turn_speed, -agv_config.turn_speed,
-                 enable_search);
+                 enable_search, search_ratio);
 }
 
 void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
@@ -553,7 +553,7 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed,
-                 enable_search);
+                 enable_search, 0.70f);
 }
 
 /* USER CODE END 1 */
