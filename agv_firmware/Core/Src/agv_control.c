@@ -210,7 +210,7 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
   float output = AGV_ComputePID(hagv->pid_controller, 0.0f);
 
   // Ramping (Tăng/Giảm tốc mềm mại)
-  float accel_step = 1.5f; // Chỉnh gia tốc tại đây (1.5 * 100Hz = 150 PWM/s)
+  float accel_step = 5.0f; // Chỉnh gia tốc tại đây (5.0 * 100Hz = 500 PWM/s) -> Đạt 250 mất 0.5s
   if (hagv->current_speed < hagv->base_speed) {
     hagv->current_speed += accel_step;
     if (hagv->current_speed > hagv->base_speed) hagv->current_speed = hagv->base_speed;
@@ -274,7 +274,7 @@ static void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv, uint32_t reference_
   // Ở vận tốc 250, thời gian là reference_time_at_250.
   uint32_t dynamic_delay = (uint32_t)((250.0f * (float)reference_time_at_250) / speed);
   
-  if (dynamic_delay > 4000) dynamic_delay = 4000; // Giới hạn an toàn
+  if (dynamic_delay > 2000) dynamic_delay = 2000; // Giới hạn an toàn
 
   Motor_SetSpeed(hagv->motor_left, (int16_t)speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)speed);
@@ -331,7 +331,7 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
-  AGV_BlindForwardDynamic(hagv, 1200);
+  AGV_BlindForwardDynamic(hagv, 1000);
 
   AGV_Stop(hagv);
   HAL_Delay(500);
@@ -344,7 +344,7 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
-  AGV_BlindForwardDynamic(hagv, 1200);
+  AGV_BlindForwardDynamic(hagv, 1000);
 
   AGV_Stop(hagv);
   HAL_Delay(500);
@@ -459,7 +459,7 @@ void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 1200);
+  AGV_BlindForwardDynamic(hagv, 1000);
 
   AGV_Stop(hagv);
   HAL_Delay(500);
@@ -474,7 +474,7 @@ void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 1200);
+  AGV_BlindForwardDynamic(hagv, 1000);
 
   AGV_Stop(hagv);
   HAL_Delay(500);
