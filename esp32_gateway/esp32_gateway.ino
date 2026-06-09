@@ -553,11 +553,13 @@ void setup() {
   Serial.println("Dang nap 90KB Firmware cho VL53L5CX (Se mat ~0.6s)...");
   if (myImager.begin()) {
     // Cau hinh 64 vung (8x8) de co the loc duoc cac vung ria bi che
-    myImager.setResolution(8 * 8); 
-    myImager.setRangingFrequency(10); 
+    // Tang integration time de sensor nhay hon khi can do xa hon.
+    myImager.setResolution(8 * 8);
+    myImager.setIntegrationTime(50);
+    myImager.setRangingFrequency(5);
     myImager.startRanging();
     vl53_ok = true;
-    Serial.println("[OK] VL53L5CX ket noi thanh cong! (Mode 8x8, 10Hz)");
+    Serial.println("[OK] VL53L5CX ket noi thanh cong! (Mode 8x8, 5Hz, Integration 50ms)");
   } else {
     Serial.println("[LOI] VL53L5CX khong phan hoi hoac loi nap Firmware!");
   }
