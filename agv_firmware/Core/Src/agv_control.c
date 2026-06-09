@@ -265,6 +265,22 @@ void AGV_Stop(AGV_HandleTypeDef *hagv) {
   hagv->current_speed = 0.0f; // Reset speed for ramping when resuming
 }
 
+// Hàm hỗ trợ đi thẳng qua ngã tư với thời gian động (Dynamic Delay) dựa trên tốc độ hiện tại
+static void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv, uint32_t reference_time_at_250) {
+  float speed = hagv->current_speed;
+  if (speed < 80.0f) speed = 80.0f; // Tránh chia cho 0 và tránh thời gian quá dài
+
+  // Quãng đường không đổi = Tốc độ x Thời gian
+  // Ở vận tốc 250, thời gian là reference_time_at_250.
+  uint32_t dynamic_delay = (uint32_t)((250.0f * (float)reference_time_at_250) / speed);
+  
+  if (dynamic_delay > 4000) dynamic_delay = 4000; // Giới hạn an toàn
+
+  Motor_SetSpeed(hagv->motor_left, (int16_t)speed);
+  Motor_SetSpeed(hagv->motor_right, (int16_t)speed);
+  HAL_Delay(dynamic_delay);
+}
+
 // Mask for 4 center sensors (bits 9-6): 0x03C0 = 0000001111000000
 #define CENTER_MASK 0x03C0
 
@@ -315,9 +331,7 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
-  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
-  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(700);
+  AGV_BlindForwardDynamic(hagv, 1200);
 
   AGV_Stop(hagv);
   HAL_Delay(500);
@@ -330,9 +344,7 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
-  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
-  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(700);
+  AGV_BlindForwardDynamic(hagv, 1200);
 
   AGV_Stop(hagv);
   HAL_Delay(500);
@@ -447,9 +459,7 @@ void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
-  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(700);
+  AGV_BlindForwardDynamic(hagv, 1200);
 
   AGV_Stop(hagv);
   HAL_Delay(500);
@@ -464,9 +474,7 @@ void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
-  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(700);
+  AGV_BlindForwardDynamic(hagv, 1200);
 
   AGV_Stop(hagv);
   HAL_Delay(500);
@@ -481,9 +489,7 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  Motor_SetSpeed(hagv->motor_left, (int16_t)hagv->base_speed);
-  Motor_SetSpeed(hagv->motor_right, (int16_t)hagv->base_speed);
-  HAL_Delay(150);
+  AGV_BlindForwardDynamic(hagv, 150);
 
   AGV_Stop(hagv);
   HAL_Delay(500);
