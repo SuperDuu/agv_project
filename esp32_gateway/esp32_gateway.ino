@@ -61,9 +61,9 @@ uint8_t rs485_rx_buffer[10];
 uint8_t rs485_rx_index = 0;
 unsigned long last_rs485_rx_time = 0;
 
-// Lưu trữ lệnh bóc tách từ Firebase
 uint8_t firebase_node = 255;  // 255 = Không có lệnh
 uint8_t firebase_h_cmd = 255; // 255 = Không có lệnh
+unsigned long last_firebase_cmd_time = 0;
 
 // Biến quản lý trạng thái cảm biến (Fail-safe)
 SparkFun_VL53L5CX myImager;
@@ -162,9 +162,15 @@ void parse_rs485_frame() {
             Serial2.write(tx_frame, 11);
             Serial2.flush();
             
-            // Xóa cờ sau khi đã gửi để tránh AGV hiểu nhầm gửi liên tục
-            firebase_node = 255;
-            firebase_h_cmd = 255;
+            // Xóa cờ sau khi đã gửi 1 giây để đảm bảo STM32 nhận được (tránh lỗi rớt gói RS485)
+            if (firebase_node != 255 && last_firebase_cmd_time == 0) {
+                last_firebase_cmd_time = millis();
+            }
+            if (firebase_node != 255 && millis() - last_firebase_cmd_time > 1000) {
+                firebase_node = 255;
+                firebase_h_cmd = 255;
+                last_firebase_cmd_time = 0;
+            }
           } else { Serial.println(" => (Loi CMD)"); }
         } else { Serial.println(" => (Loi Checksum)"); }
       } else { Serial.println(" => (Loi Dia Chi)"); }
@@ -512,6 +518,7 @@ void FirebaseTask(void *pvParameters) {
                   
                   firebase_node = (uint8_t)nStr.toInt();
                   firebase_h_cmd = (uint8_t)hStr.toInt();
+                  last_firebase_cmd_time = 0; // Reset timer for new command
                   
                   Serial.printf("=> Node: %d, H_Cmd: %d\n", firebase_node, firebase_h_cmd);
                 }

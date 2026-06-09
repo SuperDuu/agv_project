@@ -515,26 +515,28 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
   HAL_Delay(120);
 }
 
-void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv) {
+void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 800);
+  // Giảm thời gian lướt xuống theo tham số truyền vào
+  AGV_BlindForwardDynamic(hagv, fwd_delay);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 80.0f, -agv_config.turn_speed, agv_config.turn_speed,
                  enable_search);
 }
 
-void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
+void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 800);
+  // Giảm thời gian lướt qua ngã tư theo tham số truyền vào
+  AGV_BlindForwardDynamic(hagv, fwd_delay);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 70.0f, agv_config.turn_speed, -agv_config.turn_speed,

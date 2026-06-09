@@ -94,7 +94,7 @@ typedef struct {
 /* USER CODE BEGIN Exported constants */
 extern float Delta_t;
 
-#define AGV_LINE_RECOVERY_TIME 400
+#define AGV_LINE_RECOVERY_TIME 1000
 #define AGV_TURN_BLIND_TIME 800
 
 /* USER CODE END Exported constants */
@@ -115,8 +115,8 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv);
 
 void AGV_TrackLine_Sync(AGV_HandleTypeDef *hagv, uint32_t duration_ms);
 
-void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv);
-void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv);
+void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay);
+void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay);
 void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv);
 
 /* USER CODE BEGIN EFP */
