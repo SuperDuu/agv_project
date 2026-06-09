@@ -40,6 +40,9 @@ AGV_Config_t agv_config = {
 
 /* USER CODE BEGIN 1 */
 
+// Mask for 4 center sensors (bits 9-6): 0x03C0 = 0000001111000000
+#define CENTER_MASK 0x03C0
+
 float Delta_t = 0.01f;
 
 void AGV_Init(AGV_HandleTypeDef *hagv, Motor_HandleTypeDef *m_left,
@@ -304,7 +307,7 @@ static void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv,
 }
 
 // Mask for 4 center sensors (bits 9-6): 0x03C0 = 0000001111000000
-#define CENTER_MASK 0x03C0
+// Removed duplicate CENTER_MASK
 
 static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
                             int16_t speed_r, uint32_t total_time) {
