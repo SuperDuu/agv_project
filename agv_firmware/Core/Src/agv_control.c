@@ -32,8 +32,8 @@ AGV_Config_t agv_config = {
     .time_forward = 2000,
     .time_turn_90 = 3100,
     .time_turn_180 = 6200,
-    .turn_speed = 200,  // Tăng tốc độ quay (từ 180 lên 200)
-    .base_speed = 350}; // Tăng tốc độ di chuyển (từ 300 lên 350)
+    .turn_speed = 300,  // Tăng tốc độ quay lên 300
+    .base_speed = 500}; // Tăng tốc độ di chuyển lên 500
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
@@ -350,7 +350,7 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
-  AGV_BlindForwardDynamic(hagv, 1200);
+  AGV_BlindForwardDynamic(hagv, 900);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_Time_Based(hagv, -agv_config.turn_speed, agv_config.turn_speed,
@@ -361,7 +361,7 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
-  AGV_BlindForwardDynamic(hagv, 1200);
+  AGV_BlindForwardDynamic(hagv, 900);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_Time_Based(hagv, agv_config.turn_speed, -agv_config.turn_speed,
@@ -474,7 +474,7 @@ void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 1200);
+  AGV_BlindForwardDynamic(hagv, 900);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 80.0f, -agv_config.turn_speed, agv_config.turn_speed,
@@ -487,7 +487,7 @@ void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 1200);
+  AGV_BlindForwardDynamic(hagv, 900);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 70.0f, agv_config.turn_speed, -agv_config.turn_speed,
@@ -500,7 +500,7 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 150);
+  AGV_BlindForwardDynamic(hagv, 100);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed,
