@@ -571,6 +571,15 @@ int main(void)
       if (safe_esp32_data.TargetNode != agv_state.destination_node) {
         agv_state.destination_node = safe_esp32_data.TargetNode;
         agv_state.need_recalculate_path = true;
+        
+        // Đồng bộ ngược lại cho màn hình HMI biết ESP32 đã đổi đích đến
+        extern uint16_t hmi_registers[];
+        hmi_registers[0x05] = agv_state.destination_node; // 0x05 is REG_DEST_NODE
+      }
+      
+      if (safe_esp32_data.H_Command != 0 && safe_esp32_data.H_Command != 255) {
+        extern uint16_t hmi_registers[];
+        hmi_registers[0x06] = safe_esp32_data.H_Command; // 0x06 is REG_COMMAND
       }
     }
 
