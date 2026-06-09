@@ -38,7 +38,8 @@ typedef enum {
     MODE_4_FULL_RUN = 4,
     MODE_5_CALIBRATE_MOTORS = 5,
     MODE_6_TEST_TURN_RIGHT = 6,
-    MODE_7_DEBUG_NO_QR = 7
+    MODE_7_DEBUG_NO_QR = 7,
+    MODE_8_TEST_ENCODER = 8
 } AGV_RunMode_t;
 
 typedef struct {
