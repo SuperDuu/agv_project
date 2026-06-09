@@ -109,6 +109,12 @@ void LS7366R_Init(uint8_t csPin, uint8_t mdr0, uint8_t mdr1) {
  * @brief Khởi tạo đồng loạt cả 4 chip LS7366R với thông số mặc định (Hall encoder).
  */
 void LS7366R_InitAll(void) {
+    // Kéo toàn bộ chân CS lên HIGH trước tiên để tránh xung đột SPI (Do cấu hình mặc định IOC là LOW)
+    CS_High(ENC_CS1);
+    CS_High(ENC_CS2);
+    CS_High(ENC_CS3);
+    CS_High(ENC_CS4);
+
     for (uint8_t i = 1; i <= 4; i++) {
         LS7366R_Init(i, LS_MDR0_QUAD_X4_FREE, LS_MDR1_4BYTE_EN);
         prev_counter[i - 1] = 0;
