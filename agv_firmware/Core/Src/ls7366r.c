@@ -4,12 +4,12 @@
 static int32_t prev_counter[4] = {0, 0, 0, 0};
 
 /**
- * @brief  Tạo delay ngắn khoảng 50ns để đáp ứng timing của LS7366R.
+ * @brief  Tạo delay ngắn khoảng 1us để đáp ứng timing của LS7366R và tốc độ slew rate của GPIO (LOW speed).
  *         Với STM32H5 (250MHz), mỗi chu kỳ máy là 4ns.
  */
-static void delay_50ns(void) {
-    // 15 NOPs x 4ns = 60ns
-    for (volatile int i = 0; i < 15; i++) {
+static void delay_1us(void) {
+    // 250 NOPs x 4ns = 1us
+    for (volatile int i = 0; i < 250; i++) {
         __asm("nop");
     }
 }
@@ -51,7 +51,7 @@ static void CS_Low(uint8_t csPin) {
     Get_CS_Pin(csPin, &port, &pin);
     if (port != NULL) {
         HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET);
-        delay_50ns(); // Đảm bảo t_CSS (CS setup time) >= 50ns
+        delay_1us(); // Đảm bảo t_CSS (CS setup time) và bù slew rate
     }
 }
 
@@ -63,9 +63,9 @@ static void CS_High(uint8_t csPin) {
     uint16_t pin;
     Get_CS_Pin(csPin, &port, &pin);
     if (port != NULL) {
-        delay_50ns(); // Đảm bảo data hold time
+        delay_1us(); // Đảm bảo data hold time
         HAL_GPIO_WritePin(port, pin, GPIO_PIN_SET);
-        delay_50ns(); // Đảm bảo t_CSW (CS disable time) >= 50ns
+        delay_1us(); // Đảm bảo t_CSW (CS disable time)
     }
 }
 
