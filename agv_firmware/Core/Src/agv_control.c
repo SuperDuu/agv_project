@@ -340,50 +340,58 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
                   agv_config.time_turn_90);
 }
 
-//void AGV_Turn180(AGV_HandleTypeDef *hagv) {
-//  if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
-//    return;
+// void AGV_Turn180(AGV_HandleTypeDef *hagv) {
+//   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
+//     return;
 //
-//  AGV_Stop(hagv);
-//  HAL_Delay(300);
+//   AGV_Stop(hagv);
+//   HAL_Delay(300);
 //
-//  // 1. Quay mù 45 độ sang phải (bằng nửa thời gian quay 90 độ)
-//  uint32_t time_45 = agv_config.time_turn_90 / 2;
-//  Motor_SetSpeed(hagv->motor_left, 700); // Kick-start
-//  Motor_SetSpeed(hagv->motor_right, -700);
-//  HAL_Delay(80);
-//  Motor_SetSpeed(hagv->motor_left, agv_config.turn_speed);
-//  Motor_SetSpeed(hagv->motor_right, -agv_config.turn_speed);
-//  HAL_Delay(time_45 - 80);
+//   // 1. Quay mù 45 độ sang phải (bằng nửa thời gian quay 90 độ)
+//   uint32_t time_45 = agv_config.time_turn_90 / 2;
+//   Motor_SetSpeed(hagv->motor_left, 700); // Kick-start
+//   Motor_SetSpeed(hagv->motor_right, -700);
+//   HAL_Delay(80);
+//   Motor_SetSpeed(hagv->motor_left, agv_config.turn_speed);
+//   Motor_SetSpeed(hagv->motor_right, -agv_config.turn_speed);
+//   HAL_Delay(time_45 - 80);
 //
-//  AGV_Stop(hagv);
-//  HAL_Delay(300);
+//   AGV_Stop(hagv);
+//   HAL_Delay(300);
 //
-//  // 2. Lùi thẳng lại 1 giây (kéo xe về hướng Tây Nam để né tường phải và tường
-//  // trước)
-//  Motor_SetSpeed(hagv->motor_left, -hagv->base_speed);
-//  Motor_SetSpeed(hagv->motor_right, -hagv->base_speed);
-//  HAL_Delay(1000);
+//   // 2. Lùi thẳng lại 1 giây (kéo xe về hướng Tây Nam để né tường phải và
+//   tường
+//   // trước)
+//   Motor_SetSpeed(hagv->motor_left, -hagv->base_speed);
+//   Motor_SetSpeed(hagv->motor_right, -hagv->base_speed);
+//   HAL_Delay(1000);
 //
-//  AGV_Stop(hagv);
-//  HAL_Delay(300);
+//   AGV_Stop(hagv);
+//   HAL_Delay(300);
 //
-//  // 3. Chọn chiều quay (phải) để quay tiếp 135 độ còn lại và dò vạch
-//  uint32_t time_135 = agv_config.time_turn_180 - time_45;
-//  Turn_Time_Based(hagv, agv_config.turn_speed, -agv_config.turn_speed,
-//                  time_135);
-//}
+//   // 3. Chọn chiều quay (phải) để quay tiếp 135 độ còn lại và dò vạch
+//   uint32_t time_135 = agv_config.time_turn_180 - time_45;
+//   Turn_Time_Based(hagv, agv_config.turn_speed, -agv_config.turn_speed,
+//                   time_135);
+// }
+
+static bool Turn_FindCenterLine(AGV_HandleTypeDef *hagv) {
+  uint16_t val = LineSensor_Read(hagv->line_sensor);
+  return (val & CENTER_MASK) != CENTER_MASK;
+}
 
 static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
                            int16_t speed_l, int16_t speed_r, bool search_line) {
-  bool center_found = false;
   uint32_t start_time = HAL_GetTick();
   float start_yaw = ESP32_GetSafeData().Yaw;
+  bool line_search_enabled = search_line && (target_angle > 0.0f);
+  bool line_found = false;
+  bool target_reached = false;
 
   int16_t kick_l = (speed_l > 0) ? 650 : ((speed_l < 0) ? -650 : 0);
   int16_t kick_r = (speed_r > 0) ? 650 : ((speed_r < 0) ? -650 : 0);
 
-  agv_state.indicator_state = 2; // State 2: Turning
+  agv_state.indicator_state = 2;
 
   Motor_SetSpeed(hagv->motor_left, kick_l);
   Motor_SetSpeed(hagv->motor_right, kick_r);
@@ -393,77 +401,49 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
   Motor_SetSpeed(hagv->motor_right, speed_r);
 
   extern void HMI_Process(void);
-
   static uint32_t last_esp_req = 0;
-  bool reached_target_angle = false;
+  uint32_t timeout_limit = (target_angle > 120.0f) ? 8000 : 5500;
 
   while (1) {
     HMI_Process();
 
-    // Liên tục gửi tín hiệu Request để ESP32 cập nhật giá trị IMU
     if (HAL_GetTick() - last_esp_req > 50) {
       last_esp_req = HAL_GetTick();
       ESP32_RequestData(agv_state.current_node);
     }
 
-    // Tính độ lệch góc tuyệt đối so với lúc bắt đầu
     float current_yaw = ESP32_GetSafeData().Yaw;
     float diff = fabs(current_yaw - start_yaw);
     while (diff > 180.0f)
       diff = 360.0f - diff;
 
-    // Chạm khoảng 70% góc đặt thì bắt đầu kiểm tra line, nhưng không dừng nếu
-    // chưa thấy line. Nếu đã thấy line trước khi đạt góc thì thoát ngay.
-    if (search_line && diff >= (target_angle * 0.70f)) {
-      uint16_t val = LineSensor_Read(hagv->line_sensor);
-      if ((val & CENTER_MASK) != CENTER_MASK) {
-        center_found = true;
-        break;
-      }
-    }
+    if (!target_reached && diff >= (target_angle - 2.0f))
+      target_reached = true;
 
-    if (diff >= (target_angle - 2.0f)) {
-      reached_target_angle = true;
-      if (!search_line) {
-        break;
-      }
-    }
-
-    // Timeout safeguard phòng khi IMU lỗi hoặc xe bị kẹt
-    uint32_t timeout_limit = (target_angle > 120.0f) ? 8000 : 5500;
-    if (HAL_GetTick() - start_time > timeout_limit) {
+    if (line_search_enabled && diff >= (target_angle * 0.70f) &&
+        Turn_FindCenterLine(hagv)) {
+      line_found = true;
       break;
     }
+
+    if (target_reached) {
+      if (!line_search_enabled)
+        break;
+      if (line_search_enabled && Turn_FindCenterLine(hagv)) {
+        line_found = true;
+        break;
+      }
+    }
+
+    if (HAL_GetTick() - start_time > timeout_limit)
+      break;
 
     HAL_Delay(5);
-
-    if (reached_target_angle && search_line && !center_found) {
-      // Đã đạt góc nhưng vẫn chưa chạm line => tiếp tục quay tới khi thấy line.
-      while (1) {
-        HMI_Process();
-
-        if (HAL_GetTick() - last_esp_req > 50) {
-          last_esp_req = HAL_GetTick();
-          ESP32_RequestData(agv_state.current_node);
-        }
-
-        uint16_t val = LineSensor_Read(hagv->line_sensor);
-        if ((val & CENTER_MASK) != CENTER_MASK) {
-          center_found = true;
-          break;
-        }
-
-        if (HAL_GetTick() - start_time > timeout_limit) {
-          break;
-        }
-        HAL_Delay(5);
-      }
-      break;
-    }
   }
 
+  (void)line_found;
   AGV_Stop(hagv);
-  agv_state.indicator_state = 0; // Turn complete
+  agv_state.indicator_state = 0;
   HAL_Delay(120);
 }
 
