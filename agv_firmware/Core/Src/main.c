@@ -436,9 +436,8 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
       break;
     case ACT_STRAIGHT:
       h_agv.direction = 1;
-      Motor_SetSpeed(h_agv.motor_left, (int16_t)h_agv.base_speed);
-      Motor_SetSpeed(h_agv.motor_right, (int16_t)h_agv.base_speed);
-      HAL_Delay(300);
+      // KHÔNG CẦN SET SPEED HAY DELAY:
+      // Xe đang chạy ở current_speed, cứ để nó trôi qua ngã tư mượt mà!
       break;
     case ACT_BACKWARD:
       h_agv.direction = 1;
