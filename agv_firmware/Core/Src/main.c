@@ -638,7 +638,15 @@ int main(void)
     }
 
     if (agv_state.run_mode == MODE_8_TEST_ENCODER) {
-      AGV_Stop(&h_agv);
+      static uint32_t m8_start = 0;
+      if (m8_start == 0) m8_start = HAL_GetTick();
+
+      if (HAL_GetTick() - m8_start > 1000) {
+        Motor_SetSpeed(&m_left, 100);
+        Motor_SetSpeed(&m_right, 100);
+      } else {
+        AGV_Stop(&h_agv);
+      }
       continue;
     }
     if (agv_state.run_mode == MODE_5_CALIBRATE_MOTORS) {
@@ -1301,10 +1309,15 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOG, B_Out23_Pin|B_Out22_Pin|T_DAC_SDI_Pin|T_DAC_CLK_Pin
                           |T_DAC_CS_Pin|T_ENC_CS2_Pin|T_ADC_CS_Pin|T_ADC_RST_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : T_ENC_CS3_Pin T_ENC_CS4_Pin B_Out0_Pin B_Out1_Pin
-                           B_Out2_Pin B_Out15_Pin T_ENC_CS1_Pin */
-  GPIO_InitStruct.Pin = T_ENC_CS3_Pin|T_ENC_CS4_Pin|B_Out0_Pin|B_Out1_Pin
-                          |B_Out2_Pin|B_Out15_Pin|T_ENC_CS1_Pin;
+  /*Configure GPIO pins : T_ENC_CS3_Pin T_ENC_CS4_Pin T_ENC_CS1_Pin */
+  GPIO_InitStruct.Pin = T_ENC_CS3_Pin|T_ENC_CS4_Pin|T_ENC_CS1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : B_Out0_Pin B_Out1_Pin B_Out2_Pin B_Out15_Pin */
+  GPIO_InitStruct.Pin = B_Out0_Pin|B_Out1_Pin|B_Out2_Pin|B_Out15_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -1401,9 +1414,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pins : B_Out23_Pin B_Out22_Pin T_DAC_SDI_Pin T_DAC_CLK_Pin
-                           T_DAC_CS_Pin T_ENC_CS2_Pin T_ADC_CS_Pin T_ADC_RST_Pin */
+                           T_DAC_CS_Pin T_ADC_CS_Pin T_ADC_RST_Pin */
   GPIO_InitStruct.Pin = B_Out23_Pin|B_Out22_Pin|T_DAC_SDI_Pin|T_DAC_CLK_Pin
-                          |T_DAC_CS_Pin|T_ENC_CS2_Pin|T_ADC_CS_Pin|T_ADC_RST_Pin;
+                          |T_DAC_CS_Pin|T_ADC_CS_Pin|T_ADC_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -1414,6 +1427,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : T_ENC_CS2_Pin */
+  GPIO_InitStruct.Pin = T_ENC_CS2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(T_ENC_CS2_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
