@@ -170,9 +170,10 @@ static void AGV_ServiceHeartbeat(uint32_t *last_led_time) {
   }
 }
 
+static uint8_t mode5_calib_state = 0;
+static uint32_t mode5_calib_start_time = 0;
+
 static bool AGV_HandleMode5Calibration(void) {
-  static uint8_t calib_state = 0;
-  static uint32_t state_start_time = 0;
 
   if (!ESP32_GetSafeData().IsConnected) {
     AGV_Stop(&h_agv);
@@ -181,17 +182,17 @@ static bool AGV_HandleMode5Calibration(void) {
 
   agv_state.follow_line_enable = false;
 
-  if (state_start_time == 0)
-    state_start_time = HAL_GetTick();
+  if (mode5_calib_start_time == 0)
+    mode5_calib_start_time = HAL_GetTick();
 
-  uint32_t elapsed = HAL_GetTick() - state_start_time;
+  uint32_t elapsed = HAL_GetTick() - mode5_calib_start_time;
 
-  switch (calib_state) {
+  switch (mode5_calib_state) {
   case 0:
     AGV_Stop(&h_agv);
     if (elapsed > 2000) {
-      calib_state++;
-      state_start_time = HAL_GetTick();
+      mode5_calib_state++;
+      mode5_calib_start_time = HAL_GetTick();
     }
     break;
   case 1:
