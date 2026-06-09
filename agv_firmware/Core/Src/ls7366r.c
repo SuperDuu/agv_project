@@ -143,29 +143,27 @@ int32_t LS7366R_ReadCounter(uint8_t csPin) {
  * @brief Kiểm tra giao tiếp SPI bằng cách ghi/đọc thanh ghi.
  */
 uint32_t LS7366R_TestSPI(uint8_t csPin) {
-    uint8_t str_before = LS7366R_ReadStatus(csPin);
-    uint32_t counter_before = (uint32_t)LS7366R_ReadCounter(csPin);
-
-    LS7366R_ClearCounter(csPin);
-    uint32_t counter_after_clear = (uint32_t)LS7366R_ReadCounter(csPin);
-    if (counter_after_clear != 0U) {
-        return 0U;
-    }
-
+    // 1. Ghi vào DTR
     uint8_t txDTR[5] = {LS_WRITE_DTR, 0x12, 0x34, 0x56, 0x78};
     uint8_t rxDTR[5] = {0};
     CS_Low(csPin);
     HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txDTR, rxDTR, 5, HAL_MAX_DELAY);
     CS_High(csPin);
 
+    // 2. Chuyển DTR sang CNTR
     uint8_t txLoad[1] = {LS_LOAD_CNTR};
     uint8_t rxLoad[1] = {0};
     CS_Low(csPin);
     HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txLoad, rxLoad, 1, HAL_MAX_DELAY);
     CS_High(csPin);
 
-    uint32_t counter_after_load = (uint32_t)LS7366R_ReadCounter(csPin);
-    return (str_before == 0U && counter_before == 0U && counter_after_load == 0x12345678U) ? 1U : 0U;
+    // 3. Đọc lại CNTR
+    int32_t read_val = LS7366R_ReadCounter(csPin);
+
+    // Clear CNTR after test so it starts from 0 for the application!
+    LS7366R_ClearCounter(csPin);
+
+    return (uint32_t)read_val;
 }
 
 /**
