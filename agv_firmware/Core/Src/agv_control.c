@@ -32,8 +32,8 @@ AGV_Config_t agv_config = {
     .time_forward = 2000,
     .time_turn_90 = 3100,
     .time_turn_180 = 6200,
-    .turn_speed = 150,  // Keep turn speed moderate to avoid overshoot
-    .base_speed = 250}; // Increased from 150 to 250
+    .turn_speed = 180,  // Tăng tốc độ quay (từ 150 lên 180)
+    .base_speed = 300}; // Tăng tốc độ di chuyển (từ 250 lên 300)
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
@@ -274,8 +274,13 @@ void AGV_Stop(AGV_HandleTypeDef *hagv) {
 static void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv,
                                     uint32_t reference_time_at_250) {
   float speed = hagv->current_speed;
-  if (speed < 80.0f)
-    speed = 80.0f; // Tránh chia cho 0 và tránh thời gian quá dài
+  
+  // NẾU TỐC ĐỘ HIỆN TẠI QUÁ THẤP (Ví dụ: Xe đang dừng hẳn ở trạm và bị bắt quay đầu ngay)
+  // Tốc độ thấp sẽ không đủ lực để thắng ma sát tĩnh, khiến xe chỉ nhích 1 đoạn ngắn xíu rồi quay -> lệch góc!
+  // Giải pháp: Ép tốc độ tối thiểu lên 200 để xe bốc qua ngã tư dứt khoát!
+  if (speed < 200.0f) {
+    speed = 200.0f;
+  }
 
   // Quãng đường không đổi = Tốc độ x Thời gian
   // Ở vận tốc 250, thời gian là reference_time_at_250.
@@ -288,6 +293,11 @@ static void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv,
   Motor_SetSpeed(hagv->motor_left, (int16_t)speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)speed);
   HAL_Delay(dynamic_delay);
+  
+  // Cập nhật lại tốc độ hiện tại để xe tiếp tục gia tốc mượt mà
+  if (hagv->current_speed < speed) {
+      hagv->current_speed = speed;
+  }
 }
 
 // Mask for 4 center sensors (bits 9-6): 0x03C0 = 0000001111000000
