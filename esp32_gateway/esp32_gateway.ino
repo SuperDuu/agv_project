@@ -486,7 +486,16 @@ void FirebaseTask(void *pvParameters) {
           if (Firebase.getString(firebaseData, "/robot/camera_command/command")) {
             if (firebaseData.dataType() == "string") {
               String newCommand = firebaseData.stringData();
-              if ((newCommand != currentCommand || newTimestamp != currentTimestamp) && newCommand != "") {
+              
+              static bool isFirstFirebaseRead = true;
+              
+              if (isFirstFirebaseRead) {
+                currentCommand = newCommand;
+                currentTimestamp = newTimestamp;
+                isFirstFirebaseRead = false;
+                Serial.println("[FIREBASE] Bo qua lenh doc duoc lan dau tien luc khoi dong.");
+              } 
+              else if ((newCommand != currentCommand || newTimestamp != currentTimestamp) && newCommand != "") {
                 currentCommand = newCommand;
                 currentTimestamp = newTimestamp;
                 isAckReceived = false;
@@ -554,12 +563,12 @@ void setup() {
   if (myImager.begin()) {
     // Cau hinh 64 vung (8x8) de co the loc duoc cac vung ria bi che
     // Tang integration time de sensor nhay hon khi can do xa hon.
-    myImager.setResolution(8 * 8);
+    myImager.setResolution(8 * 8); 
+    myImager.setRangingFrequency(10); 
     myImager.setIntegrationTime(50);
-    myImager.setRangingFrequency(5);
     myImager.startRanging();
     vl53_ok = true;
-    Serial.println("[OK] VL53L5CX ket noi thanh cong! (Mode 8x8, 5Hz, Integration 50ms)");
+    Serial.println("[OK] VL53L5CX ket noi thanh cong! (Mode 8x8, 10Hz, Integration 50ms)");
   } else {
     Serial.println("[LOI] VL53L5CX khong phan hoi hoac loi nap Firmware!");
   }
