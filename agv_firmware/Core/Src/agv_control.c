@@ -32,8 +32,8 @@ AGV_Config_t agv_config = {
     .time_forward = 2000,
     .time_turn_90 = 3100,
     .time_turn_180 = 6200,
-    .turn_speed = 180,  // Tăng tốc độ quay (từ 150 lên 180)
-    .base_speed = 300}; // Tăng tốc độ di chuyển (từ 250 lên 300)
+    .turn_speed = 200,  // Tăng tốc độ quay (từ 180 lên 200)
+    .base_speed = 350}; // Tăng tốc độ di chuyển (từ 300 lên 350)
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
