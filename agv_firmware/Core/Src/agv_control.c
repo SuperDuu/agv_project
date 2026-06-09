@@ -32,8 +32,8 @@ AGV_Config_t agv_config = {
     .time_forward = 2000,
     .time_turn_90 = 3100,
     .time_turn_180 = 6200,
-    .turn_speed = 300,  // Tăng tốc độ quay lên 300
-    .base_speed = 500}; // Tăng tốc độ di chuyển lên 500
+    .turn_speed = 220,  // Tốc độ quay giảm xuống 220 cho đầm xe
+    .base_speed = 500}; // Tốc độ di chuyển 500
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
@@ -191,10 +191,12 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     lost_line_time = 0;
   }
 
-  // Intersection check: Bit 15 and Bit 0
+  // Intersection check: Bit 15 and Bit 0 (Mắt ngoài cùng) VÀ Mắt giữa phải đang bám line (CENTER_MASK)
+  // Nếu bị lắc đuôi (wobble), mắt ngoài cùng có thể đè vạch nhưng mắt giữa sẽ bị trật vạch!
+  // Do đó, ngã tư thật sự = Mắt ngoài (trái hoặc phải) chạm vạch + Mắt giữa chạm vạch.
   if (agv_state.run_mode != MODE_1_LINE_ONLY &&
       agv_state.run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
-    if (((line_val & 0x8001) != 0x8001) &&
+    if (((line_val & 0x8001) != 0x8001) && ((line_val & CENTER_MASK) != CENTER_MASK) &&
         (HAL_GetTick() - agv_state.last_leave_intersection_time >
          AGV_LINE_RECOVERY_TIME)) {
       // AGV_Stop(hagv); // KHÔNG DỪNG LẠI
@@ -274,10 +276,11 @@ void AGV_Stop(AGV_HandleTypeDef *hagv) {
 static void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv,
                                     uint32_t reference_time_at_250) {
   float speed = hagv->current_speed;
-  
-  // NẾU TỐC ĐỘ HIỆN TẠI QUÁ THẤP (Ví dụ: Xe đang dừng hẳn ở trạm và bị bắt quay đầu ngay)
-  // Tốc độ thấp sẽ không đủ lực để thắng ma sát tĩnh, khiến xe chỉ nhích 1 đoạn ngắn xíu rồi quay -> lệch góc!
-  // Giải pháp: Ép tốc độ tối thiểu lên 200 để xe bốc qua ngã tư dứt khoát!
+
+  // NẾU TỐC ĐỘ HIỆN TẠI QUÁ THẤP (Ví dụ: Xe đang dừng hẳn ở trạm và bị bắt quay
+  // đầu ngay) Tốc độ thấp sẽ không đủ lực để thắng ma sát tĩnh, khiến xe chỉ
+  // nhích 1 đoạn ngắn xíu rồi quay -> lệch góc! Giải pháp: Ép tốc độ tối thiểu
+  // lên 200 để xe bốc qua ngã tư dứt khoát!
   if (speed < 200.0f) {
     speed = 200.0f;
   }
@@ -293,10 +296,10 @@ static void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv,
   Motor_SetSpeed(hagv->motor_left, (int16_t)speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)speed);
   HAL_Delay(dynamic_delay);
-  
+
   // Cập nhật lại tốc độ hiện tại để xe tiếp tục gia tốc mượt mà
   if (hagv->current_speed < speed) {
-      hagv->current_speed = speed;
+    hagv->current_speed = speed;
   }
 }
 
@@ -350,7 +353,7 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
-  AGV_BlindForwardDynamic(hagv, 900);
+  AGV_BlindForwardDynamic(hagv, 700);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_Time_Based(hagv, -agv_config.turn_speed, agv_config.turn_speed,
@@ -361,7 +364,7 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
-  AGV_BlindForwardDynamic(hagv, 900);
+  AGV_BlindForwardDynamic(hagv, 700);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_Time_Based(hagv, agv_config.turn_speed, -agv_config.turn_speed,
@@ -474,7 +477,7 @@ void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 900);
+  AGV_BlindForwardDynamic(hagv, 700);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 80.0f, -agv_config.turn_speed, agv_config.turn_speed,
@@ -487,7 +490,7 @@ void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 900);
+  AGV_BlindForwardDynamic(hagv, 700);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 70.0f, agv_config.turn_speed, -agv_config.turn_speed,
