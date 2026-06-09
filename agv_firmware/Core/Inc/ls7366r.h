@@ -27,7 +27,7 @@ extern SPI_HandleTypeDef hspi3;
 #define LS_READ_OTR    0x68
 #define LS_READ_STR    0x70
 #define LS_LOAD_OTR    0xE8  // Transfer CNTR to OTR
-#define LS_LOAD_CNTR   0xC8  // Transfer DTR to CNTR (User requested 0xC8 instead of 0xE0)
+#define LS_LOAD_CNTR   0xE0  // Transfer DTR to CNTR
 #define LS_CLEAR_CNTR  0x20
 #define LS_CLEAR_STR   0x30
 
