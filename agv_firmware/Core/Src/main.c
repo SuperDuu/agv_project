@@ -639,22 +639,6 @@ int main(void)
 
     if (agv_state.run_mode == MODE_8_TEST_ENCODER) {
       AGV_Stop(&h_agv);
-      
-      uint32_t now = HAL_GetTick();
-      if (now - encoder_data.last_update >= 100) {
-        float dt = (now - encoder_data.last_update) / 1000.0f;
-        encoder_data.count_e1 = LS7366R_ReadCounter(ENC_CS1);
-        encoder_data.count_e2 = LS7366R_ReadCounter(ENC_CS2);
-        encoder_data.count_e3 = LS7366R_ReadCounter(ENC_CS3);
-        encoder_data.count_e4 = LS7366R_ReadCounter(ENC_CS4);
-        
-        encoder_data.vel_e1 = LS7366R_GetVelocity(ENC_CS1, dt);
-        encoder_data.vel_e2 = LS7366R_GetVelocity(ENC_CS2, dt);
-        encoder_data.vel_e3 = LS7366R_GetVelocity(ENC_CS3, dt);
-        encoder_data.vel_e4 = LS7366R_GetVelocity(ENC_CS4, dt);
-
-        encoder_data.last_update = now;
-      }
       continue;
     }
     if (agv_state.run_mode == MODE_5_CALIBRATE_MOTORS) {
@@ -1482,6 +1466,19 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       debug_line_binary[i] = (val & (1 << (15 - i))) ? '1' : '0';
     }
     debug_line_binary[16] = '\0';
+
+    // Luôn cập nhật trạng thái Encoder mỗi 10ms (dt = 0.01s)
+    encoder_data.count_e1 = LS7366R_ReadCounter(ENC_CS1);
+    encoder_data.count_e2 = LS7366R_ReadCounter(ENC_CS2);
+    encoder_data.count_e3 = LS7366R_ReadCounter(ENC_CS3);
+    encoder_data.count_e4 = LS7366R_ReadCounter(ENC_CS4);
+    
+    encoder_data.vel_e1 = LS7366R_GetVelocity(ENC_CS1, 0.01f);
+    encoder_data.vel_e2 = LS7366R_GetVelocity(ENC_CS2, 0.01f);
+    encoder_data.vel_e3 = LS7366R_GetVelocity(ENC_CS3, 0.01f);
+    encoder_data.vel_e4 = LS7366R_GetVelocity(ENC_CS4, 0.01f);
+    
+    encoder_data.last_update = HAL_GetTick();
 
     // Ngắt PID mỗi 10ms - Chỉ điều khiển Motor nếu cờ được bật
     if (agv_state.follow_line_enable) {
