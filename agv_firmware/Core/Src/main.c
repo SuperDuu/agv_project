@@ -231,7 +231,7 @@ static bool AGV_HandleMode5Calibration(void) {
     }
     break;
   case 5:
-    AGV_TurnLeft_IMU(&h_agv, 400, 0.70f);
+    AGV_TurnLeft_IMU(&h_agv, 800, 0.70f);
     mode5_calib_state++;
     mode5_calib_start_time = HAL_GetTick();
     break;
@@ -369,7 +369,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     return;
 
   if (agv_state.run_mode == MODE_6_TEST_TURN_RIGHT) {
-    AGV_TurnRight_IMU(&h_agv, 400, 0.70f);
+    AGV_TurnRight_IMU(&h_agv, 800, 0.70f);
     agv_state.last_leave_intersection_time = HAL_GetTick();
     agv_state.is_at_intersection = false;
     agv_state.follow_line_enable = true;
@@ -424,10 +424,10 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
         Routing_GetHeading(&factory_map, agv_state.current_node, next_node);
     int diff = (target_heading - *current_heading + 4) % 4;
 
-    uint32_t fwd_delay = 400;
+    uint32_t fwd_delay = 800;
     float search_ratio = 0.70f;
     if (agv_state.current_node == 8 && next_node == 7) {
-        fwd_delay = 350;
+        fwd_delay = 550;
         search_ratio = 0.50f;
     }
 
@@ -630,10 +630,10 @@ int main(void)
                 Routing_GetHeading(&factory_map, agv_state.current_node,
                                    next_node);
             int diff = (target_heading - current_heading + 4) % 4;
-            uint32_t fwd_delay = 400;
+            uint32_t fwd_delay = 800;
             float search_ratio = 0.70f;
             if (agv_state.current_node == 8 && next_node == 7) {
-                fwd_delay = 350;
+                fwd_delay = 550;
                 search_ratio = 0.50f;
             }
 

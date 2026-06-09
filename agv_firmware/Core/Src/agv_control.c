@@ -332,7 +332,7 @@ static void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv,
   // Quãng đường không đổi = Tốc độ x Thời gian
   // Ở vận tốc 250, thời gian là reference_time_at_250.
   uint32_t dynamic_delay =
-      (uint32_t)((600.0f * (float)reference_time_at_250) / speed);
+      (uint32_t)((250.0f * (float)reference_time_at_250) / speed);
 
   if (dynamic_delay > 2000)
     dynamic_delay = 2000; // Giới hạn an toàn
