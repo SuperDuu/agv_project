@@ -3,6 +3,16 @@
 // Biến lưu trữ giá trị counter trước đó để tính toán vận tốc
 static int32_t prev_counter[4] = {0, 0, 0, 0};
 
+static int32_t LS7366R_ReadSigned32(const uint8_t *rxBuf) {
+    if (rxBuf == NULL)
+        return 0;
+
+    return (int32_t)(((uint32_t)rxBuf[1] << 24) |
+                     ((uint32_t)rxBuf[2] << 16) |
+                     ((uint32_t)rxBuf[3] << 8)  |
+                     ((uint32_t)rxBuf[4]));
+}
+
 /**
  * @brief  Tạo delay ngắn khoảng 1us để đáp ứng timing của LS7366R và tốc độ slew rate của GPIO (LOW speed).
  *         Với STM32H5 (250MHz), mỗi chu kỳ máy là 4ns.
@@ -73,26 +83,25 @@ static void CS_High(uint8_t csPin) {
  * @brief Khởi tạo 1 chip LS7366R với cấu hình cho MDR0 và MDR1.
  */
 void LS7366R_Init(uint8_t csPin, uint8_t mdr0, uint8_t mdr1) {
-    // Đảm bảo CS ở mức HIGH trước khi bắt đầu
     CS_High(csPin);
 
-    // Xóa counter và status register
+    // Đọc status 1 lần để flush giao tiếp trước khi cấu hình
+    (void)LS7366R_ReadStatus(csPin);
+
     LS7366R_ClearCounter(csPin);
-    
+
     uint8_t txStr[1] = {LS_CLEAR_STR};
     uint8_t rxBuf[1];
     CS_Low(csPin);
     HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txStr, rxBuf, 1, HAL_MAX_DELAY);
     CS_High(csPin);
 
-    // Ghi cấu hình vào MDR0
     uint8_t txMdr0[2] = {LS_WRITE_MDR0, mdr0};
     uint8_t rxMdr0[2];
     CS_Low(csPin);
     HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txMdr0, rxMdr0, 2, HAL_MAX_DELAY);
     CS_High(csPin);
 
-    // Ghi cấu hình vào MDR1
     uint8_t txMdr1[2] = {LS_WRITE_MDR1, mdr1};
     uint8_t rxMdr1[2];
     CS_Low(csPin);
@@ -122,16 +131,12 @@ void LS7366R_InitAll(void) {
 int32_t LS7366R_ReadCounter(uint8_t csPin) {
     uint8_t txBuf[5] = {LS_READ_CNTR, 0x00, 0x00, 0x00, 0x00};
     uint8_t rxBuf[5] = {0};
-    
+
     CS_Low(csPin);
     HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txBuf, rxBuf, 5, HAL_MAX_DELAY);
     CS_High(csPin);
 
-    int32_t count = ((uint32_t)rxBuf[1] << 24) | 
-                    ((uint32_t)rxBuf[2] << 16) | 
-                    ((uint32_t)rxBuf[3] << 8)  | 
-                    ((uint32_t)rxBuf[4]);
-    return count;
+    return LS7366R_ReadSigned32(rxBuf);
 }
 
 /**
@@ -139,25 +144,21 @@ int32_t LS7366R_ReadCounter(uint8_t csPin) {
  */
 uint32_t LS7366R_TestSPI(uint8_t csPin) {
     uint32_t test_val = 0x12345678;
-    
-    // 1. Ghi vào DTR
+
     uint8_t txDTR[5] = {LS_WRITE_DTR, 0x12, 0x34, 0x56, 0x78};
-    uint8_t rxDTR[5];
+    uint8_t rxDTR[5] = {0};
     CS_Low(csPin);
     HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txDTR, rxDTR, 5, HAL_MAX_DELAY);
     CS_High(csPin);
 
-    // 2. Chuyển DTR sang CNTR
     uint8_t txLoad[1] = {LS_LOAD_CNTR};
-    uint8_t rxLoad[1];
+    uint8_t rxLoad[1] = {0};
     CS_Low(csPin);
     HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txLoad, rxLoad, 1, HAL_MAX_DELAY);
     CS_High(csPin);
 
-    // 3. Đọc lại CNTR
     int32_t read_val = LS7366R_ReadCounter(csPin);
-
-    return (uint32_t)read_val;
+    return ((uint32_t)read_val == test_val) ? test_val : 0U;
 }
 
 /**
@@ -165,7 +166,7 @@ uint32_t LS7366R_TestSPI(uint8_t csPin) {
  */
 void LS7366R_ClearCounter(uint8_t csPin) {
     uint8_t txBuf[1] = {LS_CLEAR_CNTR};
-    uint8_t rxBuf[1];
+    uint8_t rxBuf[1] = {0};
     CS_Low(csPin);
     HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txBuf, rxBuf, 1, HAL_MAX_DELAY);
     CS_High(csPin);
@@ -177,11 +178,11 @@ void LS7366R_ClearCounter(uint8_t csPin) {
 uint8_t LS7366R_ReadStatus(uint8_t csPin) {
     uint8_t txBuf[2] = {LS_READ_STR, 0x00};
     uint8_t rxBuf[2] = {0};
-    
+
     CS_Low(csPin);
     HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txBuf, rxBuf, 2, HAL_MAX_DELAY);
     CS_High(csPin);
-    
+
     return rxBuf[1];
 }
 
@@ -207,11 +208,7 @@ int32_t LS7366R_ReadOTR(uint8_t csPin) {
     HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txBuf, rxBuf, 5, HAL_MAX_DELAY);
     CS_High(csPin);
 
-    int32_t count = ((uint32_t)rxBuf[1] << 24) | 
-                    ((uint32_t)rxBuf[2] << 16) | 
-                    ((uint32_t)rxBuf[3] << 8)  | 
-                    ((uint32_t)rxBuf[4]);
-    return count;
+    return LS7366R_ReadSigned32(rxBuf);
 }
 
 /**
