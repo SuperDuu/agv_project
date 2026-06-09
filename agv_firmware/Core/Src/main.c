@@ -426,12 +426,12 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
         Routing_GetHeading(&factory_map, agv_state.current_node, next_node);
     int diff = (target_heading - *current_heading + 4) % 4;
 
-    uint32_t fwd_delay = 800;
-    float search_ratio = 0.70f;
+    uint32_t fwd_delay = 1600;
+    // Nâng lên 0.95f (tức là quay 95% góc mới được tìm line) để CHẮC CHẮN thoát line cũ
+    float search_ratio = 0.95f; 
     if (agv_state.current_node == 8 && next_node == 7) {
-      fwd_delay = 700;
-      // Trả lại 0.70f để không bị nhận nhầm vạch chéo ngã tư
-      search_ratio = 0.70f;
+      fwd_delay = 1400;
+      search_ratio = 0.95f;
     }
 
     agv_state.follow_line_enable = false;
@@ -636,12 +636,12 @@ int main(void) {
             AGV_Heading_t target_heading = Routing_GetHeading(
                 &factory_map, agv_state.current_node, next_node);
             int diff = (target_heading - current_heading + 4) % 4;
-            uint32_t fwd_delay = 800;
-            float search_ratio = 0.70f;
+            uint32_t fwd_delay = 1600;
+            // Nâng lên 0.95f (tức là quay 95% góc mới được tìm line) để CHẮC CHẮN thoát line cũ
+            float search_ratio = 0.95f; 
             if (agv_state.current_node == 8 && next_node == 7) {
-              fwd_delay = 700;
-              // Trả lại 0.70f để không bị nhận nhầm vạch chéo ngã tư
-              search_ratio = 0.70f;
+              fwd_delay = 1400;
+              search_ratio = 0.95f;
             }
 
             AGV_Action_t next_action = (AGV_Action_t)diff;
