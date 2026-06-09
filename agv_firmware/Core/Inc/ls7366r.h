@@ -27,6 +27,7 @@ extern SPI_HandleTypeDef hspi3;
 #define LS_READ_OTR    0x68
 #define LS_READ_STR    0x70
 #define LS_LOAD_OTR    0xE8  // Transfer CNTR to OTR
+#define LS_LOAD_CNTR   0xE0  // Transfer DTR to CNTR
 #define LS_CLEAR_CNTR  0x20
 #define LS_CLEAR_STR   0x30
 
@@ -51,6 +52,8 @@ typedef struct {
 } LS7366R_EncoderData_t;
 
 // Function prototypes
+#include <stdbool.h>
+bool LS7366R_TestSPI(uint8_t csPin);
 void LS7366R_Init(uint8_t csPin, uint8_t mdr0, uint8_t mdr1);
 void LS7366R_InitAll(void);
 int32_t LS7366R_ReadCounter(uint8_t csPin);

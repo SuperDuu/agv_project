@@ -138,6 +138,32 @@ int32_t LS7366R_ReadCounter(uint8_t csPin) {
 }
 
 /**
+ * @brief Kiểm tra giao tiếp SPI bằng cách ghi/đọc thanh ghi.
+ */
+bool LS7366R_TestSPI(uint8_t csPin) {
+    uint32_t test_val = 0x12345678;
+    
+    // 1. Ghi vào DTR
+    uint8_t txDTR[5] = {LS_WRITE_DTR, 0x12, 0x34, 0x56, 0x78};
+    uint8_t rxDTR[5];
+    CS_Low(csPin);
+    HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txDTR, rxDTR, 5, HAL_MAX_DELAY);
+    CS_High(csPin);
+
+    // 2. Chuyển DTR sang CNTR
+    uint8_t txLoad[1] = {LS_LOAD_CNTR};
+    uint8_t rxLoad[1];
+    CS_Low(csPin);
+    HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txLoad, rxLoad, 1, HAL_MAX_DELAY);
+    CS_High(csPin);
+
+    // 3. Đọc lại CNTR
+    int32_t read_val = LS7366R_ReadCounter(csPin);
+
+    return (read_val == test_val);
+}
+
+/**
  * @brief Xóa trắng giá trị Counter về 0.
  */
 void LS7366R_ClearCounter(uint8_t csPin) {

@@ -35,7 +35,8 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+volatile bool spi_test_result_e1 = false;
+volatile bool spi_test_result_e2 = false;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -521,6 +522,8 @@ int main(void)
 
   AGV_Init(&h_agv, &m_left, &m_right, &line_ss, &pid_ctrl, 300.0f);
   LS7366R_InitAll();
+  spi_test_result_e1 = LS7366R_TestSPI(1);
+  spi_test_result_e2 = LS7366R_TestSPI(2);
 
   HMI_Init(&huart2, 1); // Đổi HMI sang USART2 (RS485_1)
   
