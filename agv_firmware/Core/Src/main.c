@@ -199,6 +199,104 @@ void Load_Factory_Map(void) {
   Map_AddEdge(&factory_map, N14, N11, 1, HEAD_WEST);
 }
 
+static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
+                                          uint16_t *last_processed_node,
+                                          uint16_t *path_length,
+                                          AGV_Heading_t *current_heading) {
+  if (!agv_state.is_at_intersection)
+    return;
+
+  if (agv_state.run_mode == MODE_2_LINE_INTERSECTION)
+    return;
+
+  if (agv_state.run_mode == MODE_6_TEST_TURN_RIGHT) {
+    AGV_TurnRight_IMU(&h_agv);
+    agv_state.last_leave_intersection_time = HAL_GetTick();
+    agv_state.is_at_intersection = false;
+    agv_state.follow_line_enable = true;
+    return;
+  }
+
+  if (agv_state.run_mode == MODE_7_DEBUG_NO_QR) {
+    if (*path_length > 0 && agv_state.path_index < *path_length - 1) {
+      *pending_qr_node = current_path[agv_state.path_index + 1];
+    } else {
+      *pending_qr_node = agv_state.destination_node;
+    }
+  }
+
+  if (*pending_qr_node == 0xFFFF)
+    return;
+
+  uint16_t read_node_id = *pending_qr_node;
+  *pending_qr_node = 0xFFFF;
+  *last_processed_node = read_node_id;
+  agv_state.is_at_intersection = false;
+
+  if (read_node_id == agv_state.destination_node) {
+    agv_state.current_node = read_node_id;
+    agv_state.path_index = 0;
+    agv_state.follow_line_enable = false;
+    AGV_Stop(&h_agv);
+    return;
+  }
+
+  if (*path_length > 0 && agv_state.path_index < *path_length - 1 &&
+      read_node_id == current_path[agv_state.path_index + 1]) {
+    agv_state.path_index++;
+    agv_state.current_node = read_node_id;
+  } else if (read_node_id != agv_state.current_node) {
+    agv_state.current_node = read_node_id;
+    bool found_path = Routing_Dijkstra(&factory_map, agv_state.current_node,
+                                       agv_state.destination_node, current_path,
+                                       path_length);
+    if (found_path) {
+      agv_state.path_index = 0;
+    } else {
+      agv_state.follow_line_enable = false;
+      AGV_Stop(&h_agv);
+      return;
+    }
+  }
+
+  if (*path_length > 0 && agv_state.path_index < *path_length - 1) {
+    uint16_t next_node = current_path[agv_state.path_index + 1];
+    AGV_Heading_t target_heading =
+        Routing_GetHeading(&factory_map, agv_state.current_node, next_node);
+    int diff = (target_heading - *current_heading + 4) % 4;
+
+    agv_state.follow_line_enable = false;
+    switch ((AGV_Action_t)diff) {
+    case ACT_TURN_LEFT:
+      h_agv.direction = 1;
+      AGV_TurnLeft_IMU(&h_agv);
+      break;
+    case ACT_TURN_RIGHT:
+      h_agv.direction = 1;
+      AGV_TurnRight_IMU(&h_agv);
+      break;
+    case ACT_STRAIGHT:
+      h_agv.direction = 1;
+      Motor_SetSpeed(h_agv.motor_left, (int16_t)h_agv.base_speed);
+      Motor_SetSpeed(h_agv.motor_right, (int16_t)h_agv.base_speed);
+      HAL_Delay(300);
+      break;
+    case ACT_BACKWARD:
+      h_agv.direction = 1;
+      AGV_Turn180_IMU(&h_agv);
+      break;
+    case ACT_STOP:
+    default:
+      AGV_Stop(&h_agv);
+      break;
+    }
+
+    *current_heading = target_heading;
+    agv_state.last_leave_intersection_time = HAL_GetTick();
+    agv_state.follow_line_enable = true;
+  }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -553,116 +651,8 @@ int main(void)
     }
 
     if (agv_state.is_at_intersection) {
-      if (agv_state.run_mode == MODE_2_LINE_INTERSECTION) {
-        continue;
-      }
-
-      if (agv_state.run_mode == MODE_6_TEST_TURN_RIGHT) {
-        AGV_TurnRight_IMU(&h_agv);
-        agv_state.last_leave_intersection_time = HAL_GetTick();
-        agv_state.is_at_intersection = false;
-        agv_state.follow_line_enable = true;
-        continue;
-      }
-
-      if (agv_state.run_mode == MODE_7_DEBUG_NO_QR) {
-        if (path_length > 0 && agv_state.path_index < path_length - 1) {
-          pending_qr_node = current_path[agv_state.path_index + 1];
-        } else {
-          pending_qr_node = agv_state.destination_node;
-        }
-      }
-
-      if (pending_qr_node != 0xFFFF) {
-        uint16_t read_node_id = pending_qr_node;
-        pending_qr_node = 0xFFFF;
-        last_processed_node = read_node_id;
-        agv_state.is_at_intersection = false;
-
-        if (read_node_id == agv_state.destination_node) {
-          // Đến đích -> Cập nhật vị trí hiện tại và dừng chờ lệnh mới
-          agv_state.current_node = read_node_id;
-          agv_state.path_index = 0;
-          agv_state.follow_line_enable = false;
-          AGV_Stop(&h_agv);
-          continue;
-        }
-
-        if (path_length > 0 && agv_state.path_index < path_length - 1 &&
-            read_node_id == current_path[agv_state.path_index + 1]) {
-          agv_state.path_index++;
-          agv_state.current_node = read_node_id;
-        } else if (read_node_id != agv_state.current_node) {
-          agv_state.current_node = read_node_id;
-          bool found_path =
-              Routing_Dijkstra(&factory_map, agv_state.current_node, agv_state.destination_node,
-                               current_path, &path_length);
-          if (found_path) {
-            agv_state.path_index = 0;
-          } else {
-            agv_state.follow_line_enable = false;
-            AGV_Stop(&h_agv);
-            continue;
-          }
-        }
-
-        if (path_length > 0 && agv_state.path_index < path_length - 1) {
-          uint16_t next_node = current_path[agv_state.path_index + 1];
-          AGV_Heading_t target_heading =
-              Routing_GetHeading(&factory_map, agv_state.current_node, next_node);
-
-          int diff = (target_heading - current_heading + 4) % 4;
-          AGV_Action_t next_action = (AGV_Action_t)diff;
-
-          agv_state.follow_line_enable = false;
-
-          switch (next_action) {
-          case ACT_TURN_LEFT:
-            h_agv.direction = 1;
-            AGV_TurnLeft_IMU(&h_agv);
-            break;
-          case ACT_TURN_RIGHT:
-            h_agv.direction = 1;
-            AGV_TurnRight_IMU(&h_agv);
-            break;
-          case ACT_STRAIGHT:
-            h_agv.direction = 1;
-            Motor_SetSpeed(h_agv.motor_left, (int16_t)h_agv.base_speed);
-            Motor_SetSpeed(h_agv.motor_right, (int16_t)h_agv.base_speed);
-            HAL_Delay(300);
-            break;
-          case ACT_BACKWARD:
-            h_agv.direction = 1; // Giữ hướng tiến tới
-            AGV_Turn180_IMU(&h_agv);
-            break;
-          case ACT_STOP:
-            AGV_Stop(&h_agv);
-            break;
-          default:
-            break;
-          }
-
-          // Cập nhật lại hướng hiện tại sau khi đã xoay xong (kể cả quay 180)
-          current_heading = target_heading;
-          agv_state.last_leave_intersection_time = HAL_GetTick();
-          agv_state.follow_line_enable = true;
-        }
-      } else if (HAL_GetTick() - agv_state.intersection_time > 2000) {
-        AGV_Stop(&h_agv);
-        agv_state.is_at_intersection = false;
-
-        if (agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR) {
-          // Trong chế độ Test, nếu không cắm QR thì tự động nhả phanh đi tiếp
-          // để người dùng có thể test các ngã tư tiếp theo mà không bị treo
-          // cứng
-          agv_state.follow_line_enable = true;
-          agv_state.last_leave_intersection_time = HAL_GetTick();
-        } else {
-          // Chạy thật: Hỏng camera, rách tem QR, hoặc chạm nhầm vạch rác
-          agv_state.follow_line_enable = false; // Tắt xe chờ xử lý sự cố
-                                          // Bật còi/đèn nháy báo lỗi tại đây
-        }
-      }
+      AGV_HandleIntersectionRouting(&pending_qr_node, &last_processed_node,
+                                    &path_length, &current_heading);
     }
   }
   /* USER CODE END 3 */
