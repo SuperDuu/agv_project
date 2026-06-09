@@ -94,7 +94,7 @@ typedef struct {
 /* USER CODE BEGIN Exported constants */
 extern float Delta_t;
 
-#define AGV_LINE_RECOVERY_TIME 600
+#define AGV_LINE_RECOVERY_TIME 1500
 #define AGV_TURN_BLIND_TIME 800
 
 /* USER CODE END Exported constants */
