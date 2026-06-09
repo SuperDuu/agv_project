@@ -32,8 +32,8 @@ extern SPI_HandleTypeDef hspi3;
 #define LS_CLEAR_STR   0x30
 
 // Recommended MDR0 config for Hall signals: x4 quadrature, free running, no index, filter off
-// TUNE: Change filter clock if noise is present (e.g. 0x43 for div1, 0x83 for div2)
-#define LS_MDR0_QUAD_X4_FREE 0x03
+// Change to non-quadrature (A=clk, B=dir) to test if Hall signals reach the chip
+#define LS_MDR0_QUAD_X4_FREE 0x00
 
 // Recommended MDR1 config: 4-byte counter, enable counting, no flags
 // TUNE: Change counter byte length if needed
