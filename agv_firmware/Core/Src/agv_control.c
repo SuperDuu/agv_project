@@ -194,12 +194,14 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     lost_line_time = 0;
   }
 
-  // Intersection check: Bit 15 and Bit 0 (Mắt ngoài cùng) VÀ Mắt giữa phải đang bám line (CENTER_MASK)
-  // Nếu bị lắc đuôi (wobble), mắt ngoài cùng có thể đè vạch nhưng mắt giữa sẽ bị trật vạch!
-  // Do đó, ngã tư thật sự = Mắt ngoài (trái hoặc phải) chạm vạch + Mắt giữa chạm vạch.
+  // Intersection check: Bit 15 and Bit 0 (Mắt ngoài cùng) VÀ Mắt giữa phải đang
+  // bám line (CENTER_MASK) Nếu bị lắc đuôi (wobble), mắt ngoài cùng có thể đè
+  // vạch nhưng mắt giữa sẽ bị trật vạch! Do đó, ngã tư thật sự = Mắt ngoài
+  // (trái hoặc phải) chạm vạch + Mắt giữa chạm vạch.
   if (agv_state.run_mode != MODE_1_LINE_ONLY &&
       agv_state.run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
-    if (((line_val & 0x8001) != 0x8001) && ((line_val & CENTER_MASK) != CENTER_MASK) &&
+    if (((line_val & 0x8001) != 0x8001) &&
+        ((line_val & CENTER_MASK) != CENTER_MASK) &&
         (HAL_GetTick() - agv_state.last_leave_intersection_time >
          AGV_LINE_RECOVERY_TIME)) {
       // AGV_Stop(hagv); // KHÔNG DỪNG LẠI
@@ -356,9 +358,11 @@ void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
-  AGV_BlindForwardDynamic(hagv, 800);
+  AGV_BlindForwardDynamic(hagv, 400);
 
-  // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
+  AGV_Stop(hagv);
+  HAL_Delay(300);
+
   Turn_Time_Based(hagv, -agv_config.turn_speed, agv_config.turn_speed,
                   agv_config.time_turn_90);
 }
@@ -367,9 +371,11 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
-  AGV_BlindForwardDynamic(hagv, 800);
+  AGV_BlindForwardDynamic(hagv, 400);
 
-  // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
+  AGV_Stop(hagv);
+  HAL_Delay(300);
+
   Turn_Time_Based(hagv, agv_config.turn_speed, -agv_config.turn_speed,
                   agv_config.time_turn_90);
 }
@@ -480,13 +486,9 @@ void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 700);
+  AGV_BlindForwardDynamic(hagv, 800);
 
-  // Phải dừng lại triệt tiêu quán tính! Ở tốc độ 500, đảo chiều motor ngay lập tức sẽ gây sốc cơ khí (khựng mạnh)
-  // và làm trượt bánh, văng khỏi tâm ngã tư dẫn đến quay tròn vì không tìm thấy line!
-  AGV_Stop(hagv);
-  HAL_Delay(300);
-
+  // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 80.0f, -agv_config.turn_speed, agv_config.turn_speed,
                  enable_search);
 }
@@ -497,11 +499,9 @@ void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 700);
+  AGV_BlindForwardDynamic(hagv, 800);
 
-  AGV_Stop(hagv);
-  HAL_Delay(300);
-
+  // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 70.0f, agv_config.turn_speed, -agv_config.turn_speed,
                  enable_search);
 }
@@ -512,10 +512,9 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  // Đối với quay đầu, không tiến tới để tránh văng tâm
-  AGV_Stop(hagv);
-  HAL_Delay(300);
+  AGV_BlindForwardDynamic(hagv, 100);
 
+  // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed,
                  enable_search);
 }
