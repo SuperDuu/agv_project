@@ -78,7 +78,7 @@ Motor_HandleTypeDef m_left, m_right;
 LineSensor_HandleTypeDef line_ss;
 Pid_data pid_ctrl;
 QR50_Handler_t qr50;
-LS7366R_EncoderData_t encoder_data;
+volatile LS7366R_EncoderData_t encoder_data;
 AGV_Map_t factory_map;
 AGV_Heading_t current_heading = HEAD_NORTH;
 extern AGV_State_t agv_state;
