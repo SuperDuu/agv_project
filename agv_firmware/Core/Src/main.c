@@ -126,6 +126,50 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static void AGV_HandleEsp32Safety(AGV_HandleTypeDef *hagv,
+                                  const ESP32_SensorData_t *safe_esp32_data) {
+  if (safe_esp32_data == NULL || hagv == NULL)
+    return;
+
+  if (!safe_esp32_data->IsConnected)
+    return;
+
+  if (safe_esp32_data->Yaw == 65535.0f || safe_esp32_data->ObstacleDistance == 0xFFFF) {
+    if (agv_state.follow_line_enable) {
+      agv_state.follow_line_enable = false;
+      AGV_Stop(hagv);
+    }
+  }
+}
+
+static void AGV_ServiceEsp32Request(uint32_t *last_esp32_req_time) {
+  if (last_esp32_req_time == NULL)
+    return;
+
+  if (HAL_GetTick() - *last_esp32_req_time > 50) {
+    *last_esp32_req_time = HAL_GetTick();
+    ESP32_RequestData(agv_state.current_node);
+  }
+}
+
+static void AGV_ServiceHeartbeat(uint32_t *last_led_time) {
+  if (last_led_time == NULL)
+    return;
+
+  if (HAL_GetTick() - *last_led_time <= 500)
+    return;
+
+  *last_led_time = HAL_GetTick();
+  HAL_GPIO_TogglePin(SYS_LED1_GPIO_Port, SYS_LED1_Pin);
+  __HAL_UART_CLEAR_FLAG(&huart5, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF | UART_CLEAR_PEF);
+
+  if (HAL_GetTick() - esp32_data.LastUpdateTick > 2000) {
+    extern uint8_t esp32_rx_buffer[15];
+    HAL_UART_AbortReceive(&huart5);
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart5, esp32_rx_buffer, sizeof(esp32_rx_buffer));
+  }
+}
+
 /**
  * @brief Toggle all Output pins for hardware verification
  * @note Excludes Input pins (B_InX, SDO, RX) to avoid electrical conflict
@@ -389,120 +433,75 @@ int main(void)
 
   /* USER CODE BEGIN 3 */
     HMI_Process();
-    
+
     ESP32_SensorData_t safe_esp32_data = ESP32_GetSafeData();
-    // ==========================================
-    // FAIL-SAFE: KIỂM TRA PHẦN CỨNG CẢM BIẾN
-    // ==========================================
-    if (safe_esp32_data.IsConnected) {
-      if (safe_esp32_data.Yaw == 65535.0f || safe_esp32_data.ObstacleDistance == 0xFFFF) {
-        // Nếu nhận mã lỗi từ ESP32 (đứt dây I2C BNO055 hoặc VL53L5)
-        if (agv_state.follow_line_enable) {
-          agv_state.follow_line_enable = false;
-          AGV_Stop(&h_agv);
-        }
-        // Bỏ qua các logic di chuyển bên dưới nếu đang lỗi
-        continue;
-      }
-      
-      // LOGIC CHỐNG VA CHẠM (COLLISION AVOIDANCE) BẰNG SIÊU ÂM
-      // Nếu có vật cản gần hơn 300mm (30cm), lập tức phanh khẩn cấp
-      // CHỈ kiểm tra khi xe đang đi thẳng (sai số vạch <= 1.5) để tránh bắt nhầm tường lúc đang cua/lắc đuôi
-//      if (safe_esp32_data.ObstacleDistance != 65534 && safe_esp32_data.ObstacleDistance < 300) {
-//        if (agv_state.follow_line_enable && fabs(h_agv.current_error) <= 1.5f) {
-//          agv_state.follow_line_enable = false;
-//          AGV_Stop(&h_agv);
-//        }
-//      }
-    }
-    
-    // Yêu cầu dữ liệu từ ESP32 mỗi 50ms
-    if (HAL_GetTick() - last_esp32_req_time > 50) {
-      last_esp32_req_time = HAL_GetTick();
-      // Gửi agv_state.current_node hiện tại xuống cho ESP32
-      ESP32_RequestData(agv_state.current_node);
+    AGV_HandleEsp32Safety(&h_agv, &safe_esp32_data);
+    if (safe_esp32_data.IsConnected &&
+        (safe_esp32_data.Yaw == 65535.0f || safe_esp32_data.ObstacleDistance == 0xFFFF)) {
+      continue;
     }
 
-    // Nháy đèn Heartbeat mỗi 500ms để báo hiệu mạch không bị treo (HardFault)
-    static uint32_t last_led_time = 0;
-    if (HAL_GetTick() - last_led_time > 500) {
-      last_led_time = HAL_GetTick();
-      HAL_GPIO_TogglePin(SYS_LED1_GPIO_Port, SYS_LED1_Pin);
-      
-      // Auto-recovery UART5: Clear các cờ lỗi phòng trường hợp ngắt bị miss
-      __HAL_UART_CLEAR_FLAG(&huart5, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF | UART_CLEAR_PEF);
-      
-      // Nếu DMA đột ngột bị chết (không nhận được gói nào trong 2 giây), force restart
-      if (HAL_GetTick() - esp32_data.LastUpdateTick > 2000) {
-        extern uint8_t esp32_rx_buffer[15];
-        HAL_UART_AbortReceive(&huart5);
-        HAL_UARTEx_ReceiveToIdle_DMA(&huart5, esp32_rx_buffer, sizeof(esp32_rx_buffer));
-      }
-    }
-    
-    // Bắt lệnh mới từ ESP32 (Firebase / Web đẩy xuống)
+    AGV_ServiceEsp32Request(&last_esp32_req_time);
+    AGV_ServiceHeartbeat(&last_led_time);
+
     if (safe_esp32_data.HasNewCommand) {
-      esp32_data.HasNewCommand = false; // Clear real flag
+      esp32_data.HasNewCommand = false;
       esp32_data.TargetNode = safe_esp32_data.TargetNode;
       esp32_data.H_Command = safe_esp32_data.H_Command;
       if (safe_esp32_data.TargetNode != agv_state.destination_node) {
         agv_state.destination_node = safe_esp32_data.TargetNode;
-        agv_state.need_recalculate_path = true; // Kích hoạt sinh quỹ đạo
-        // TODO: Lưu safe_esp32_data.H_Command để xử lý nâng hạ sau
+        agv_state.need_recalculate_path = true;
       }
     }
-    
+
     HMI_SyncData();
-    
+
     if (agv_state.need_recalculate_path) {
       agv_state.need_recalculate_path = false;
-      
-      // LOGIC SINH QUỸ ĐẠO ĐỘNG (Dynamic Trajectory)
-      if (agv_state.follow_line_enable && path_length > 0 && agv_state.path_index < path_length - 1) {
-          // 1. Xe đang chạy giữa chừng, lấy ngã tư tiếp theo làm điểm bắt đầu
-          uint16_t next_node = current_path[agv_state.path_index + 1];
-          uint16_t new_path[MAX_NODES];
-          uint16_t new_len = 0;
-          
-          bool found = Routing_Dijkstra(&factory_map, next_node, agv_state.destination_node, new_path, &new_len);
-          if (found) {
-              // 2. Nối mảng: Đè từ vị trí next_node (agv_state.path_index + 1) bằng mảng mới
-              for (uint16_t i = 0; i < new_len; i++) {
-                  if (agv_state.path_index + 1 + i < MAX_NODES) {
-                      current_path[agv_state.path_index + 1 + i] = new_path[i];
-                  }
-              }
-              path_length = agv_state.path_index + 1 + new_len;
-              // agv_state.path_index giữ nguyên, xe sẽ đi nốt đến next_node và rẽ theo đường mới!
+
+      if (agv_state.follow_line_enable && path_length > 0 &&
+          agv_state.path_index < path_length - 1) {
+        uint16_t next_node = current_path[agv_state.path_index + 1];
+        uint16_t new_path[MAX_NODES];
+        uint16_t new_len = 0;
+
+        bool found = Routing_Dijkstra(&factory_map, next_node,
+                                      agv_state.destination_node, new_path,
+                                      &new_len);
+        if (found) {
+          for (uint16_t i = 0; i < new_len; i++) {
+            if (agv_state.path_index + 1 + i < MAX_NODES) {
+              current_path[agv_state.path_index + 1 + i] = new_path[i];
+            }
           }
+          path_length = agv_state.path_index + 1 + new_len;
+        }
       } else {
-          // Xe đang đứng yên hoặc chưa có đường
-          bool found = Routing_Dijkstra(&factory_map, agv_state.current_node, agv_state.destination_node, current_path, &path_length);
-          if (found) {
-            agv_state.path_index = 0;
-            
-            // KIỂM TRA HƯỚNG VÀ XOAY NGAY LẬP TỨC NẾU CẦN THIẾT TRƯỚC KHI CHẠY
-            if (path_length > 1) {
-              uint16_t next_node = current_path[1];
-              AGV_Heading_t target_heading =
-                  Routing_GetHeading(&factory_map, agv_state.current_node, next_node);
-
-              int diff = (target_heading - current_heading + 4) % 4;
-              AGV_Action_t next_action = (AGV_Action_t)diff;
-
-              switch (next_action) {
-              case ACT_TURN_LEFT:
-                h_agv.direction = 1;
-                AGV_TurnLeft_IMU(&h_agv);
-                break;
-              case ACT_TURN_RIGHT:
-                h_agv.direction = 1;
-                AGV_TurnRight_IMU(&h_agv);
-                break;
-              case ACT_BACKWARD:
-                h_agv.direction = 1;
-                AGV_Turn180_IMU(&h_agv);
-                break;
+        bool found = Routing_Dijkstra(&factory_map, agv_state.current_node,
+                                      agv_state.destination_node, current_path,
+                                      &path_length);
+        if (found) {
+          agv_state.path_index = 0;
+          if (path_length > 1) {
+            uint16_t next_node = current_path[1];
+            AGV_Heading_t target_heading =
+                Routing_GetHeading(&factory_map, agv_state.current_node,
+                                   next_node);
+            int diff = (target_heading - current_heading + 4) % 4;
+            AGV_Action_t next_action = (AGV_Action_t)diff;
+            switch (next_action) {
+            case ACT_TURN_LEFT:
+              h_agv.direction = 1;
+              AGV_TurnLeft_IMU(&h_agv);
+              break;
+            case ACT_TURN_RIGHT:
+              h_agv.direction = 1;
+              AGV_TurnRight_IMU(&h_agv);
+              break;
+            case ACT_BACKWARD:
+              h_agv.direction = 1;
+              AGV_Turn180_IMU(&h_agv);
+              break;
               case ACT_STRAIGHT:
               case ACT_STOP:
               default:
