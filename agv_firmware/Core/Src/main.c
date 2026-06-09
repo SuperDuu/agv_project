@@ -441,11 +441,12 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
       break;
     case ACT_BACKWARD:
       h_agv.direction = 1;
-      // Đặc biệt: Tại các điểm 1, 4, 7 nếu quay 180 độ về 2, 5, 8 thì phải đi thẳng dò line thêm 1s
+      // Đặc biệt: Tại các điểm 1, 4, 7 nếu quay 180 độ về 2, 5, 8 thì phải đi thẳng dò line thêm 1.5s
+      // Chiều ngược lại (từ 2 về 1) sẽ KHÔNG chạy logic này.
       if ((agv_state.current_node == 1 && next_node == 2) ||
           (agv_state.current_node == 4 && next_node == 5) ||
           (agv_state.current_node == 7 && next_node == 8)) {
-          AGV_TrackLine_Sync(&h_agv, 1000);
+          AGV_TrackLine_Sync(&h_agv, 1500);
       }
       AGV_Turn180_IMU(&h_agv);
       break;
