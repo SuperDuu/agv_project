@@ -170,6 +170,115 @@ static void AGV_ServiceHeartbeat(uint32_t *last_led_time) {
   }
 }
 
+static bool AGV_HandleMode5Calibration(void) {
+  static uint8_t calib_state = 0;
+  static uint32_t state_start_time = 0;
+
+  if (!ESP32_GetSafeData().IsConnected) {
+    AGV_Stop(&h_agv);
+    return true;
+  }
+
+  agv_state.follow_line_enable = false;
+
+  if (state_start_time == 0)
+    state_start_time = HAL_GetTick();
+
+  uint32_t elapsed = HAL_GetTick() - state_start_time;
+
+  switch (calib_state) {
+  case 0:
+    AGV_Stop(&h_agv);
+    if (elapsed > 2000) {
+      calib_state++;
+      state_start_time = HAL_GetTick();
+    }
+    break;
+  case 1:
+    Motor_SetSpeed(&m_left, agv_config.turn_speed);
+    Motor_SetSpeed(&m_right, agv_config.turn_speed);
+    if (elapsed > agv_config.time_forward) {
+      calib_state++;
+      state_start_time = HAL_GetTick();
+    }
+    break;
+  case 2:
+    AGV_Stop(&h_agv);
+    if (elapsed > 1000) {
+      calib_state++;
+      state_start_time = HAL_GetTick();
+    }
+    break;
+  case 3:
+    Motor_SetSpeed(&m_left, -agv_config.turn_speed);
+    Motor_SetSpeed(&m_right, -agv_config.turn_speed);
+    if (elapsed > agv_config.time_forward) {
+      calib_state++;
+      state_start_time = HAL_GetTick();
+    }
+    break;
+  case 4:
+    AGV_Stop(&h_agv);
+    if (elapsed > 1000) {
+      calib_state++;
+      state_start_time = HAL_GetTick();
+    }
+    break;
+  case 5:
+    AGV_TurnLeft_IMU(&h_agv);
+    calib_state++;
+    state_start_time = HAL_GetTick();
+    break;
+  case 6:
+    AGV_Stop(&h_agv);
+    if (elapsed > 1000) {
+      calib_state++;
+      state_start_time = HAL_GetTick();
+    }
+    break;
+  case 7:
+    AGV_Turn180_IMU(&h_agv);
+    calib_state++;
+    state_start_time = HAL_GetTick();
+    break;
+  case 8:
+    AGV_Stop(&h_agv);
+    if (elapsed > 1000) {
+      calib_state++;
+      state_start_time = HAL_GetTick();
+    }
+    break;
+  case 9:
+    Motor_SetSpeed(&m_left, -agv_config.turn_speed);
+    Motor_SetSpeed(&m_right, agv_config.turn_speed);
+    if (elapsed > agv_config.time_turn_180) {
+      calib_state++;
+      state_start_time = HAL_GetTick();
+    }
+    break;
+  case 10:
+    AGV_Stop(&h_agv);
+    if (elapsed > 1000) {
+      calib_state++;
+      state_start_time = HAL_GetTick();
+    }
+    break;
+  case 11:
+    Motor_SetSpeed(&m_left, agv_config.turn_speed);
+    Motor_SetSpeed(&m_right, -agv_config.turn_speed);
+    if (elapsed > agv_config.time_turn_180) {
+      calib_state++;
+      state_start_time = HAL_GetTick();
+    }
+    break;
+  default:
+    AGV_Stop(&h_agv);
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * @brief Toggle all Output pins for hardware verification
  * @note Excludes Input pins (B_InX, SDO, RX) to avoid electrical conflict
@@ -519,113 +628,10 @@ int main(void)
           }
       }
     }
-    // STATE MACHINE CHUYÊN DỤNG CHO CALIBRATION (MODE 5)
     if (agv_state.run_mode == MODE_5_CALIBRATE_MOTORS) {
-      if (!ESP32_GetSafeData().IsConnected) {
-        AGV_Stop(&h_agv);
+      if (AGV_HandleMode5Calibration()) {
         continue;
       }
-
-      agv_state.follow_line_enable = false;
-      static uint8_t calib_state = 0;
-      static uint32_t state_start_time = 0;
-
-      if (state_start_time == 0)
-        state_start_time = HAL_GetTick();
-      uint32_t elapsed = HAL_GetTick() - state_start_time;
-
-      switch (calib_state) {
-      case 0:
-        AGV_Stop(&h_agv);
-        if (elapsed > 2000) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
-        break;
-      case 1:
-        Motor_SetSpeed(&m_left, agv_config.turn_speed);
-        Motor_SetSpeed(&m_right, agv_config.turn_speed);
-        if (elapsed > agv_config.time_forward) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
-        break;
-      case 2:
-        AGV_Stop(&h_agv);
-        if (elapsed > 1000) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
-        break;
-      case 3:
-        Motor_SetSpeed(&m_left, -agv_config.turn_speed);
-        Motor_SetSpeed(&m_right, -agv_config.turn_speed);
-        if (elapsed > agv_config.time_forward) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
-        break;
-      case 4:
-        AGV_Stop(&h_agv);
-        if (elapsed > 1000) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
-        break;
-      case 5:
-        // Đổi sang dùng IMU để test
-        AGV_TurnLeft_IMU(&h_agv);
-        calib_state++;
-        state_start_time = HAL_GetTick();
-        break;
-      case 6:
-        AGV_Stop(&h_agv);
-        if (elapsed > 1000) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
-        break;
-      case 7:
-        // Đổi sang dùng IMU để test
-        AGV_Turn180_IMU(&h_agv);
-        calib_state++;
-        state_start_time = HAL_GetTick();
-        break;
-      case 8:
-        AGV_Stop(&h_agv);
-        if (elapsed > 1000) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
-        break;
-      case 9:
-        Motor_SetSpeed(&m_left, -agv_config.turn_speed);
-        Motor_SetSpeed(&m_right, agv_config.turn_speed);
-        if (elapsed > agv_config.time_turn_180) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
-        break;
-      case 10:
-        AGV_Stop(&h_agv);
-        if (elapsed > 1000) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
-        break;
-      case 11:
-        Motor_SetSpeed(&m_left, agv_config.turn_speed);
-        Motor_SetSpeed(&m_right, -agv_config.turn_speed);
-        if (elapsed > agv_config.time_turn_180) {
-          calib_state++;
-          state_start_time = HAL_GetTick();
-        }
-        break;
-      case 12:
-        AGV_Stop(&h_agv);
-        break;
-      }
-      continue;
     }
 
     if (agv_state.run_mode == MODE_4_FULL_RUN) {
