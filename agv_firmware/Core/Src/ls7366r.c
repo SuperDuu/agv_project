@@ -70,15 +70,6 @@ static void CS_High(uint8_t csPin) {
 }
 
 /**
- * @brief Gửi và nhận 1 byte qua SPI.
- */
-static uint8_t SPI_Transfer(uint8_t data) {
-    uint8_t rxData = 0;
-    HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, &data, &rxData, 1, HAL_MAX_DELAY);
-    return rxData;
-}
-
-/**
  * @brief Khởi tạo 1 chip LS7366R với cấu hình cho MDR0 và MDR1.
  */
 void LS7366R_Init(uint8_t csPin, uint8_t mdr0, uint8_t mdr1) {
@@ -88,20 +79,24 @@ void LS7366R_Init(uint8_t csPin, uint8_t mdr0, uint8_t mdr1) {
     // Xóa counter và status register
     LS7366R_ClearCounter(csPin);
     
+    uint8_t txStr[1] = {LS_CLEAR_STR};
+    uint8_t rxBuf[1];
     CS_Low(csPin);
-    SPI_Transfer(LS_CLEAR_STR);
+    HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txStr, rxBuf, 1, HAL_MAX_DELAY);
     CS_High(csPin);
 
     // Ghi cấu hình vào MDR0
+    uint8_t txMdr0[2] = {LS_WRITE_MDR0, mdr0};
+    uint8_t rxMdr0[2];
     CS_Low(csPin);
-    SPI_Transfer(LS_WRITE_MDR0);
-    SPI_Transfer(mdr0);
+    HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txMdr0, rxMdr0, 2, HAL_MAX_DELAY);
     CS_High(csPin);
 
     // Ghi cấu hình vào MDR1
+    uint8_t txMdr1[2] = {LS_WRITE_MDR1, mdr1};
+    uint8_t rxMdr1[2];
     CS_Low(csPin);
-    SPI_Transfer(LS_WRITE_MDR1);
-    SPI_Transfer(mdr1);
+    HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txMdr1, rxMdr1, 2, HAL_MAX_DELAY);
     CS_High(csPin);
 }
 
@@ -125,22 +120,17 @@ void LS7366R_InitAll(void) {
  * @brief Đọc trực tiếp giá trị Counter (CNTR) của chip.
  */
 int32_t LS7366R_ReadCounter(uint8_t csPin) {
-    int32_t count = 0;
+    uint8_t txBuf[5] = {LS_READ_CNTR, 0x00, 0x00, 0x00, 0x00};
+    uint8_t rxBuf[5] = {0};
     
-    // Ngắt toàn bộ interrupts để tránh bị ngắt SPI giữa chừng gây hỏng frame
-    uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-
     CS_Low(csPin);
-    SPI_Transfer(LS_READ_CNTR);
-    count |= ((uint32_t)SPI_Transfer(0x00) << 24);
-    count |= ((uint32_t)SPI_Transfer(0x00) << 16);
-    count |= ((uint32_t)SPI_Transfer(0x00) << 8);
-    count |= ((uint32_t)SPI_Transfer(0x00));
+    HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txBuf, rxBuf, 5, HAL_MAX_DELAY);
     CS_High(csPin);
 
-    __set_PRIMASK(primask);
-
+    int32_t count = ((uint32_t)rxBuf[1] << 24) | 
+                    ((uint32_t)rxBuf[2] << 16) | 
+                    ((uint32_t)rxBuf[3] << 8)  | 
+                    ((uint32_t)rxBuf[4]);
     return count;
 }
 
@@ -148,8 +138,10 @@ int32_t LS7366R_ReadCounter(uint8_t csPin) {
  * @brief Xóa trắng giá trị Counter về 0.
  */
 void LS7366R_ClearCounter(uint8_t csPin) {
+    uint8_t txBuf[1] = {LS_CLEAR_CNTR};
+    uint8_t rxBuf[1];
     CS_Low(csPin);
-    SPI_Transfer(LS_CLEAR_CNTR);
+    HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txBuf, rxBuf, 1, HAL_MAX_DELAY);
     CS_High(csPin);
 }
 
@@ -157,22 +149,24 @@ void LS7366R_ClearCounter(uint8_t csPin) {
  * @brief Đọc thanh ghi trạng thái (STR).
  */
 uint8_t LS7366R_ReadStatus(uint8_t csPin) {
-    uint8_t status = 0;
+    uint8_t txBuf[2] = {LS_READ_STR, 0x00};
+    uint8_t rxBuf[2] = {0};
     
     CS_Low(csPin);
-    SPI_Transfer(LS_READ_STR);
-    status = SPI_Transfer(0x00);
+    HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txBuf, rxBuf, 2, HAL_MAX_DELAY);
     CS_High(csPin);
     
-    return status;
+    return rxBuf[1];
 }
 
 /**
  * @brief Copy giá trị từ CNTR sang OTR (latch). Dùng để đọc đồng thời mà không bị nhiễu do xung mới.
  */
 void LS7366R_LoadOTR(uint8_t csPin) {
+    uint8_t txBuf[1] = {LS_LOAD_OTR};
+    uint8_t rxBuf[1];
     CS_Low(csPin);
-    SPI_Transfer(LS_LOAD_OTR);
+    HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txBuf, rxBuf, 1, HAL_MAX_DELAY);
     CS_High(csPin);
 }
 
@@ -180,21 +174,17 @@ void LS7366R_LoadOTR(uint8_t csPin) {
  * @brief Đọc giá trị đã được latch trong thanh ghi OTR.
  */
 int32_t LS7366R_ReadOTR(uint8_t csPin) {
-    int32_t count = 0;
-    
-    uint32_t primask = __get_PRIMASK();
-    __disable_irq();
+    uint8_t txBuf[5] = {LS_READ_OTR, 0x00, 0x00, 0x00, 0x00};
+    uint8_t rxBuf[5] = {0};
 
     CS_Low(csPin);
-    SPI_Transfer(LS_READ_OTR);
-    count |= ((uint32_t)SPI_Transfer(0x00) << 24);
-    count |= ((uint32_t)SPI_Transfer(0x00) << 16);
-    count |= ((uint32_t)SPI_Transfer(0x00) << 8);
-    count |= ((uint32_t)SPI_Transfer(0x00));
+    HAL_SPI_TransmitReceive(LS7366R_SPI_HANDLE, txBuf, rxBuf, 5, HAL_MAX_DELAY);
     CS_High(csPin);
 
-    __set_PRIMASK(primask);
-
+    int32_t count = ((uint32_t)rxBuf[1] << 24) | 
+                    ((uint32_t)rxBuf[2] << 16) | 
+                    ((uint32_t)rxBuf[3] << 8)  | 
+                    ((uint32_t)rxBuf[4]);
     return count;
 }
 
