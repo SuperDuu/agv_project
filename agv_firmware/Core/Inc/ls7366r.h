@@ -27,13 +27,12 @@ extern SPI_HandleTypeDef hspi3;
 #define LS_READ_OTR    0x68
 #define LS_READ_STR    0x70
 #define LS_LOAD_OTR    0xE8  // Transfer CNTR to OTR
-#define LS_LOAD_CNTR   0xE0  // Transfer DTR to CNTR
+#define LS_LOAD_CNTR   0xC8  // Transfer DTR to CNTR (User requested 0xC8 instead of 0xE0)
 #define LS_CLEAR_CNTR  0x20
 #define LS_CLEAR_STR   0x30
 
 // Recommended MDR0 config for Hall signals: x4 quadrature, free running, no index, filter off
-// Change to non-quadrature (A=clk, B=dir) to test if Hall signals reach the chip
-#define LS_MDR0_QUAD_X4_FREE 0x00
+#define LS_MDR0_QUAD_X4_FREE 0x03
 
 // Recommended MDR1 config: 4-byte counter, enable counting, no flags
 // TUNE: Change counter byte length if needed
