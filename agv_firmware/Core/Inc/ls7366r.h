@@ -38,6 +38,18 @@ extern SPI_HandleTypeDef hspi3;
 // TUNE: Change counter byte length if needed
 #define LS_MDR1_4BYTE_EN     0x00
 
+typedef struct {
+    int32_t count_e1;
+    int32_t count_e2;
+    int32_t count_e3;
+    int32_t count_e4;
+    float vel_e1;
+    float vel_e2;
+    float vel_e3;
+    float vel_e4;
+    uint32_t last_update;
+} LS7366R_EncoderData_t;
+
 // Function prototypes
 void LS7366R_Init(uint8_t csPin, uint8_t mdr0, uint8_t mdr1);
 void LS7366R_InitAll(void);
