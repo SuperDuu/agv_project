@@ -50,7 +50,9 @@ static void CS_Low(uint8_t csPin) {
     uint16_t pin;
     Get_CS_Pin(csPin, &port, &pin);
     if (port != NULL) {
-        HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET);
+        // Mạch cách ly quang (Opto) thường đảo logic. 
+        // Kéo chân MCU lên HIGH -> Opto thông -> CS phía chip bị kéo xuống LOW (Active)
+        HAL_GPIO_WritePin(port, pin, GPIO_PIN_SET);
         delay_1us(); // Đảm bảo t_CSS (CS setup time) và bù slew rate
     }
 }
@@ -64,7 +66,8 @@ static void CS_High(uint8_t csPin) {
     Get_CS_Pin(csPin, &port, &pin);
     if (port != NULL) {
         delay_1us(); // Đảm bảo data hold time
-        HAL_GPIO_WritePin(port, pin, GPIO_PIN_SET);
+        // Kéo chân MCU xuống LOW -> Opto ngắt -> Trở kéo lên làm CS phía chip lên HIGH (Deselect)
+        HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET);
         delay_1us(); // Đảm bảo t_CSW (CS disable time)
     }
 }
