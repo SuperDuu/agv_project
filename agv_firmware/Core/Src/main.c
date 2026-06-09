@@ -231,7 +231,7 @@ static bool AGV_HandleMode5Calibration(void) {
     }
     break;
   case 5:
-    AGV_TurnLeft_IMU(&h_agv);
+    AGV_TurnLeft_IMU(&h_agv, 400, 0.70f);
     mode5_calib_state++;
     mode5_calib_start_time = HAL_GetTick();
     break;
@@ -369,7 +369,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     return;
 
   if (agv_state.run_mode == MODE_6_TEST_TURN_RIGHT) {
-    AGV_TurnRight_IMU(&h_agv);
+    AGV_TurnRight_IMU(&h_agv, 400, 0.70f);
     agv_state.last_leave_intersection_time = HAL_GetTick();
     agv_state.is_at_intersection = false;
     agv_state.follow_line_enable = true;
