@@ -29,6 +29,7 @@
 #include "sensor.h"
 #include <stdlib.h> // Để sử dụng hàm atoi
 #include "esp32_hub.h" // Thư viện giao tiếp ESP32
+#include "ls7366r.h"
 
 /* USER CODE END Includes */
 
@@ -77,6 +78,7 @@ Motor_HandleTypeDef m_left, m_right;
 LineSensor_HandleTypeDef line_ss;
 Pid_data pid_ctrl;
 QR50_Handler_t qr50;
+LS7366R_EncoderData_t encoder_data;
 AGV_Map_t factory_map;
 AGV_Heading_t current_heading = HEAD_NORTH;
 extern AGV_State_t agv_state;
@@ -518,6 +520,7 @@ int main(void)
   pid_ctrl.i = 0.0f;
 
   AGV_Init(&h_agv, &m_left, &m_right, &line_ss, &pid_ctrl, 300.0f);
+  LS7366R_InitAll();
 
   HMI_Init(&huart2, 1); // Đổi HMI sang USART2 (RS485_1)
   
@@ -632,6 +635,27 @@ int main(void)
             path_length = 0;
           }
       }
+    }
+
+    if (agv_state.run_mode == MODE_8_TEST_ENCODER) {
+      AGV_Stop(&h_agv);
+      
+      uint32_t now = HAL_GetTick();
+      if (now - encoder_data.last_update >= 100) {
+        float dt = (now - encoder_data.last_update) / 1000.0f;
+        encoder_data.count_e1 = LS7366R_ReadCounter(ENC_CS1);
+        encoder_data.count_e2 = LS7366R_ReadCounter(ENC_CS2);
+        encoder_data.count_e3 = LS7366R_ReadCounter(ENC_CS3);
+        encoder_data.count_e4 = LS7366R_ReadCounter(ENC_CS4);
+        
+        encoder_data.vel_e1 = LS7366R_GetVelocity(ENC_CS1, dt);
+        encoder_data.vel_e2 = LS7366R_GetVelocity(ENC_CS2, dt);
+        encoder_data.vel_e3 = LS7366R_GetVelocity(ENC_CS3, dt);
+        encoder_data.vel_e4 = LS7366R_GetVelocity(ENC_CS4, dt);
+
+        encoder_data.last_update = now;
+      }
+      continue;
     }
     if (agv_state.run_mode == MODE_5_CALIBRATE_MOTORS) {
       if (AGV_HandleMode5Calibration()) {
