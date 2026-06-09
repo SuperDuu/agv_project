@@ -199,77 +199,77 @@ static bool AGV_HandleMode5Calibration(void) {
     Motor_SetSpeed(&m_left, agv_config.turn_speed);
     Motor_SetSpeed(&m_right, agv_config.turn_speed);
     if (elapsed > agv_config.time_forward) {
-      calib_state++;
-      state_start_time = HAL_GetTick();
+      mode5_calib_state++;
+      mode5_calib_start_time = HAL_GetTick();
     }
     break;
   case 2:
     AGV_Stop(&h_agv);
     if (elapsed > 1000) {
-      calib_state++;
-      state_start_time = HAL_GetTick();
+      mode5_calib_state++;
+      mode5_calib_start_time = HAL_GetTick();
     }
     break;
   case 3:
     Motor_SetSpeed(&m_left, -agv_config.turn_speed);
     Motor_SetSpeed(&m_right, -agv_config.turn_speed);
     if (elapsed > agv_config.time_forward) {
-      calib_state++;
-      state_start_time = HAL_GetTick();
+      mode5_calib_state++;
+      mode5_calib_start_time = HAL_GetTick();
     }
     break;
   case 4:
     AGV_Stop(&h_agv);
     if (elapsed > 1000) {
-      calib_state++;
-      state_start_time = HAL_GetTick();
+      mode5_calib_state++;
+      mode5_calib_start_time = HAL_GetTick();
     }
     break;
   case 5:
     AGV_TurnLeft_IMU(&h_agv);
-    calib_state++;
-    state_start_time = HAL_GetTick();
+    mode5_calib_state++;
+    mode5_calib_start_time = HAL_GetTick();
     break;
   case 6:
     AGV_Stop(&h_agv);
     if (elapsed > 1000) {
-      calib_state++;
-      state_start_time = HAL_GetTick();
+      mode5_calib_state++;
+      mode5_calib_start_time = HAL_GetTick();
     }
     break;
   case 7:
     AGV_Turn180_IMU(&h_agv);
-    calib_state++;
-    state_start_time = HAL_GetTick();
+    mode5_calib_state++;
+    mode5_calib_start_time = HAL_GetTick();
     break;
   case 8:
     AGV_Stop(&h_agv);
     if (elapsed > 1000) {
-      calib_state++;
-      state_start_time = HAL_GetTick();
+      mode5_calib_state++;
+      mode5_calib_start_time = HAL_GetTick();
     }
     break;
   case 9:
     Motor_SetSpeed(&m_left, -agv_config.turn_speed);
     Motor_SetSpeed(&m_right, agv_config.turn_speed);
     if (elapsed > agv_config.time_turn_180) {
-      calib_state++;
-      state_start_time = HAL_GetTick();
+      mode5_calib_state++;
+      mode5_calib_start_time = HAL_GetTick();
     }
     break;
   case 10:
     AGV_Stop(&h_agv);
     if (elapsed > 1000) {
-      calib_state++;
-      state_start_time = HAL_GetTick();
+      mode5_calib_state++;
+      mode5_calib_start_time = HAL_GetTick();
     }
     break;
   case 11:
     Motor_SetSpeed(&m_left, agv_config.turn_speed);
     Motor_SetSpeed(&m_right, -agv_config.turn_speed);
     if (elapsed > agv_config.time_turn_180) {
-      calib_state++;
-      state_start_time = HAL_GetTick();
+      mode5_calib_state++;
+      mode5_calib_start_time = HAL_GetTick();
     }
     break;
   default:
@@ -538,6 +538,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   uint32_t last_esp32_req_time = 0;
+  uint32_t last_led_time = 0;
   while (1) {
   /* USER CODE END WHILE */
 
