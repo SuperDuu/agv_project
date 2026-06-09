@@ -140,7 +140,7 @@ int32_t LS7366R_ReadCounter(uint8_t csPin) {
 /**
  * @brief Kiểm tra giao tiếp SPI bằng cách ghi/đọc thanh ghi.
  */
-bool LS7366R_TestSPI(uint8_t csPin) {
+uint32_t LS7366R_TestSPI(uint8_t csPin) {
     uint32_t test_val = 0x12345678;
     
     // 1. Ghi vào DTR
@@ -160,7 +160,7 @@ bool LS7366R_TestSPI(uint8_t csPin) {
     // 3. Đọc lại CNTR
     int32_t read_val = LS7366R_ReadCounter(csPin);
 
-    return (read_val == test_val);
+    return (uint32_t)read_val;
 }
 
 /**

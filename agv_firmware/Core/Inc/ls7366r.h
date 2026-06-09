@@ -52,8 +52,7 @@ typedef struct {
 } LS7366R_EncoderData_t;
 
 // Function prototypes
-#include <stdbool.h>
-bool LS7366R_TestSPI(uint8_t csPin);
+uint32_t LS7366R_TestSPI(uint8_t csPin);
 void LS7366R_Init(uint8_t csPin, uint8_t mdr0, uint8_t mdr1);
 void LS7366R_InitAll(void);
 int32_t LS7366R_ReadCounter(uint8_t csPin);

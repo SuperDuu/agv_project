@@ -35,8 +35,8 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-volatile bool spi_test_result_e1 = false;
-volatile bool spi_test_result_e2 = false;
+volatile uint32_t spi_test_result_e1 = 0;
+volatile uint32_t spi_test_result_e2 = 0;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
