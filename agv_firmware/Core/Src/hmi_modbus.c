@@ -222,6 +222,11 @@ void HMI_SyncData(void) {
     hmi_registers[REG_AGV_MODE] = agv_state.run_mode;
     hmi_registers[REG_CURRENT_NODE] = agv_state.current_node;
     hmi_registers[REG_PATH_LENGTH] = path_length;
+    
+    // Thêm: Điểm bắt đầu (Start Point) và Điểm tiếp theo (Next Point)
+    hmi_registers[REG_NEXT_NODE] = current_path[agv_state.path_index];
+    // hmi_registers[REG_DEST_NODE] đã được lấy từ HMI xuống nên không cần ghi đè ngược lại
+
 
     // Cập nhật trạng thái chạy của AGV (0: Idle, 1: Running, 2: Error)
     if (agv_state.indicator_state == 3) {
