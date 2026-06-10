@@ -54,7 +54,17 @@ void QR50_Init(QR50_Handler_t *handler, UART_HandleTypeDef *huart, uint8_t addr)
 void QR50_ParseData(QR50_Handler_t *handler, uint8_t *raw_buffer, uint16_t length);
 
 /* USER CODE BEGIN Prototypes */
+typedef struct {
+    uint32_t bit_count;
+    uint64_t data_buffer;
+    uint32_t last_bit_time;
+    volatile bool new_data_ready;
+    uint32_t final_card_id;
+} Wiegand_HandleTypeDef;
 
+void Wiegand_Init(Wiegand_HandleTypeDef *hwg);
+void Wiegand_ProcessBit(Wiegand_HandleTypeDef *hwg, uint8_t bit);
+void Wiegand_ProcessLoop(Wiegand_HandleTypeDef *hwg);
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus
