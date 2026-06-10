@@ -87,7 +87,8 @@ LineSensor_HandleTypeDef line_ss;
 Pid_data pid_ctrl;
 QR50_Handler_t qr50;
 Wiegand_HandleTypeDef h_wiegand;
-volatile uint32_t debug_wiegand_id = 0; // Lưu tạm ID thẻ Wiegand để xem trên Live Expression
+volatile uint32_t debug_wiegand_id =
+    0; // Lưu tạm ID thẻ Wiegand để xem trên Live Expression
 volatile uint32_t debug_wiegand_bit_count = 0; // Kiểm tra số lượng bit đếm được
 
 // --- CẤU HÌNH MÃ THẺ RFID CỦA TỪNG TRẠM ---
@@ -102,14 +103,8 @@ volatile uint32_t debug_wiegand_bit_count = 0; // Kiểm tra số lượng bit �
 
 // Mảng ánh xạ RFID sang Node ID (Chỉ mục là Node ID, giá trị là Wiegand ID)
 uint32_t rfid_node_map[MAX_NODES] = {
-    [1] = RFID_NODE_1,
-    [2] = RFID_NODE_2,
-    [3] = RFID_NODE_3,
-    [4] = RFID_NODE_4,
-    [5] = RFID_NODE_5,
-    [6] = RFID_NODE_6,
-    [7] = RFID_NODE_7,
-    [8] = RFID_NODE_8,
+    [1] = RFID_NODE_1, [2] = RFID_NODE_2, [3] = RFID_NODE_3, [4] = RFID_NODE_4,
+    [5] = RFID_NODE_5, [6] = RFID_NODE_6, [7] = RFID_NODE_7, [8] = RFID_NODE_8,
 };
 volatile LS7366R_EncoderData_t encoder_data;
 AGV_Map_t factory_map;
@@ -369,27 +364,26 @@ void Load_Factory_Map(void) {
   Map_AddEdge(&factory_map, N07, N08, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N08, N07, 1, HEAD_SOUTH);
 
-  Map_AddEdge(&factory_map, N09, N10, 1, HEAD_NORTH);
-  Map_AddEdge(&factory_map, N10, N09, 1, HEAD_SOUTH);
-  Map_AddEdge(&factory_map, N10, N11, 1, HEAD_NORTH);
-  Map_AddEdge(&factory_map, N11, N10, 1, HEAD_SOUTH);
-
-  Map_AddEdge(&factory_map, N12, N13, 1, HEAD_NORTH);
-  Map_AddEdge(&factory_map, N13, N12, 1, HEAD_SOUTH);
-  Map_AddEdge(&factory_map, N13, N14, 1, HEAD_NORTH);
-  Map_AddEdge(&factory_map, N14, N13, 1, HEAD_SOUTH);
-
   Map_AddEdge(&factory_map, N02, N05, 1, HEAD_EAST);
   Map_AddEdge(&factory_map, N05, N02, 1, HEAD_WEST);
 
   Map_AddEdge(&factory_map, N05, N08, 1, HEAD_EAST);
   Map_AddEdge(&factory_map, N08, N05, 1, HEAD_WEST);
 
-  Map_AddEdge(&factory_map, N08, N11, 1, HEAD_EAST);
-  Map_AddEdge(&factory_map, N11, N08, 1, HEAD_WEST);
+  // Thêm các đường ngang ở phía dưới (Chiều quay về từ N06 về N00)
+  Map_AddEdge(&factory_map, N06, N03, 1, HEAD_WEST);
+  Map_AddEdge(&factory_map, N03, N06, 1, HEAD_EAST);
 
-  Map_AddEdge(&factory_map, N11, N14, 1, HEAD_EAST);
-  Map_AddEdge(&factory_map, N14, N11, 1, HEAD_WEST);
+  Map_AddEdge(&factory_map, N03, N00, 1, HEAD_WEST);
+  Map_AddEdge(&factory_map, N00, N03, 1, HEAD_EAST);
+
+  // Nếu bạn dán line ngang ở giữa (N01-N04-N07) thì uncomment bên dưới:
+  /*
+  Map_AddEdge(&factory_map, N01, N04, 1, HEAD_EAST);
+  Map_AddEdge(&factory_map, N04, N01, 1, HEAD_WEST);
+  Map_AddEdge(&factory_map, N04, N07, 1, HEAD_EAST);
+  Map_AddEdge(&factory_map, N07, N04, 1, HEAD_WEST);
+  */
 }
 
 static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
@@ -614,7 +608,8 @@ int main(void) {
       // Ánh xạ Wiegand ID sang Node ID
       uint16_t read_node_id = 0xFFFF;
       for (int i = 0; i < MAX_NODES; i++) {
-        if (rfid_node_map[i] == debug_wiegand_id && debug_wiegand_id != 0 && debug_wiegand_id != 0xFFFFFFFF) {
+        if (rfid_node_map[i] == debug_wiegand_id && debug_wiegand_id != 0 &&
+            debug_wiegand_id != 0xFFFFFFFF) {
           read_node_id = i;
           break;
         }
