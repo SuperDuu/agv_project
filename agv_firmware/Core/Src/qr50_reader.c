@@ -110,18 +110,34 @@ void Wiegand_ProcessLoop(Wiegand_HandleTypeDef *hwg) {
         
         // Chuẩn Wiegand 34 (reverse hoặc thuận)
         if (hwg->bit_count == 34) {
-            // Dữ liệu nằm ở 32 bit giữa (bỏ bit đầu và bit cuối)
+            uint8_t p_even = (hwg->data_buffer >> 33) & 0x01; // Bit 33 (đầu tiên)
+            uint8_t p_odd = hwg->data_buffer & 0x01;          // Bit 0 (cuối cùng)
             uint32_t card_data = (hwg->data_buffer >> 1) & 0xFFFFFFFF;
             
-            // Xử lý "Reverse output" bằng cách đảo ngược các byte
-            uint32_t reversed_card = 0;
-            reversed_card |= (card_data & 0xFF000000) >> 24;
-            reversed_card |= (card_data & 0x00FF0000) >> 8;
-            reversed_card |= (card_data & 0x0000FF00) << 8;
-            reversed_card |= (card_data & 0x000000FF) << 24;
+            // Tính chẵn lẻ (Parity Check)
+            uint8_t count_even = 0;
+            uint8_t count_odd = 0;
+            uint32_t first_16 = (card_data >> 16) & 0xFFFF;
+            uint32_t last_16 = card_data & 0xFFFF;
             
-            hwg->final_card_id = reversed_card;
-            hwg->new_data_ready = true;
+            for (int i = 0; i < 16; i++) {
+                if ((first_16 >> i) & 1) count_even++;
+                if ((last_16 >> i) & 1) count_odd++;
+            }
+            
+            // Even Parity: Tổng số bit 1 của (p_even + first_16) phải là số chẵn
+            // Odd Parity: Tổng số bit 1 của (p_odd + last_16) phải là số lẻ
+            bool parity_ok = (((count_even + p_even) % 2) == 0) && (((count_odd + p_odd) % 2) != 0);
+            
+            if (parity_ok) {
+                // Bỏ tính năng đảo byte (Reverse output) để xem số gốc
+                hwg->final_card_id = card_data;
+                hwg->new_data_ready = true;
+            } else {
+                // Lỗi Parity
+                hwg->final_card_id = 0xFFFFFFFF; // Báo mã lỗi
+                hwg->new_data_ready = true;
+            }
         } else if (hwg->bit_count == 26) {
             uint32_t card_data = (hwg->data_buffer >> 1) & 0xFFFFFF;
             
@@ -135,7 +151,12 @@ void Wiegand_ProcessLoop(Wiegand_HandleTypeDef *hwg) {
         } else {
             // Số bit không xác định, có thể nhiễu, lưu tạm để debug
             hwg->final_card_id = (uint32_t)hwg->data_buffer;
+            hwg->new_data_ready = true;
         }
+        
+        // Lưu lại số lượng bit vào biến toàn cục để theo dõi trên Live Expression
+        extern volatile uint32_t debug_wiegand_bit_count;
+        debug_wiegand_bit_count = hwg->bit_count;
         
         // Reset sau khi xử lý xong
         hwg->bit_count = 0;
