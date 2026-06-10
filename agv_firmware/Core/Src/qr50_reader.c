@@ -70,5 +70,76 @@ void QR50_ParseData(QR50_Handler_t *handler, uint8_t *raw_buffer, uint16_t lengt
 }
 
 /* USER CODE BEGIN 1 */
+void Wiegand_Init(Wiegand_HandleTypeDef *hwg) {
+    if (hwg == NULL) return;
+    hwg->bit_count = 0;
+    hwg->data_buffer = 0;
+    hwg->last_bit_time = 0;
+    hwg->new_data_ready = false;
+    hwg->final_card_id = 0;
+}
 
+// Gọi hàm này trong ngắt EXTI Falling Edge
+void Wiegand_ProcessBit(Wiegand_HandleTypeDef *hwg, uint8_t bit) {
+    if (hwg == NULL) return;
+    
+    uint32_t now = HAL_GetTick();
+    
+    // Nếu khoảng thời gian giữa 2 bit > 50ms, coi như bắt đầu quẹt thẻ mới
+    if (now - hwg->last_bit_time > 50) {
+        hwg->bit_count = 0;
+        hwg->data_buffer = 0;
+    }
+    
+    hwg->last_bit_time = now;
+    
+    // Dịch bit và gán bit mới
+    hwg->data_buffer <<= 1;
+    hwg->data_buffer |= bit;
+    hwg->bit_count++;
+}
+
+// Gọi hàm này trong vòng lặp while(1)
+void Wiegand_ProcessLoop(Wiegand_HandleTypeDef *hwg) {
+    if (hwg == NULL) return;
+    
+    uint32_t now = HAL_GetTick();
+    
+    // Nếu đã nhận đủ bit và sau 50ms không có bit mới nào đến
+    if (hwg->bit_count > 0 && (now - hwg->last_bit_time > 50)) {
+        
+        // Chuẩn Wiegand 34 (reverse hoặc thuận)
+        if (hwg->bit_count == 34) {
+            // Dữ liệu nằm ở 32 bit giữa (bỏ bit đầu và bit cuối)
+            uint32_t card_data = (hwg->data_buffer >> 1) & 0xFFFFFFFF;
+            
+            // Xử lý "Reverse output" bằng cách đảo ngược các byte
+            uint32_t reversed_card = 0;
+            reversed_card |= (card_data & 0xFF000000) >> 24;
+            reversed_card |= (card_data & 0x00FF0000) >> 8;
+            reversed_card |= (card_data & 0x0000FF00) << 8;
+            reversed_card |= (card_data & 0x000000FF) << 24;
+            
+            hwg->final_card_id = reversed_card;
+            hwg->new_data_ready = true;
+        } else if (hwg->bit_count == 26) {
+            uint32_t card_data = (hwg->data_buffer >> 1) & 0xFFFFFF;
+            
+            uint32_t reversed_card = 0;
+            reversed_card |= (card_data & 0xFF0000) >> 16;
+            reversed_card |= (card_data & 0x00FF00);
+            reversed_card |= (card_data & 0x0000FF) << 16;
+            
+            hwg->final_card_id = reversed_card;
+            hwg->new_data_ready = true;
+        } else {
+            // Số bit không xác định, có thể nhiễu, lưu tạm để debug
+            hwg->final_card_id = (uint32_t)hwg->data_buffer;
+        }
+        
+        // Reset sau khi xử lý xong
+        hwg->bit_count = 0;
+        hwg->data_buffer = 0;
+    }
+}
 /* USER CODE END 1 */
