@@ -369,21 +369,6 @@ void Load_Factory_Map(void) {
 
   Map_AddEdge(&factory_map, N05, N08, 1, HEAD_EAST);
   Map_AddEdge(&factory_map, N08, N05, 1, HEAD_WEST);
-
-  // Thêm các đường ngang ở phía dưới (Chiều quay về từ N06 về N00)
-  Map_AddEdge(&factory_map, N06, N03, 1, HEAD_WEST);
-  Map_AddEdge(&factory_map, N03, N06, 1, HEAD_EAST);
-
-  Map_AddEdge(&factory_map, N03, N00, 1, HEAD_WEST);
-  Map_AddEdge(&factory_map, N00, N03, 1, HEAD_EAST);
-
-  // Nếu bạn dán line ngang ở giữa (N01-N04-N07) thì uncomment bên dưới:
-  /*
-  Map_AddEdge(&factory_map, N01, N04, 1, HEAD_EAST);
-  Map_AddEdge(&factory_map, N04, N01, 1, HEAD_WEST);
-  Map_AddEdge(&factory_map, N04, N07, 1, HEAD_EAST);
-  Map_AddEdge(&factory_map, N07, N04, 1, HEAD_WEST);
-  */
 }
 
 static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
