@@ -438,12 +438,17 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     int diff = (target_heading - *current_heading + 4) % 4;
 
     uint32_t fwd_delay = 1600;
-    // Nâng lên 0.95f (tức là quay 95% góc mới được tìm line) để CHẮC CHẮN thoát
-    // line cũ
+    // Nâng lên 0.95f (tức là quay 95% góc mới được tìm line) để CHẮC CHẮN thoát line cũ
     float search_ratio = 0.95f;
+    // Giảm thời gian lướt thẳng (fwd_delay) tại các góc cua chữ L để không bị lố vạch
     if (agv_state.current_node == 8 && next_node == 7) {
       fwd_delay = 1400;
-      search_ratio = 0.95f;
+    } else if (agv_state.current_node == 2 && next_node == 1) {
+      fwd_delay = 1400;
+    } else if (agv_state.current_node == 2 && next_node == 5) {
+      fwd_delay = 1400;
+    } else if (agv_state.current_node == 8 && next_node == 5) {
+      fwd_delay = 1400;
     }
 
     agv_state.follow_line_enable = false;
@@ -670,12 +675,16 @@ int main(void) {
                 &factory_map, agv_state.current_node, next_node);
             int diff = (target_heading - current_heading + 4) % 4;
             uint32_t fwd_delay = 1600;
-            // Nâng lên 0.95f (tức là quay 95% góc mới được tìm line) để CHẮC
-            // CHẮN thoát line cũ
+            // Nâng lên 0.95f (tức là quay 95% góc mới được tìm line) để CHẮC CHẮN thoát line cũ
             float search_ratio = 0.95f;
             if (agv_state.current_node == 8 && next_node == 7) {
               fwd_delay = 1400;
-              search_ratio = 0.95f;
+            } else if (agv_state.current_node == 2 && next_node == 1) {
+              fwd_delay = 1400;
+            } else if (agv_state.current_node == 2 && next_node == 5) {
+              fwd_delay = 1400;
+            } else if (agv_state.current_node == 8 && next_node == 5) {
+              fwd_delay = 1400;
             }
 
             AGV_Action_t next_action = (AGV_Action_t)diff;
