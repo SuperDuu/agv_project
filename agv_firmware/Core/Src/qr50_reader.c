@@ -127,11 +127,16 @@ void Wiegand_ProcessLoop(Wiegand_HandleTypeDef *hwg) {
       extern volatile uint64_t debug_wiegand_raw;
       debug_wiegand_raw = raw_data;
 
-      // Để tạo ra một ID 32-bit duy nhất từ 64-bit data, ta XOR 32 bit đầu với 32 bit cuối
-      // Điều này đảm bảo rằng bất kỳ thay đổi nào ở đầu hay cuối UID đều tạo ra ID khác nhau
+      // Không XOR nữa, bóc tách riêng 32 bit cao và 32 bit thấp để xem
       uint32_t part1 = (raw_data >> 32) & 0xFFFFFFFF;
       uint32_t part2 = raw_data & 0xFFFFFFFF;
-      hwg->final_card_id = part1 ^ part2;
+      
+      extern volatile uint32_t debug_wiegand_high32;
+      extern volatile uint32_t debug_wiegand_low32;
+      debug_wiegand_high32 = part1;
+      debug_wiegand_low32 = part2;
+
+      hwg->final_card_id = part2;
       hwg->new_data_ready = true;
     } 
     // --- WIEGAND 34 ---
