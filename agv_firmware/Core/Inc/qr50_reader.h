@@ -56,7 +56,7 @@ void QR50_ParseData(QR50_Handler_t *handler, uint8_t *raw_buffer, uint16_t lengt
 /* USER CODE BEGIN Prototypes */
 typedef struct {
     uint32_t bit_count;
-    uint64_t data_buffer;
+    uint8_t raw_bits[128]; // Lưu từng bit (0 hoặc 1) để hỗ trợ Wiegand >= 66 bit
     uint32_t last_bit_time;
     volatile bool new_data_ready;
     uint32_t final_card_id;
