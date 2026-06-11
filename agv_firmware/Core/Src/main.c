@@ -1537,13 +1537,38 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
   if (huart->Instance == USART2) { // RS485_1 (Chia sẻ giữa HMI và QR50)
     extern HMI_HandleTypeDef h_hmi;
     
-    // Phân luồng: Modbus RTU Response của HMI luôn bắt đầu bằng Slave ID = 0x01
-    // Trong khi dữ liệu mã QR là chuỗi ASCII (thường bắt đầu bằng chữ cái hoặc số, mã ASCII > 0x20)
+    // 1. Phục vụ Modbus HMI nếu byte đầu là Slave ID (0x01)
     if (h_hmi.rx_buffer[0] == 1) {
       HMI_RxCallback(huart, Size);
-    } else {
-      // Nếu không phải byte 0x01, giả định đây là chuỗi mã QR
-      QR50_ParseData(&qr50, h_hmi.rx_buffer, Size);
+    }
+    
+    // 2. Trích xuất mã QR từ buffer (bảo vệ lỗi dính chùm DMA)
+    // Mã QR (VD: "N01\r") có thể nằm ở đầu hoặc bị dính vào đuôi gói Modbus.
+    // Quét buffer để tìm chuỗi ASCII kết thúc bằng \r hoặc \n.
+    int qr_start = -1;
+    int qr_len = 0;
+    for (int i = 0; i < Size; i++) {
+      uint8_t c = h_hmi.rx_buffer[i];
+      // Chấp nhận chữ cái và số
+      if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-') {
+        if (qr_start == -1) qr_start = i;
+        qr_len++;
+      } 
+      // Dấu hiệu kết thúc mã QR
+      else if (c == '\r' || c == '\n') {
+        if (qr_start != -1 && qr_len >= 2) {
+          // Trích xuất thành công chuỗi QR
+          QR50_ParseData(&qr50, &h_hmi.rx_buffer[qr_start], qr_len);
+          break; // Chỉ xử lý 1 mã QR mỗi lần nhận
+        }
+        qr_start = -1;
+        qr_len = 0;
+      } 
+      // Gặp dữ liệu nhị phân rác -> reset bộ đếm
+      else {
+        qr_start = -1;
+        qr_len = 0;
+      }
     }
   } else if (huart->Instance == UART5) { // RS485_2 (ESP32 Sensor Hub)
     ESP32_ParseResponse(Size);
