@@ -562,10 +562,9 @@ int main(void) {
   extern TIM_HandleTypeDef htim6;
   HAL_TIM_Base_Start_IT(&htim6);
 
-  // QR50_Init(&qr50, &huart2, 99); // Đã mở lại QR50/RFID
+  QR50_Init(&qr50, &huart2, 99); // Khởi tạo QR50 chung port với HMI
   Wiegand_Init(&h_wiegand); // Khởi tạo Wiegand reader
-  // (Device no response) DMA đã được HMI_Init khởi động, QR50 chỉ cần parse dữ
-  // liệu khi callback gọi
+  // DMA đã được HMI_Init khởi động, QR50 chỉ cần parse dữ liệu khi callback gọi
 
   // Khởi tạo kênh giao tiếp Master-Slave với ESP32 qua UART5 (RS485_2)
   ESP32_Init(&huart5);
@@ -1535,12 +1534,17 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 }
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
-  if (huart->Instance == USART2) { // RS485_1 (Cổng ISO đang sống)
-    HMI_RxCallback(huart, Size);
-
-    // Chia sẻ chung buffer DMA của HMI cho QR50/RFID cùng đọc
+  if (huart->Instance == USART2) { // RS485_1 (Chia sẻ giữa HMI và QR50)
     extern HMI_HandleTypeDef h_hmi;
-    QR50_ParseData(&qr50, h_hmi.rx_buffer, Size);
+    
+    // Phân luồng: Modbus RTU Response của HMI luôn bắt đầu bằng Slave ID = 0x01
+    // Trong khi dữ liệu mã QR là chuỗi ASCII (thường bắt đầu bằng chữ cái hoặc số, mã ASCII > 0x20)
+    if (h_hmi.rx_buffer[0] == 1) {
+      HMI_RxCallback(huart, Size);
+    } else {
+      // Nếu không phải byte 0x01, giả định đây là chuỗi mã QR
+      QR50_ParseData(&qr50, h_hmi.rx_buffer, Size);
+    }
   } else if (huart->Instance == UART5) { // RS485_2 (ESP32 Sensor Hub)
     ESP32_ParseResponse(Size);
   } else if (huart->Instance == USART3) { // RS485_0 (Cổng bị hỏng vật lý)
