@@ -90,6 +90,8 @@ Wiegand_HandleTypeDef h_wiegand;
 volatile uint32_t debug_wiegand_id = 0;        // ID thẻ Wiegand (Live Expression)
 volatile uint32_t debug_wiegand_bit_count = 0; // Số bit nhận được (phải = 34)
 volatile uint64_t debug_wiegand_raw = 0;        // Raw 34 bit trước khi decode (để chẩn đoán)
+volatile uint32_t debug_wiegand_high32 = 0;
+volatile uint32_t debug_wiegand_low32 = 0;
 
 // --- CẤU HÌNH MÃ THẺ RFID CỦA TỪNG TRẠM ---
 #define RFID_NODE_0 16790427
