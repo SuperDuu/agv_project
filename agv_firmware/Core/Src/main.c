@@ -86,10 +86,12 @@ Motor_HandleTypeDef m_left, m_right;
 LineSensor_HandleTypeDef line_ss;
 Pid_data pid_ctrl;
 QR50_Handler_t qr50;
+uint8_t qr50_rx_buffer[QR50_MAX_DATA_LEN];
 Wiegand_HandleTypeDef h_wiegand;
-volatile uint32_t debug_wiegand_id = 0;        // ID thẻ Wiegand (Live Expression)
+volatile uint32_t debug_wiegand_id = 0; // ID thẻ Wiegand (Live Expression)
 volatile uint32_t debug_wiegand_bit_count = 0; // Số bit nhận được (phải = 34)
-volatile uint64_t debug_wiegand_raw = 0;        // Raw 34 bit trước khi decode (để chẩn đoán)
+volatile uint64_t debug_wiegand_raw =
+    0; // Raw 34 bit trước khi decode (để chẩn đoán)
 volatile uint32_t debug_wiegand_high32 = 0;
 volatile uint32_t debug_wiegand_low32 = 0;
 
@@ -105,9 +107,10 @@ volatile uint32_t debug_wiegand_low32 = 0;
 #define RFID_NODE_8 233916848
 
 // Mảng ánh xạ RFID sang Node ID (Chỉ mục là Node ID, giá trị là Wiegand ID)
-uint32_t rfid_node_map[MAX_NODES] = {[0] = RFID_NODE_0,
-    [1] = RFID_NODE_1, [2] = RFID_NODE_2, [3] = RFID_NODE_3, [4] = RFID_NODE_4,
-    [5] = RFID_NODE_5, [6] = RFID_NODE_6, [7] = RFID_NODE_7, [8] = RFID_NODE_8,
+uint32_t rfid_node_map[MAX_NODES] = {
+    [0] = RFID_NODE_0, [1] = RFID_NODE_1, [2] = RFID_NODE_2,
+    [3] = RFID_NODE_3, [4] = RFID_NODE_4, [5] = RFID_NODE_5,
+    [6] = RFID_NODE_6, [7] = RFID_NODE_7, [8] = RFID_NODE_8,
 };
 volatile LS7366R_EncoderData_t encoder_data;
 AGV_Map_t factory_map;
@@ -562,9 +565,17 @@ int main(void) {
   extern TIM_HandleTypeDef htim6;
   HAL_TIM_Base_Start_IT(&htim6);
 
-  QR50_Init(&qr50, &huart2, 99); // Khởi tạo QR50 chung port với HMI
-  Wiegand_Init(&h_wiegand); // Khởi tạo Wiegand reader
-  // DMA đã được HMI_Init khởi động, QR50 chỉ cần parse dữ liệu khi callback gọi
+  QR50_Init(&qr50, &huart3, 99); // Khởi tạo QR50 trên USART3 (RS485_0)
+  Wiegand_Init(&h_wiegand);      // Khởi tạo Wiegand reader
+  
+  // Khởi động DMA cho QR50 (RS485_0)
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart3, qr50_rx_buffer, sizeof(qr50_rx_buffer));
+
+  // DMA đã được HMI_Init khởi động cho HMI
+  extern HMI_HandleTypeDef h_hmi;
+  // Cố gắng start lại DMA cho HMI để chắc chắn (nếu HMI_Init có lỗi/trễ)
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, h_hmi.rx_buffer,
+                               sizeof(h_hmi.rx_buffer));
 
   // Khởi tạo kênh giao tiếp Master-Slave với ESP32 qua UART5 (RS485_2)
   ESP32_Init(&huart5);
@@ -615,8 +626,8 @@ int main(void) {
       continue;
     }
 
-//    AGV_ServiceEsp32Request(&last_esp32_req_time);
-//    AGV_ServiceHeartbeat(&last_led_time);
+    //    AGV_ServiceEsp32Request(&last_esp32_req_time);
+    //    AGV_ServiceHeartbeat(&last_led_time);
 
     if (safe_esp32_data.HasNewCommand) {
       esp32_data.HasNewCommand = false;
@@ -742,14 +753,17 @@ int main(void) {
     if (qr50.Data.New_Data_Flag) {
       qr50.Data.New_Data_Flag = false;
 
-      // Xử lý chuyển đổi Node (Chỉ chạy nếu chuỗi bắt đầu bằng chữ 'N' như
-      // thiết kế cũ)
-      if (qr50.Data.Data_Buffer[0] == 'N') {
-        agv_state.last_qr_time = HAL_GetTick();
-
-        uint16_t read_node_id = atoi((char *)&qr50.Data.Data_Buffer[1]);
+      // QR50 gửi xuống theo format N00 -> N08.
+      // Parse chặt để tránh nhận nhầm các chuỗi rác/không đủ định dạng.
+      if (qr50.Data.Data_Length >= 3 && qr50.Data.Data_Buffer[0] == 'N' &&
+          qr50.Data.Data_Buffer[1] >= '0' && qr50.Data.Data_Buffer[1] <= '9' &&
+          qr50.Data.Data_Buffer[2] >= '0' && qr50.Data.Data_Buffer[2] <= '9') {
+        uint16_t read_node_id =
+            (uint16_t)((qr50.Data.Data_Buffer[1] - '0') * 10 +
+                       (qr50.Data.Data_Buffer[2] - '0'));
 
         if (read_node_id < MAX_NODES && read_node_id != last_processed_node) {
+          agv_state.last_qr_time = HAL_GetTick();
           pending_qr_node = read_node_id;
         }
       }
@@ -1521,6 +1535,15 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
     extern HMI_HandleTypeDef h_hmi;
     HAL_UARTEx_ReceiveToIdle_DMA(h_hmi.huart, h_hmi.rx_buffer,
                                  sizeof(h_hmi.rx_buffer));
+  } else if (huart->Instance == USART3) {
+    // Xóa cờ lỗi UART
+    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF |
+                                     UART_CLEAR_FEF | UART_CLEAR_PEF);
+
+    HAL_UART_AbortReceive(huart);
+    extern uint8_t qr50_rx_buffer[QR50_MAX_DATA_LEN];
+    HAL_UARTEx_ReceiveToIdle_DMA(huart, qr50_rx_buffer,
+                                 sizeof(qr50_rx_buffer));
   } else if (huart->Instance == UART5) {
     // Xóa cờ lỗi UART
     __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF |
@@ -1534,46 +1557,31 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 }
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
-  if (huart->Instance == USART2) { // RS485_1 (Chia sẻ giữa HMI và QR50)
+  if (huart->Instance == USART2) { // RS485_1 (Dành riêng cho HMI)
     extern HMI_HandleTypeDef h_hmi;
-    
-    // 1. Phục vụ Modbus HMI nếu byte đầu là Slave ID (0x01)
-    if (h_hmi.rx_buffer[0] == 1) {
+
+    if (Size >= 8 && h_hmi.rx_buffer[0] == h_hmi.slave_address) {
       HMI_RxCallback(huart, Size);
+    } else {
+      // Phục hồi lại cơ chế abort UART và restart DMA cho HMI nếu bị lỗi
+      HAL_UART_AbortReceive(huart);
+      __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
+      HAL_UARTEx_ReceiveToIdle_DMA(huart, h_hmi.rx_buffer, sizeof(h_hmi.rx_buffer));
     }
-    
-    // 2. Trích xuất mã QR từ buffer (bảo vệ lỗi dính chùm DMA)
-    // Mã QR (VD: "N01\r") có thể nằm ở đầu hoặc bị dính vào đuôi gói Modbus.
-    // Quét buffer để tìm chuỗi ASCII kết thúc bằng \r hoặc \n.
-    int qr_start = -1;
-    int qr_len = 0;
-    for (int i = 0; i < Size; i++) {
-      uint8_t c = h_hmi.rx_buffer[i];
-      // Chấp nhận chữ cái và số
-      if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-') {
-        if (qr_start == -1) qr_start = i;
-        qr_len++;
-      } 
-      // Dấu hiệu kết thúc mã QR
-      else if (c == '\r' || c == '\n') {
-        if (qr_start != -1 && qr_len >= 2) {
-          // Trích xuất thành công chuỗi QR
-          QR50_ParseData(&qr50, &h_hmi.rx_buffer[qr_start], qr_len);
-          break; // Chỉ xử lý 1 mã QR mỗi lần nhận
-        }
-        qr_start = -1;
-        qr_len = 0;
-      } 
-      // Gặp dữ liệu nhị phân rác -> reset bộ đếm
-      else {
-        qr_start = -1;
-        qr_len = 0;
+  } else if (huart->Instance == USART3) { // RS485_0 (Dành riêng cho QR50)
+    extern uint8_t qr50_rx_buffer[QR50_MAX_DATA_LEN];
+    if (Size > 0 && qr50_rx_buffer[0] == qr50.Config.Address) {
+      if (Size > 1) {
+        QR50_ParseData(&qr50, &qr50_rx_buffer[1], Size - 1);
       }
     }
+    
+    // Khởi động lại DMA sau khi nhận
+    HAL_UART_AbortReceive(huart);
+    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
+    HAL_UARTEx_ReceiveToIdle_DMA(huart, qr50_rx_buffer, sizeof(qr50_rx_buffer));
   } else if (huart->Instance == UART5) { // RS485_2 (ESP32 Sensor Hub)
     ESP32_ParseResponse(Size);
-  } else if (huart->Instance == USART3) { // RS485_0 (Cổng bị hỏng vật lý)
-    // Tạm thời vô hiệu hóa cổng này
   }
 }
 
