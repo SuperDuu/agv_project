@@ -243,8 +243,10 @@ void HMI_SyncData(void) {
         hmi_registers[REG_INDICATOR] = 0;  // HMI: Off/Normal
     }
     
-    for (int i = 0; i < path_length && i < 20; i++) {
-        hmi_registers[REG_PATH_START + i] = current_path[i];
+    if (path_length > 0) {
+        hmi_registers[REG_PATH_START] = current_path[0];
+    } else {
+        hmi_registers[REG_PATH_START] = 0;
     }
 
     // 2. HMI -> STM32 (Lắng nghe lệnh từ màn hình)
