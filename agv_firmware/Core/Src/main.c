@@ -79,6 +79,7 @@ volatile uint16_t debug_rfid_rx_len = 0;
 volatile uint8_t debug_rfid_rx_buf[64] = {0};
 volatile uint32_t debug_rfid_err_count = 0;
 volatile uint8_t debug_rx_byte = 0; // Byte nhận tạm thời cho ngắt IT
+volatile uint32_t debug_qr_rx_count = 0; // Đếm số lần nhảy vào ngắt nhận QR50
 
 // === BIẾN GLOBAL ĐỂ DEBUG TRÊN LIVE EXPRESSION ===
 AGV_HandleTypeDef h_agv;
@@ -1615,6 +1616,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
     }
   } else if (huart->Instance == USART3) { // RS485_0 (Dành riêng cho QR50)
     extern uint8_t qr50_rx_buffer[QR50_MAX_DATA_LEN];
+    debug_qr_rx_count++; // Debug đếm số lần nhận
     if (Size > 0) {
       QR50_ParseData(&qr50, qr50_rx_buffer, Size);
     }
