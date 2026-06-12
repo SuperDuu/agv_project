@@ -65,6 +65,9 @@ UART_HandleTypeDef huart3;
 DMA_NodeTypeDef Node_GPDMA1_Channel2;
 DMA_QListTypeDef List_GPDMA1_Channel2;
 DMA_HandleTypeDef handle_GPDMA1_Channel2;
+DMA_NodeTypeDef Node_GPDMA1_Channel3;
+DMA_QListTypeDef List_GPDMA1_Channel3;
+DMA_HandleTypeDef handle_GPDMA1_Channel3;
 DMA_NodeTypeDef Node_GPDMA1_Channel1;
 DMA_QListTypeDef List_GPDMA1_Channel1;
 DMA_HandleTypeDef handle_GPDMA1_Channel1;
@@ -562,7 +565,7 @@ int main(void)
   spi_test_result_e1 = LS7366R_TestSPI(1);
   spi_test_result_e2 = LS7366R_TestSPI(2);
 
-  HMI_Init(&h_hmi, &huart1, 1); // Đổi HMI sang USART1 (RS232)
+  HMI_Init(&huart1, 1); // Đổi HMI sang USART1 (RS232)
 
   extern TIM_HandleTypeDef htim6;
   HAL_TIM_Base_Start_IT(&htim6);
@@ -890,6 +893,8 @@ static void MX_GPDMA1_Init(void)
     HAL_NVIC_EnableIRQ(GPDMA1_Channel1_IRQn);
     HAL_NVIC_SetPriority(GPDMA1_Channel2_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(GPDMA1_Channel2_IRQn);
+    HAL_NVIC_SetPriority(GPDMA1_Channel3_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(GPDMA1_Channel3_IRQn);
 
   /* USER CODE BEGIN GPDMA1_Init 1 */
 
