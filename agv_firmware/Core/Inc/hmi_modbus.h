@@ -10,7 +10,7 @@ extern "C" {
 #include <stdbool.h>
 
 /* --- Modbus RTU Register Map Configuration --- */
-#define HMI_REG_COUNT 50
+#define HMI_REG_COUNT 10
 
 // Register Addresses (0-indexed offset for Modbus 4x Holding Registers)
 #define REG_AGV_MODE      0x0000  // R/W: Current Run Mode (1-7)
@@ -21,7 +21,7 @@ extern "C" {
 #define REG_AGV_STATUS    0x0005  // R  : 0=Idle, 1=Running, 2=Error
 #define REG_PATH_LENGTH   0x0006  // R  : Number of nodes in current path
 #define REG_INDICATOR     0x0007  // R  : 0=Off, 1=Turning (Blink Green), 2=Error (Blink Red)
-#define REG_PATH_START    0x0008  // R  : Array of up to 20 nodes for path (0x0008 - 0x001B)
+#define REG_PATH_START    0x0008  // R  : Start Node of the path
 
 /* --- Modbus Communication Structure --- */
 typedef struct {
