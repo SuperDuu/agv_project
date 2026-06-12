@@ -634,8 +634,8 @@ int main(void)
       continue;
     }
 
-    //    AGV_ServiceEsp32Request(&last_esp32_req_time);
-    //    AGV_ServiceHeartbeat(&last_led_time);
+    AGV_ServiceEsp32Request(&last_esp32_req_time);
+    AGV_ServiceHeartbeat(&last_led_time);
 
     if (safe_esp32_data.HasNewCommand) {
       esp32_data.HasNewCommand = false;
