@@ -20,7 +20,7 @@ extern "C" {
 #define REG_DEST_NODE     0x0004  // R/W: Destination Node ID (Set from HMI)
 #define REG_AGV_STATUS    0x0005  // R  : 0=Idle, 1=Running, 2=Error
 #define REG_PATH_LENGTH   0x0006  // R  : Number of nodes in current path
-#define REG_INDICATOR     0x0007  // R  : 0=Off, 1=Turning (Blink Green), 2=Error (Blink Red)
+#define REG_INDICATOR     0x0007  // R  : 0=Normal, 1=Turning, 2=Error, 3=ESP32 Disconnected
 #define REG_PATH_START    0x0008  // R  : Start Node of the path
 
 /* --- Modbus Communication Structure --- */
