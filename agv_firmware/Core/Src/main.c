@@ -592,6 +592,8 @@ int main(void)
   agv_state.path_index = 0;
   HAL_Delay(2000);
   agv_state.last_qr_time = HAL_GetTick();
+  uint32_t last_esp32_req_time = 0;
+  uint32_t last_led_time = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
