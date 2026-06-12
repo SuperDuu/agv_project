@@ -593,6 +593,7 @@ int main(void) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    AGV_UpdateGlobalYaw(); // Cập nhật góc Yaw toàn cục từ IMU
     HMI_Process();
 
     Wiegand_ProcessLoop(&h_wiegand);
@@ -711,6 +712,14 @@ int main(void) {
               break;
             }
             current_heading = target_heading;
+            
+            // Kiểm tra xem sau khi rẽ, góc của xe có khớp với bản đồ không
+            if (!AGV_ValidateHeading((uint8_t)current_heading)) {
+              AGV_Stop(&h_agv);
+              agv_state.follow_line_enable = false;
+              agv_state.indicator_state = 2; // Báo lỗi
+              continue; // Bỏ qua đoạn lệnh tiếp theo, yêu cầu can thiệp
+            }
           }
 
           agv_state.follow_line_enable = true;
@@ -1582,6 +1591,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
     HAL_UARTEx_ReceiveToIdle_DMA(huart, qr50_rx_buffer, sizeof(qr50_rx_buffer));
   } else if (huart->Instance == UART5) { // RS485_2 (ESP32 Sensor Hub)
     ESP32_ParseResponse(Size);
+    
+    // Khởi động lại DMA cho ESP32 sau khi nhận xong (HAL_UARTEx_ReceiveToIdle_DMA tự động dừng sau 1 frame)
+    HAL_UART_AbortReceive(huart);
+    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
+    extern uint8_t esp32_rx_buffer[15];
+    HAL_UARTEx_ReceiveToIdle_DMA(huart, esp32_rx_buffer, sizeof(esp32_rx_buffer));
   }
 }
 
