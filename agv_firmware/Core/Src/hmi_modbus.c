@@ -80,7 +80,7 @@ void HMI_RxCallback(UART_HandleTypeDef *huart, uint16_t Size) {
     }
 }
 
-// Khởi động lại DMA an toàn (Gọi từ main loop, KHÔNG gọi trong ISR)
+// Khởi động lại DMA an toàn (chỉ dùng khi cần, không gọi liên tục trong main loop)
 void HMI_RestartDMA(void) {
     if (!need_restart_dma) return;
     need_restart_dma = false;
@@ -97,9 +97,6 @@ void HMI_RestartDMA(void) {
 
 // Xử lý gói tin Modbus (Gọi liên tục trong while(1))
 void HMI_Process(void) {
-    // Luôn kiểm tra xem có cần restart DMA không (dù có frame hay không)
-    HMI_RestartDMA();
-    
     if (!h_hmi.frame_ready) return;
     h_hmi.frame_ready = false;
 
