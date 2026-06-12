@@ -562,21 +562,21 @@ int main(void)
   spi_test_result_e1 = LS7366R_TestSPI(1);
   spi_test_result_e2 = LS7366R_TestSPI(2);
 
-  HMI_Init(&huart2, 1); // Đổi HMI sang USART2 (RS485_1)
+  HMI_Init(&h_hmi, &huart1, 1); // Đổi HMI sang USART1 (RS232)
 
   extern TIM_HandleTypeDef htim6;
   HAL_TIM_Base_Start_IT(&htim6);
 
-  QR50_Init(&qr50, &huart3, 99); // Khởi tạo QR50 trên USART3 (RS485_0)
+  QR50_Init(&qr50, &huart2, 99); // Khởi tạo QR50 trên USART2 (RS485_1)
   Wiegand_Init(&h_wiegand);      // Khởi tạo Wiegand reader
   
-  // Khởi động DMA cho QR50 (RS485_0)
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart3, qr50_rx_buffer, sizeof(qr50_rx_buffer));
+  // Khởi động DMA cho QR50 (RS485_1)
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, qr50_rx_buffer, sizeof(qr50_rx_buffer));
 
   // DMA đã được HMI_Init khởi động cho HMI
   extern HMI_HandleTypeDef h_hmi;
   // Cố gắng start lại DMA cho HMI để chắc chắn (nếu HMI_Init có lỗi/trễ)
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, h_hmi.rx_buffer,
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, h_hmi.rx_buffer,
                                sizeof(h_hmi.rx_buffer));
 
   // Khởi tạo kênh giao tiếp Master-Slave với ESP32 qua UART5 (RS485_2)
@@ -1565,7 +1565,7 @@ static void MX_GPIO_Init(void)
 volatile bool hmi_tx_in_progress = false;
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
-  if (huart->Instance == USART2) {
+  if (huart->Instance == USART1) {
     debug_rfid_err_count++; // Tăng biến này nếu nhận được rác / sai baudrate
 
     // Xóa cờ lỗi UART
@@ -1582,7 +1582,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
     extern HMI_HandleTypeDef h_hmi;
     HAL_UARTEx_ReceiveToIdle_DMA(h_hmi.huart, h_hmi.rx_buffer,
                                  sizeof(h_hmi.rx_buffer));
-  } else if (huart->Instance == USART3) {
+  } else if (huart->Instance == USART2) {
     debug_qr_err_count++; // Tăng biến đếm lỗi
     // Xóa cờ lỗi UART
     __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF |
@@ -1605,7 +1605,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 }
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
-  if (huart->Instance == USART2) { // RS485_1 (Dành riêng cho HMI)
+  if (huart->Instance == USART1) { // RS232 (Dành riêng cho HMI)
     extern HMI_HandleTypeDef h_hmi;
 
     if (Size >= 8 && h_hmi.rx_buffer[0] == h_hmi.slave_address) {
@@ -1616,7 +1616,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
       __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
       HAL_UARTEx_ReceiveToIdle_DMA(huart, h_hmi.rx_buffer, sizeof(h_hmi.rx_buffer));
     }
-  } else if (huart->Instance == USART3) { // RS485_0 (Dành riêng cho QR50)
+  } else if (huart->Instance == USART2) { // RS485_1 (Dành riêng cho QR50)
     extern uint8_t qr50_rx_buffer[QR50_MAX_DATA_LEN];
     debug_qr_rx_count++; // Debug đếm số lần nhận
     if (Size > 0) {
