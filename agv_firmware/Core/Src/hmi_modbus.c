@@ -2,6 +2,7 @@
 #include <string.h>
 #include "agv_routing.h"
 #include "agv_control.h"
+#include "esp32_hub.h"
 
 uint16_t hmi_registers[HMI_REG_COUNT] = {0};
 HMI_HandleTypeDef h_hmi;
@@ -235,7 +236,6 @@ void HMI_SyncData(void) {
     }
     
     // Cập nhật đèn trạng thái kết nối ESP32 (1: Có tín hiệu, 0: Bị lỗi/Chưa nhận được)
-    extern ESP32_SensorData_t ESP32_GetSafeData(void);
     ESP32_SensorData_t esp_data = ESP32_GetSafeData();
     bool esp_connected = (HAL_GetTick() - esp_data.LastUpdateTick < 1000) && (esp_data.LastUpdateTick > 0);
 
