@@ -80,6 +80,7 @@ volatile uint8_t debug_rfid_rx_buf[64] = {0};
 volatile uint32_t debug_rfid_err_count = 0;
 volatile uint8_t debug_rx_byte = 0; // Byte nhận tạm thời cho ngắt IT
 volatile uint32_t debug_qr_rx_count = 0; // Đếm số lần nhảy vào ngắt nhận QR50
+volatile uint32_t debug_qr_err_count = 0; // Đếm số lần bị lỗi khung truyền (Baudrate)
 
 // === BIẾN GLOBAL ĐỂ DEBUG TRÊN LIVE EXPRESSION ===
 AGV_HandleTypeDef h_agv;
@@ -1582,6 +1583,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
     HAL_UARTEx_ReceiveToIdle_DMA(h_hmi.huart, h_hmi.rx_buffer,
                                  sizeof(h_hmi.rx_buffer));
   } else if (huart->Instance == USART3) {
+    debug_qr_err_count++; // Tăng biến đếm lỗi
     // Xóa cờ lỗi UART
     __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF |
                                      UART_CLEAR_FEF | UART_CLEAR_PEF);
