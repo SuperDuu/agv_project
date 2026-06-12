@@ -84,6 +84,7 @@ volatile uint32_t debug_rfid_err_count = 0;
 volatile uint8_t debug_rx_byte = 0; // Byte nhận tạm thời cho ngắt IT
 volatile uint32_t debug_qr_rx_count = 0; // Đếm số lần nhảy vào ngắt nhận QR50
 volatile uint32_t debug_qr_err_count = 0; // Đếm số lần bị lỗi khung truyền (Baudrate)
+volatile uint32_t debug_hmi_rx_count = 0; // Đếm số lần nhận được ngắt từ HMI
 
 // === BIẾN GLOBAL ĐỂ DEBUG TRÊN LIVE EXPRESSION ===
 AGV_HandleTypeDef h_agv;
@@ -1612,6 +1613,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
   if (huart->Instance == USART1) { // RS232 (Dành riêng cho HMI)
     extern HMI_HandleTypeDef h_hmi;
+    debug_hmi_rx_count++; // Debug đếm số lần nhận từ HMI
 
     if (Size >= 8 && h_hmi.rx_buffer[0] == h_hmi.slave_address) {
       HMI_RxCallback(huart, Size);
