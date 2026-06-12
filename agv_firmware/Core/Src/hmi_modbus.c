@@ -234,19 +234,15 @@ void HMI_SyncData(void) {
         hmi_registers[REG_AGV_STATUS] = 0; // HMI Idle
     }
     
-    // Cập nhật đèn trạng thái HMI (0: Off/Normal, 1: Turning Blink Green, 2: Error Blink Red)
+    // Cập nhật đèn trạng thái kết nối ESP32 (1: Có tín hiệu, 0: Bị lỗi/Chưa nhận được)
     extern ESP32_SensorData_t ESP32_GetSafeData(void);
     ESP32_SensorData_t esp_data = ESP32_GetSafeData();
     bool esp_connected = (HAL_GetTick() - esp_data.LastUpdateTick < 1000) && (esp_data.LastUpdateTick > 0);
 
-    if (!esp_connected) {
-        hmi_registers[REG_INDICATOR] = 3;  // Lỗi mất kết nối ESP32
-    } else if (agv_state.indicator_state == 1) {
-        hmi_registers[REG_INDICATOR] = 1;  // HMI: Turning
-    } else if (agv_state.indicator_state >= 2) {
-        hmi_registers[REG_INDICATOR] = 2;  // HMI: Error
+    if (esp_connected) {
+        hmi_registers[REG_INDICATOR] = 1;  // Đã có tín hiệu
     } else {
-        hmi_registers[REG_INDICATOR] = 0;  // HMI: Off/Normal
+        hmi_registers[REG_INDICATOR] = 0;  // Mất tín hiệu hoặc chưa nhận được
     }
     
     if (path_length > 0) {
