@@ -54,6 +54,8 @@ typedef struct {
     volatile bool need_recalculate_path;
     volatile uint32_t last_qr_time;
     volatile uint16_t path_index;
+    volatile float global_yaw;
+    volatile float prev_imu_yaw;
 } AGV_State_t;
 
 typedef struct {
@@ -118,6 +120,9 @@ void AGV_TrackLine_Sync(AGV_HandleTypeDef *hagv, uint32_t duration_ms);
 void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay, float search_ratio);
 void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay, float search_ratio);
 void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv);
+
+void AGV_UpdateGlobalYaw(void);
+bool AGV_ValidateHeading(uint8_t logical_heading);
 
 /* USER CODE BEGIN EFP */
 
