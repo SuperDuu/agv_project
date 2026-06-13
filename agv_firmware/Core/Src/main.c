@@ -450,17 +450,12 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     int diff = (target_heading - *current_heading + 4) % 4;
 
     uint32_t fwd_delay = 1600;
-    // Nâng lên 0.95f (tức là quay 95% góc mới được tìm line) để CHẮC CHẮN thoát
-    // line cũ
-    float search_ratio = 0.95f;
+    float search_ratio = 0.70f;
     if (agv_state.current_node == 8 && next_node == 7) {
       fwd_delay = 1400;
-      search_ratio = 0.95f;
     }
-    // Node 2→5: Rẽ phải, cần lướt xa hơn để thoát line NORTH
     if (agv_state.current_node == 2 && next_node == 5) {
       fwd_delay = 1800;
-      search_ratio = 0.85f;
     }
 
     agv_state.follow_line_enable = false;
@@ -699,12 +694,9 @@ int main(void)
                 &factory_map, agv_state.current_node, next_node);
             int diff = (target_heading - current_heading + 4) % 4;
             uint32_t fwd_delay = 1600;
-            // Nâng lên 0.95f (tức là quay 95% góc mới được tìm line) để CHẮC
-            // CHẮN thoát line cũ
-            float search_ratio = 0.95f;
+            float search_ratio = 0.70f;
             if (agv_state.current_node == 8 && next_node == 7) {
               fwd_delay = 1400;
-              search_ratio = 0.95f;
             }
 
             AGV_Action_t next_action = (AGV_Action_t)diff;
