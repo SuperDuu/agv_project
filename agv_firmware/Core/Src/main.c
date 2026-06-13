@@ -455,6 +455,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     agv_state.current_node = read_node_id;
   } else if (read_node_id != agv_state.current_node) {
     agv_state.current_node = read_node_id;
+    agv_state.is_kidnapped = true; // Bật cờ phát hiện bị bắt cóc
     bool found_path =
         Routing_Dijkstra(&factory_map, agv_state.current_node,
                          agv_state.destination_node, current_path, path_length);
@@ -471,6 +472,13 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     uint16_t next_node = current_path[agv_state.path_index + 1];
     AGV_Heading_t target_heading =
         Routing_GetHeading(&factory_map, agv_state.current_node, next_node);
+        
+    // Nếu vừa bị bắt cóc, ép hướng hiện tại bằng đúng hướng đích để đi thẳng đồng bộ lại
+    if (agv_state.is_kidnapped) {
+        *current_heading = target_heading;
+        agv_state.is_kidnapped = false; // Đã phục hồi hướng
+    }
+
     int diff = (target_heading - *current_heading + 4) % 4;
 
     uint32_t fwd_delay = 1900;
@@ -732,6 +740,13 @@ int main(void)
             uint16_t next_node = current_path[1];
             AGV_Heading_t target_heading = Routing_GetHeading(
                 &factory_map, agv_state.current_node, next_node);
+                
+            // Nếu xe đang bị mất phương hướng do bắt cóc, ép hướng về hướng đích
+            if (agv_state.is_kidnapped) {
+                current_heading = target_heading;
+                agv_state.is_kidnapped = false;
+            }
+            
             int diff = (target_heading - current_heading + 4) % 4;
             uint32_t fwd_delay = 1900;
             float search_ratio = 0.70f;

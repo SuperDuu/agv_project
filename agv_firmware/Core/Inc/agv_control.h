@@ -56,6 +56,7 @@ typedef struct {
     volatile uint16_t path_index;
     volatile float global_yaw;
     volatile float prev_imu_yaw;
+    volatile bool is_kidnapped;
 } AGV_State_t;
 
 typedef struct {
