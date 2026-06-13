@@ -413,7 +413,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
 
   if (*pending_qr_node == 0xFFFF) {
     if (agv_state.run_mode == MODE_4_FULL_RUN) {
-      if (HAL_GetTick() - agv_state.intersection_time > 500) {
+      if (HAL_GetTick() - agv_state.intersection_time > 2000) {
         if (nudge_count < 3) {
           AGV_BlindForward(&h_agv, 50); // Nhích tới 50ms
           AGV_Stop(&h_agv);
