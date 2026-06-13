@@ -457,6 +457,11 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
       fwd_delay = 1400;
       search_ratio = 0.95f;
     }
+    // Node 2→5: Rẽ phải, cần lướt xa hơn để thoát line NORTH
+    if (agv_state.current_node == 2 && next_node == 5) {
+      fwd_delay = 1800;
+      search_ratio = 0.85f;
+    }
 
     agv_state.follow_line_enable = false;
     switch ((AGV_Action_t)diff) {
