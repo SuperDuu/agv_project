@@ -359,7 +359,7 @@ void Toggle_Outputs(void) {
 
 void Load_Factory_Map(void) {
   Map_Init(&factory_map);
-  factory_map.total_nodes = 15;
+  factory_map.total_nodes = 9;
 
   Map_AddEdge(&factory_map, N00, N01, 1, HEAD_NORTH);
   Map_AddEdge(&factory_map, N01, N00, 1, HEAD_SOUTH);
