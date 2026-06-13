@@ -121,7 +121,7 @@ void AGV_BlindForward(AGV_HandleTypeDef *hagv, uint32_t delay_ms);
 
 void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay, float search_ratio);
 void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay, float search_ratio);
-void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv);
+void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv, uint8_t current_heading);
 
 void AGV_UpdateGlobalYaw(void);
 bool AGV_ValidateHeading(uint8_t logical_heading);

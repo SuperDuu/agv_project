@@ -592,17 +592,24 @@ void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay,
                  enable_search, search_ratio);
 }
 
-void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
+void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv, uint8_t current_heading) {
   if (hagv == NULL || agv_state.run_mode == MODE_3_TEST_SENSORS_NO_MOTOR)
     return;
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForward(hagv, 2000);
+  AGV_BlindForward(hagv, 500);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
-  Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed,
-                 enable_search, 0.80f);
+  // Nếu đang đi ngược hướng ban đầu (HEAD_SOUTH = 2), rẽ cùng chiều kim đồng hồ (Right)
+  if (current_heading == 2) {
+    Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed,
+                   enable_search, 0.60f);
+  } else {
+    // Nếu đi hướng xuôi (HEAD_NORTH = 0), WEST(3), EAST(1), rẽ ngược chiều kim đồng hồ (Left)
+    Turn_IMU_Based(hagv, 170.0f, -agv_config.turn_speed, agv_config.turn_speed,
+                   enable_search, 0.60f);
+  }
 }
 
 /* USER CODE END 1 */

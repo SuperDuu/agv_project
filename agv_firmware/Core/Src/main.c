@@ -483,7 +483,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
           (agv_state.current_node == 7 && next_node == 8)) {
         AGV_TrackLine_Sync(&h_agv, 1500);
       }
-      AGV_Turn180_IMU(&h_agv);
+      AGV_Turn180_IMU(&h_agv, *current_heading);
       break;
     case ACT_STOP:
     default:
@@ -1570,10 +1570,12 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 // Cờ toàn cục: khi STM32 đang truyền TX, cấm ErrorCallback restart DMA
 volatile bool hmi_tx_in_progress = false;
+volatile uint32_t debug_hmi_crc_err = 0;
+volatile uint32_t debug_hmi_hw_err = 0;
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
   if (huart->Instance == USART1) {
-    debug_rfid_err_count++; // Tăng biến này nếu nhận được rác / sai baudrate
+    debug_hmi_hw_err++; // Tăng biến này nếu HMI nhận rác do nhiễu motor
 
     // Xóa cờ lỗi UART
     __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF |
