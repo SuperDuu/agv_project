@@ -494,6 +494,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     *current_heading = target_heading;
     agv_state.last_leave_intersection_time = HAL_GetTick();
     agv_state.follow_line_enable = true;
+    *last_processed_node = 0xFFFF;
   }
 }
 
