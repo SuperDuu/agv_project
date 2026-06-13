@@ -470,8 +470,8 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
       break;
     case ACT_STRAIGHT:
       h_agv.direction = 1;
-      // KHÔNG CẦN SET SPEED HAY DELAY:
-      // Xe đang chạy ở current_speed, cứ để nó trôi qua ngã tư mượt mà!
+      // Xe đã bị dừng tại ngã tư, cần chạy thẳng qua trước khi bám line
+      AGV_BlindForwardDynamic(&h_agv, 800);
       break;
     case ACT_BACKWARD:
       h_agv.direction = 1;
