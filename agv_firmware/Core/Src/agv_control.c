@@ -15,7 +15,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-AGV_State_t agv_state = {.run_mode = MODE_7_DEBUG_NO_QR,
+AGV_State_t agv_state = {.run_mode = MODE_4_FULL_RUN,
                          .indicator_state = 0,
                          .follow_line_enable = false,
                          .is_at_intersection = false,
@@ -319,7 +319,7 @@ void AGV_TrackLine_Sync(AGV_HandleTypeDef *hagv, uint32_t duration_ms) {
 
 // Hàm hỗ trợ đi thẳng qua ngã tư với thời gian động (Dynamic Delay) dựa trên
 // tốc độ hiện tại
-static void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv,
+void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv,
                                     uint32_t reference_time_at_250) {
   float speed = hagv->current_speed;
 
