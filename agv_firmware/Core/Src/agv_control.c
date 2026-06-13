@@ -25,7 +25,9 @@ AGV_State_t agv_state = {.run_mode = MODE_7_DEBUG_NO_QR,
                          .destination_node = 0,
                          .need_recalculate_path = false,
                          .last_qr_time = 0,
-                         .path_index = 0};
+                         .path_index = 0,
+                         .global_yaw = 0.0f,
+                         .prev_imu_yaw = 0.0f};
 
 AGV_Config_t agv_config = {
     .time_offset = 400, // Reduced from 600 because of higher speed
@@ -450,6 +452,49 @@ void AGV_TurnRight(AGV_HandleTypeDef *hagv) {
 //                   time_135);
 // }
 
+void AGV_UpdateGlobalYaw(void) {
+  static bool imu_initialized = false;
+  float current_imu = ESP32_GetSafeData().Yaw;
+  
+  // Chờ cho đến khi có dữ liệu IMU thực sự (khác 0) để khởi tạo mốc 0 độ
+  if (!imu_initialized) {
+    if (current_imu != 0.0f) {
+      agv_state.prev_imu_yaw = current_imu;
+      agv_state.global_yaw = 0.0f; // Bắt đầu từ 0 độ tương ứng với HEAD_NORTH lúc bật máy
+      imu_initialized = true;
+    }
+    return;
+  }
+
+  float delta = current_imu - agv_state.prev_imu_yaw;
+  
+  if (delta > 180.0f) {
+    delta -= 360.0f;
+  } else if (delta < -180.0f) {
+    delta += 360.0f;
+  }
+  
+  agv_state.global_yaw += delta;
+  agv_state.prev_imu_yaw = current_imu;
+}
+
+// Kiểm tra xem góc quay thực tế của xe có đúng với góc logic trên bản đồ không
+bool AGV_ValidateHeading(uint8_t logical_heading) {
+  float normalized_yaw = fmodf(agv_state.global_yaw, 360.0f);
+  if (normalized_yaw < 0.0f) normalized_yaw += 360.0f;
+  
+  // Logical: 0=North, 1=East, 2=South, 3=West
+  // IMU Yaw: Right turn decreases angle. So East is -90 (270 deg), South is -180 (180 deg)
+  float expected_angle = fmodf(360.0f - 90.0f * logical_heading, 360.0f);
+  
+  float error = fabs(normalized_yaw - expected_angle);
+  if (error > 180.0f) error = 360.0f - error;
+  
+  // Cho phép sai số lên tới 35 độ vì lốp xe có thể trượt và IMU có thể trôi (drift)
+  if (error <= 35.0f) return true;
+  return false;
+}
+
 static bool Turn_FindCenterLine(AGV_HandleTypeDef *hagv) {
   uint16_t val = LineSensor_Read(hagv->line_sensor);
   return (val & CENTER_MASK) != CENTER_MASK;
@@ -458,7 +503,8 @@ static bool Turn_FindCenterLine(AGV_HandleTypeDef *hagv) {
 static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
                            int16_t speed_l, int16_t speed_r, bool search_line, float search_ratio) {
   uint32_t start_time = HAL_GetTick();
-  float start_yaw = ESP32_GetSafeData().Yaw;
+  AGV_UpdateGlobalYaw(); // Cập nhật góc trước khi bắt đầu
+  float start_yaw = agv_state.global_yaw;
   bool line_search_enabled = search_line && (target_angle > 0.0f);
   bool line_found = false;
   bool target_reached = false;
@@ -480,10 +526,8 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
       ESP32_RequestData(agv_state.current_node);
     }
 
-    float current_yaw = ESP32_GetSafeData().Yaw;
-    float diff = fabs(current_yaw - start_yaw);
-    while (diff > 180.0f)
-      diff = 360.0f - diff;
+    AGV_UpdateGlobalYaw(); // Cập nhật liên tục biến dẫn hướng toàn cục
+    float diff = fabs(agv_state.global_yaw - start_yaw);
 
     if (!target_reached && diff >= (target_angle - 2.0f))
       target_reached = true;
