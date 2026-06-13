@@ -25,9 +25,13 @@
 #include "agv_routing.h"
 #include "esp32_hub.h" // Thư viện giao tiếp ESP32
 #include "hmi_modbus.h"
+#include "agv_control.h"
+#include "hmi_modbus.h"
+#include "qr50_reader.h"
+#include "wiegand.h"
+#include "agv_eeprom.h"
 #include "ls7366r.h"
 #include "motor.h"
-#include "qr50_reader.h"
 #include "sensor.h"
 #include <stdlib.h> // Để sử dụng hàm atoi
 
@@ -413,7 +417,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
 
   if (*pending_qr_node == 0xFFFF) {
     if (agv_state.run_mode == MODE_4_FULL_RUN) {
-      if (HAL_GetTick() - agv_state.intersection_time > 2000) {
+      if (HAL_GetTick() - agv_state.intersection_time > 1500) {
         if (nudge_count < 3) {
           AGV_BlindForward(&h_agv, 50); // Nhích tới 50ms
           AGV_Stop(&h_agv);
@@ -441,6 +445,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     agv_state.path_index = 0;
     agv_state.follow_line_enable = false;
     AGV_Stop(&h_agv);
+    EEPROM_SaveState(agv_state.current_node, current_heading);
     return;
   }
 
@@ -518,6 +523,9 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     agv_state.last_leave_intersection_time = HAL_GetTick();
     agv_state.follow_line_enable = true;
     *last_processed_node = 0xFFFF;
+    
+    // Đã qua ngã tư và cập nhật góc mới, lưu vào EEPROM
+    EEPROM_SaveState(agv_state.current_node, *current_heading);
   }
 }
 
@@ -611,6 +619,15 @@ int main(void)
   ESP32_Init(&huart5);
 
   Load_Factory_Map();
+
+  // Đọc trạng thái cũ từ Flash EEPROM (nếu có)
+  uint16_t saved_node;
+  uint8_t saved_heading;
+  if (EEPROM_LoadState(&saved_node, &saved_heading)) {
+    agv_state.current_node = saved_node;
+    current_heading = (AGV_Heading_t)saved_heading;
+  }
+
   // Khởi động với đường đi trống - chờ HMI đặt đích mới tính
   path_length = 0;
   agv_state.path_index = 0;
