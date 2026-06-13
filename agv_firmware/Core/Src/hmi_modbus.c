@@ -98,26 +98,29 @@ void HMI_RestartDMA(void) {
 
 // Xử lý gói tin Modbus (Gọi liên tục trong while(1))
 void HMI_Process(void) {
-    if (!h_hmi.frame_ready) return;
+    if (!h_hmi.frame_ready) {
+        HMI_RestartDMA();
+        return;
+    }
     h_hmi.frame_ready = false;
 
     uint16_t len = process_len;
-    if (len < 8) return; // Khung Modbus RTU tối thiểu 8 bytes
+    if (len < 8) goto end_process; // Khung Modbus RTU tối thiểu 8 bytes
 
     // Kiểm tra Slave Address
-    if (process_buffer[0] != h_hmi.slave_address) return;
+    if (process_buffer[0] != h_hmi.slave_address) goto end_process;
 
     // Kiểm tra CRC
     uint16_t received_crc = (process_buffer[len - 1] << 8) | process_buffer[len - 2];
     uint16_t calc_crc = Modbus_CalcCRC(process_buffer, len - 2);
-    if (received_crc != calc_crc) return;
+    if (received_crc != calc_crc) goto end_process;
 
     uint8_t function_code = process_buffer[1];
     uint16_t start_addr = (process_buffer[2] << 8) | process_buffer[3];
     uint16_t reg_count = (process_buffer[4] << 8) | process_buffer[5];
 
     // Chống ghi đè ngoài mảng
-    if (start_addr + reg_count > HMI_REG_COUNT) return;
+    if (start_addr + reg_count > HMI_REG_COUNT) goto end_process;
 
     uint16_t tx_len = 0;
 
@@ -153,8 +156,8 @@ void HMI_Process(void) {
         // HMI gửi function 16, đính kèm số lượng byte data = reg_count * 2
         // Data bắt đầu từ byte số 7
         uint8_t byte_count = process_buffer[6];
-        if (byte_count != reg_count * 2) return; // Kiểm tra tính hợp lệ
-        if (7 + byte_count > len - 2) return; // Tránh đọc lố mảng
+        if (byte_count != reg_count * 2) goto end_process; // Kiểm tra tính hợp lệ
+        if (7 + byte_count > len - 2) goto end_process; // Tránh đọc lố mảng
 
         for (uint16_t i = 0; i < reg_count; i++) {
             hmi_registers[start_addr + i] = (process_buffer[7 + i*2] << 8) | process_buffer[8 + i*2];
@@ -192,8 +195,8 @@ void HMI_Process(void) {
         // Truyền dữ liệu
         HAL_UART_Transmit(h_hmi.huart, h_hmi.tx_buffer, tx_len, 100);
         
-        // Chờ byte cuối cùng ra khỏi shift register (TC = Transmission Complete)
-        while (!__HAL_UART_GET_FLAG(h_hmi.huart, UART_FLAG_TC)) {}
+        // HAL_UART_Transmit đã tự động đợi cờ TC (Transmission Complete) hoặc Timeout.
+        // Xóa vòng lặp while(TC) vô tận ở đây để tránh treo hệ thống nếu cáp đứt/nhiễu.
         
         // Chờ bus RS485 ổn định sau khi truyền
         HAL_Delay(2);
@@ -212,6 +215,11 @@ void HMI_Process(void) {
         // Nháy LED3 báo hiệu truyền xong
         HAL_GPIO_TogglePin(SYS_LED3_GPIO_Port, SYS_LED3_Pin);
     }
+
+end_process:
+    // Đảm bảo luôn luôn khởi động lại DMA nếu chưa được restart
+    // (Bảo vệ HMI không bị "điếc" khi nhận phải gói tin lỗi CRC)
+    HMI_RestartDMA();
 }
 
 // Đồng bộ dữ liệu HMI với hệ thống
