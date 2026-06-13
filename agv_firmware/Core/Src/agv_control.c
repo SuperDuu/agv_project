@@ -317,18 +317,28 @@ void AGV_TrackLine_Sync(AGV_HandleTypeDef *hagv, uint32_t duration_ms) {
     }
 }
 
+// Hàm Delay không chặn (non-blocking) để giữ kết nối HMI Modbus luôn sống
+void AGV_Delay(uint32_t ms) {
+  uint32_t start = HAL_GetTick();
+  extern void HMI_Process(void);
+  while (HAL_GetTick() - start < ms) {
+    HMI_Process();
+    HAL_Delay(1);
+  }
+}
+
 // Hàm hỗ trợ đi thẳng qua ngã tư với thời gian động (Dynamic Delay) dựa trên
 // tốc độ hiện tại
 void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv,
                                     uint32_t reference_time_at_250) {
   float speed = hagv->current_speed;
 
-  // NẾU TỐC ĐỘ HIỆN TẠI QUÁ THẤP (Ví dụ: Xe đang dừng hẳn ở trạm và bị bắt quay
-  // đầu ngay) Tốc độ thấp sẽ không đủ lực để thắng ma sát tĩnh, khiến xe chỉ
-  // nhích 1 đoạn ngắn xíu rồi quay -> lệch góc! Giải pháp: Ép tốc độ tối thiểu
-  // lên 200 để xe bốc qua ngã tư dứt khoát!
-  if (speed < 200.0f) {
-    speed = 200.0f;
+  // NẾU TỐC ĐỘ HIỆN TẠI QUÁ THẤP (Ví dụ: Xe đang dừng hẳn ở trạm)
+  // Tốc độ quá thấp (200) sẽ không đủ lực để thắng ma sát tĩnh một cách dứt khoát,
+  // khiến quãng đường lướt mù bị sai lệch! Giải pháp: Ép tốc độ tối thiểu
+  // lên 400 để xe bọt qua ngã tư dứt khoát!
+  if (speed < 400.0f) {
+    speed = 400.0f;
   }
 
   // Quãng đường không đổi = Tốc độ x Thời gian
@@ -341,7 +351,7 @@ void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv,
 
   Motor_SetSpeed(hagv->motor_left, (int16_t)speed);
   Motor_SetSpeed(hagv->motor_right, (int16_t)speed);
-  HAL_Delay(dynamic_delay);
+  AGV_Delay(dynamic_delay);
 
   // Cập nhật lại tốc độ hiện tại để xe tiếp tục gia tốc mượt mà
   if (hagv->current_speed < speed) {
@@ -392,7 +402,7 @@ static void Turn_Time_Based(AGV_HandleTypeDef *hagv, int16_t speed_l,
 
   AGV_Stop(hagv);
   agv_state.indicator_state = 0; // Turn complete
-  HAL_Delay(120);
+  AGV_Delay(120);
 }
 
 void AGV_TurnLeft(AGV_HandleTypeDef *hagv) {
@@ -556,7 +566,7 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
   (void)line_found;
   AGV_Stop(hagv);
   agv_state.indicator_state = 0;
-  HAL_Delay(120);
+  AGV_Delay(120);
 }
 
 void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay, float search_ratio) {
@@ -593,11 +603,11 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv) {
 
   bool enable_search = (agv_state.run_mode != MODE_5_CALIBRATE_MOTORS);
 
-  AGV_BlindForwardDynamic(hagv, 100);
+  AGV_BlindForwardDynamic(hagv, 2000);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
   Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed,
-                 enable_search, 0.70f);
+                 enable_search, 0.80f);
 }
 
 /* USER CODE END 1 */
