@@ -102,15 +102,15 @@ volatile uint32_t debug_wiegand_high32 = 0;
 volatile uint32_t debug_wiegand_low32 = 0;
 
 // --- CẤU HÌNH MÃ THẺ RFID CỦA TỪNG TRẠM ---
-#define RFID_NODE_0 16790427
-#define RFID_NODE_1 16790427
-#define RFID_NODE_2 0
-#define RFID_NODE_3 0
-#define RFID_NODE_4 0
-#define RFID_NODE_5 0
-#define RFID_NODE_6 0
-#define RFID_NODE_7 0
-#define RFID_NODE_8 233916848
+#define RFID_NODE_0 N00
+#define RFID_NODE_1 N01
+#define RFID_NODE_2 N02
+#define RFID_NODE_3 N03
+#define RFID_NODE_4 N04
+#define RFID_NODE_5 N05
+#define RFID_NODE_6 N06
+#define RFID_NODE_7 N07
+#define RFID_NODE_8 N08
 
 // Mảng ánh xạ RFID sang Node ID (Chỉ mục là Node ID, giá trị là Wiegand ID)
 uint32_t rfid_node_map[MAX_NODES] = {
