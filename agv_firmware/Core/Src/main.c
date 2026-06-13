@@ -284,7 +284,7 @@ static bool AGV_HandleMode5Calibration(void) {
     }
     break;
   case 7:
-    AGV_Turn180_IMU(&h_agv);
+    AGV_Turn180_IMU(&h_agv, 0); // 0 = HEAD_NORTH
     mode5_calib_state++;
     mode5_calib_start_time = HAL_GetTick();
     break;
@@ -711,7 +711,7 @@ int main(void)
               break;
             case ACT_BACKWARD:
               h_agv.direction = 1;
-              AGV_Turn180_IMU(&h_agv);
+              AGV_Turn180_IMU(&h_agv, current_heading);
               break;
             case ACT_STRAIGHT:
             case ACT_STOP:
