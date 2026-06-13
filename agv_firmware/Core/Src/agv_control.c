@@ -206,7 +206,7 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
         ((line_val & CENTER_MASK) != CENTER_MASK) &&
         (HAL_GetTick() - agv_state.last_leave_intersection_time >
          AGV_LINE_RECOVERY_TIME)) {
-      // AGV_Stop(hagv); // KHÔNG DỪNG LẠI
+      AGV_Stop(hagv);
       agv_state.follow_line_enable = false;
       agv_state.is_at_intersection = true;
       agv_state.intersection_time = HAL_GetTick();
