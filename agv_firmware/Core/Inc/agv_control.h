@@ -117,7 +117,7 @@ void AGV_Turn180(AGV_HandleTypeDef *hagv);
 
 void AGV_TrackLine_Sync(AGV_HandleTypeDef *hagv, uint32_t duration_ms);
 void AGV_Delay(uint32_t ms);
-void AGV_BlindForwardDynamic(AGV_HandleTypeDef *hagv, uint32_t reference_time_at_250);
+void AGV_BlindForward(AGV_HandleTypeDef *hagv, uint32_t delay_ms);
 
 void AGV_TurnLeft_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay, float search_ratio);
 void AGV_TurnRight_IMU(AGV_HandleTypeDef *hagv, uint32_t fwd_delay, float search_ratio);

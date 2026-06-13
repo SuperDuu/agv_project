@@ -449,7 +449,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
         Routing_GetHeading(&factory_map, agv_state.current_node, next_node);
     int diff = (target_heading - *current_heading + 4) % 4;
 
-    uint32_t fwd_delay = 1600;
+    uint32_t fwd_delay = 1900;
     float search_ratio = 0.70f;
     if (agv_state.current_node == 8 && next_node == 7) {
       fwd_delay = 1400;
@@ -471,7 +471,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     case ACT_STRAIGHT:
       h_agv.direction = 1;
       // Xe đã bị dừng tại ngã tư, cần chạy thẳng qua trước khi bám line
-      AGV_BlindForwardDynamic(&h_agv, 800);
+      AGV_BlindForward(&h_agv, 800);
       break;
     case ACT_BACKWARD:
       h_agv.direction = 1;
@@ -693,7 +693,7 @@ int main(void)
             AGV_Heading_t target_heading = Routing_GetHeading(
                 &factory_map, agv_state.current_node, next_node);
             int diff = (target_heading - current_heading + 4) % 4;
-            uint32_t fwd_delay = 1600;
+            uint32_t fwd_delay = 1900;
             float search_ratio = 0.70f;
             if (agv_state.current_node == 8 && next_node == 7) {
               fwd_delay = 1400;
