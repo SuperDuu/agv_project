@@ -409,8 +409,27 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     }
   }
 
-  if (*pending_qr_node == 0xFFFF)
+  static uint8_t nudge_count = 0;
+
+  if (*pending_qr_node == 0xFFFF) {
+    if (agv_state.run_mode == MODE_4_FULL_RUN) {
+      if (HAL_GetTick() - agv_state.intersection_time > 500) {
+        if (nudge_count < 3) {
+          AGV_BlindForward(&h_agv, 50); // Nhích tới 50ms
+          AGV_Stop(&h_agv);
+          nudge_count++;
+          agv_state.intersection_time = HAL_GetTick();
+        } else {
+          // Báo lỗi nếu đã nhích 3 lần vẫn không thấy mã
+          agv_state.indicator_state = 2; 
+        }
+      }
+    }
     return;
+  }
+
+  // Đã có mã QR, reset lại số lần nhích để dùng cho ngã tư sau
+  nudge_count = 0;
 
   uint16_t read_node_id = *pending_qr_node;
   *pending_qr_node = 0xFFFF;
@@ -452,7 +471,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     uint32_t fwd_delay = 1900;
     float search_ratio = 0.70f;
     if (agv_state.current_node == 8 && next_node == 7) {
-      fwd_delay = 1400;
+      fwd_delay = 1600;
     }
     if (agv_state.current_node == 2 && next_node == 5) {
       fwd_delay = 1800;
@@ -696,7 +715,7 @@ int main(void)
             uint32_t fwd_delay = 1900;
             float search_ratio = 0.70f;
             if (agv_state.current_node == 8 && next_node == 7) {
-              fwd_delay = 1400;
+              fwd_delay = 1600;
             }
 
             AGV_Action_t next_action = (AGV_Action_t)diff;

@@ -601,12 +601,14 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv, uint8_t current_heading) {
   AGV_BlindForward(hagv, 500);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
-  // Nếu đang đi ngược hướng ban đầu (HEAD_SOUTH = 2), rẽ cùng chiều kim đồng hồ (Right)
-  if (current_heading == 2) {
+  // Nếu đang đi ngược hướng ban đầu (HEAD_SOUTH = 2) hoặc ngược hướng rẽ phải (HEAD_WEST = 3)
+  if (current_heading == 2 || current_heading == 3) {
+    // Rẽ cùng chiều kim đồng hồ (Right)
     Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed,
                    enable_search, 0.60f);
   } else {
-    // Nếu đi hướng xuôi (HEAD_NORTH = 0), WEST(3), EAST(1), rẽ ngược chiều kim đồng hồ (Left)
+    // Nếu đi hướng xuôi (HEAD_NORTH = 0), hoặc EAST(1)
+    // Rẽ ngược chiều kim đồng hồ (Left)
     Turn_IMU_Based(hagv, 170.0f, -agv_config.turn_speed, agv_config.turn_speed,
                    enable_search, 0.60f);
   }
