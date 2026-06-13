@@ -476,6 +476,10 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     if (agv_state.current_node == 2 && next_node == 5) {
       fwd_delay = 1800;
     }
+    // Căn chỉnh riêng cho Node 5 để tránh bị văng quá đà khi rẽ
+    if (agv_state.current_node == 5) {
+      fwd_delay = 1700; 
+    }
 
     agv_state.follow_line_enable = false;
     switch ((AGV_Action_t)diff) {
