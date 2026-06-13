@@ -253,8 +253,12 @@ void HMI_SyncData(void) {
   hmi_registers[REG_CURRENT_NODE] = agv_state.current_node;
   hmi_registers[REG_PATH_LENGTH] = path_length;
 
-  // Thêm: Điểm bắt đầu (Start Point) và Điểm tiếp theo (Next Point)
-  hmi_registers[REG_NEXT_NODE] = current_path[agv_state.path_index];
+  // Thêm: Điểm tiếp theo (Next Point)
+  if (path_length > 0 && agv_state.path_index < path_length - 1) {
+      hmi_registers[REG_NEXT_NODE] = current_path[agv_state.path_index + 1];
+  } else {
+      hmi_registers[REG_NEXT_NODE] = agv_state.destination_node;
+  }
   // hmi_registers[REG_DEST_NODE] đã được lấy từ HMI xuống nên không cần ghi đè
   // ngược lại
 
