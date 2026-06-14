@@ -199,41 +199,19 @@ void HMI_Process(void) {
   }
 
   if (tx_len > 0) {
-    // === Bảo vệ: Cấm ErrorCallback can thiệp DMA trong quá trình TX ===
+    // RS232 Full Duplex: Không cần tắt DMA RX, không cần Turnaround Delay.
+    // Việc truyền TX và nhận RX diễn ra độc lập và liên tục.
+    
     extern volatile bool hmi_tx_in_progress;
     hmi_tx_in_progress = true;
 
-    // Tắt DMA RX trước khi truyền (RS485 half-duplex)
-    HAL_UART_AbortReceive(h_hmi.huart);
-
-    // Ép trạng thái UART TX về READY
+    // Ép trạng thái UART TX về READY (phòng ngừa kẹt state)
     h_hmi.huart->gState = HAL_UART_STATE_READY;
     __HAL_UNLOCK(h_hmi.huart);
-
-    // RS485 Turnaround Delay
-    HAL_Delay(3);
 
     // Truyền dữ liệu
     HAL_UART_Transmit(h_hmi.huart, h_hmi.tx_buffer, tx_len, 100);
 
-    // HAL_UART_Transmit đã tự động đợi cờ TC (Transmission Complete) hoặc
-    // Timeout. Xóa vòng lặp while(TC) vô tận ở đây để tránh treo hệ thống nếu
-    // cáp đứt/nhiễu.
-
-    // Chờ bus RS485 ổn định sau khi truyền
-    HAL_Delay(2);
-
-    // Xóa toàn bộ lỗi và dữ liệu echo còn sót trong RX
-    __HAL_UART_CLEAR_FLAG(h_hmi.huart, UART_CLEAR_OREF | UART_CLEAR_NEF |
-                                           UART_CLEAR_FEF | UART_CLEAR_IDLEF);
-    __HAL_UART_SEND_REQ(h_hmi.huart, UART_RXDATA_FLUSH_REQUEST);
-
-    // Khởi động lại DMA RX
-    HAL_UARTEx_ReceiveToIdle_DMA(h_hmi.huart, h_hmi.rx_buffer,
-                                 sizeof(h_hmi.rx_buffer));
-    need_restart_dma = false;
-
-    // === Gỡ bảo vệ: Cho phép ErrorCallback hoạt động bình thường ===
     hmi_tx_in_progress = false;
 
     // Nháy LED3 báo hiệu truyền xong
