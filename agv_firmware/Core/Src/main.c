@@ -22,13 +22,14 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "agv_control.h"
+#include "agv_eeprom.h"
 #include "agv_routing.h"
 #include "esp32_hub.h" // Thư viện giao tiếp ESP32
 #include "hmi_modbus.h"
 #include "agv_control.h"
 #include "hmi_modbus.h"
 #include "qr50_reader.h"
-#include "wiegand.h"
+//#include "wiegand.h"
 #include "agv_eeprom.h"
 #include "ls7366r.h"
 #include "motor.h"
@@ -196,7 +197,8 @@ static void AGV_ServiceEsp32Request(uint32_t *last_esp32_req_time) {
 
   if (HAL_GetTick() - *last_esp32_req_time > 50) {
     *last_esp32_req_time = HAL_GetTick();
-    ESP32_RequestData(agv_state.current_node);
+    uint8_t is_arrived = (agv_state.current_node == agv_state.destination_node) ? 1 : 0;
+    ESP32_RequestData(agv_state.current_node, is_arrived);
   }
 }
 
@@ -473,10 +475,10 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     AGV_Heading_t target_heading =
         Routing_GetHeading(&factory_map, agv_state.current_node, next_node);
         
-    // Nếu vừa bị bắt cóc, ép hướng hiện tại bằng đúng hướng đích để đi thẳng đồng bộ lại
+    // Loại bỏ việc ép hướng khi bị "bắt cóc" (hoặc khi cố tình bỏ qua node). 
+    // AGV sẽ dùng chính hướng hiện tại (current_heading) để tính góc rẽ chính xác.
     if (agv_state.is_kidnapped) {
-        *current_heading = target_heading;
-        agv_state.is_kidnapped = false; // Đã phục hồi hướng
+        agv_state.is_kidnapped = false; // Xóa cờ, giữ nguyên current_heading
     }
 
     int diff = (target_heading - *current_heading + 4) % 4;
@@ -627,7 +629,7 @@ int main(void)
   ESP32_Init(&huart5);
 
   Load_Factory_Map();
-
+  EEPROM_EraseSector();
   // Đọc trạng thái cũ từ Flash EEPROM (nếu có)
   uint16_t saved_node;
   uint8_t saved_heading;
