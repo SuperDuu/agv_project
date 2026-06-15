@@ -447,7 +447,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     agv_state.path_index = 0;
     agv_state.follow_line_enable = false;
     AGV_Stop(&h_agv);
-    EEPROM_SaveState(agv_state.current_node, current_heading);
+    // EEPROM_SaveState(agv_state.current_node, current_heading);
     return;
   }
 
@@ -535,7 +535,7 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
     *last_processed_node = 0xFFFF;
     
     // Đã qua ngã tư và cập nhật góc mới, lưu vào EEPROM
-    EEPROM_SaveState(agv_state.current_node, *current_heading);
+    // EEPROM_SaveState(agv_state.current_node, *current_heading);
   }
 }
 
