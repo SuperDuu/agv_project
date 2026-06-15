@@ -2,7 +2,7 @@
 #include <string.h>
 
 /* Xóa Sector 127 của Bank 2 */
-static void EEPROM_EraseSector(void) {
+void EEPROM_EraseSector(void) {
     FLASH_EraseInitTypeDef EraseInitStruct;
     uint32_t SectorError = 0;
 
