@@ -222,6 +222,8 @@ static void AGV_HandleEsp32Safety(AGV_HandleTypeDef *hagv,
     if (paused_by_obstacle) {
       if (agv_state.run_mode == MODE_4_FULL_RUN) {
         agv_state.follow_line_enable = true; // Đi tiếp khi vật cản rời đi
+        // Quan trọng: Reset lại bộ đếm timeout QR 15s để tránh bị báo lỗi mất line ngay lập tức
+        agv_state.last_qr_time = HAL_GetTick(); 
       }
       paused_by_obstacle = false;
     }
