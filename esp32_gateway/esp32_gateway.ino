@@ -109,10 +109,10 @@ uint8_t calculate_checksum(uint8_t *data, uint8_t start, uint8_t end) {
 void parse_rs485_frame() {
   if (rs485_rx_index == 8) {
     // --- DEBUG RX ---
-    Serial.print("[RX]: ");
-    for(int i=0; i<8; i++) {
-      Serial.printf("%02X ", rs485_rx_buffer[i]);
-    }
+    // Serial.print("[RX]: ");
+    // for(int i=0; i<8; i++) {
+    //   Serial.printf("%02X ", rs485_rx_buffer[i]);
+    // }
     // ----------------
 
     if (rs485_rx_buffer[0] == 0xAA && rs485_rx_buffer[1] == 0x55) {
@@ -152,7 +152,7 @@ void parse_rs485_frame() {
             tx_frame[9] = obstacle_distance & 0xFF;
             
             tx_frame[10] = calculate_checksum(tx_frame, 2, 9);
-            
+            Serial.printf("%d\n", obstacle_distance);
             // --- DEBUG TX ---
             /*
             Serial.printf(" => [TX] yaw=%.1fdeg node=%u cmd=%u obs=%u | ",
@@ -595,10 +595,10 @@ void setup() {
     // khiến cho xe bị "cận thị". Chuyển sang 4x4 cho phép Integration Time lên đến 90ms.
     myImager.setResolution(4 * 4); 
     myImager.setRangingFrequency(10); 
-    myImager.setIntegrationTime(50);
+    myImager.setIntegrationTime(80); // Tăng lên 80ms để thu nhiều sáng hơn
     myImager.startRanging();
     vl53_ok = true;
-    Serial.println("[OK] VL53L5CX ket noi thanh cong! (Mode 4x4, 10Hz, Integration 50ms)");
+    Serial.println("[OK] VL53L5CX ket noi thanh cong! (Mode 4x4, 10Hz, Integration 80ms)");
   } else {
     Serial.println("[LOI] VL53L5CX khong phan hoi hoac loi nap Firmware!");
   }
@@ -727,7 +727,8 @@ void loop() {
       // 5: Range Valid, 9: Range Valid Merged Pulse, 
       // 10: Range Valid No Wraparound Check (Thường xuất hiện khi đo xa trên 1.5m)
       // 12: Target Blurred (Tín hiệu yếu, nhưng vẫn đo được khoảng cách)
-      if ((st == 5 || st == 9 || st == 10 || st == 12) && dist > 0 && dist < min_dist) {
+      // Loại bỏ các khoảng cách < 50mm (do nhiễu kính bảo vệ/vỏ robot)
+      if ((st == 5 || st == 9 || st == 10 || st == 12) && dist > 50 && dist < min_dist) {
         min_dist = dist;
       }
     }
