@@ -188,6 +188,43 @@ static void AGV_HandleEsp32Safety(AGV_HandleTypeDef *hagv,
       agv_state.follow_line_enable = false;
       AGV_Stop(hagv);
     }
+    return;
+  }
+
+  // --- LOGIC VẬT CẢN (VL53L5CX) ---
+  bool is_obstacle = false;
+  if (safe_esp32_data->ObstacleDistance < 500) {
+    bool is_exception = false;
+    // Ngoại trừ các đoạn sát tường: 1->0, 4->3, 7->6
+    if (path_length > 0 && agv_state.path_index < path_length - 1) {
+      uint16_t current_n = current_path[agv_state.path_index];
+      uint16_t next_n = current_path[agv_state.path_index + 1];
+      if ((current_n == 1 && next_n == 0) || (current_n == 4 && next_n == 3) ||
+          (current_n == 7 && next_n == 6)) {
+        is_exception = true;
+      }
+    }
+
+    if (!is_exception) {
+      is_obstacle = true;
+    }
+  }
+
+  static bool paused_by_obstacle = false;
+
+  if (is_obstacle) {
+    if (agv_state.follow_line_enable && agv_state.run_mode == MODE_4_FULL_RUN) {
+      agv_state.follow_line_enable = false;
+      AGV_Stop(hagv);
+      paused_by_obstacle = true;
+    }
+  } else {
+    if (paused_by_obstacle) {
+      if (agv_state.run_mode == MODE_4_FULL_RUN) {
+        agv_state.follow_line_enable = true; // Đi tiếp khi vật cản rời đi
+      }
+      paused_by_obstacle = false;
+    }
   }
 }
 
