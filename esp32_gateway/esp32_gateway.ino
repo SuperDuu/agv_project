@@ -723,8 +723,10 @@ void loop() {
       int row = i / 4;
       int col = i % 4;
       
-      // Bỏ qua các vùng rìa (tránh chạm sàn hoặc nhiễu). Chỉ lấy 4 vùng lõi ở giữa.
-      if (row < 1 || row > 2 || col < 1 || col > 2) continue;
+      // Dựa vào ma trận thực tế: Góc trên bên trái bị vướng vỏ xe (ra số 8-10mm)
+      // Góc dưới bên phải đã nhìn lọt qua lỗ (ra số 600-900mm).
+      // Phần mềm sẽ "liếc" mắt sang phải và xuống dưới để lấy tín hiệu tốt nhất.
+      if (row < 1 || col < 2) continue; // Chỉ lấy các cột 2,3 và hàng 1,2,3
 
       uint8_t st = measurementData.target_status[i];
       uint16_t dist = measurementData.distance_mm[i];
