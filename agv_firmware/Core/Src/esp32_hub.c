@@ -84,19 +84,20 @@ void ESP32_Init(UART_HandleTypeDef *huart) {
 }
 
 // STM32 (Master) yêu cầu dữ liệu từ ESP32, đồng thời báo Node hiện tại
-void ESP32_RequestData(uint16_t current_node) {
+void ESP32_RequestData(uint16_t current_node, uint8_t is_arrived) {
     if (esp32_huart == NULL) return;
 
-    uint8_t tx_frame[7];
+    uint8_t tx_frame[8];
     tx_frame[0] = 0xAA;
     tx_frame[1] = 0x55;
     tx_frame[2] = ESP32_ADDR;
     tx_frame[3] = ESP32_CMD_READ_IMU;
     tx_frame[4] = (current_node >> 8) & 0xFF;
     tx_frame[5] = current_node & 0xFF;
-    tx_frame[6] = Calculate_Checksum(tx_frame, 2, 5);
+    tx_frame[6] = is_arrived;
+    tx_frame[7] = Calculate_Checksum(tx_frame, 2, 6);
 
-    HAL_StatusTypeDef status = HAL_UART_Transmit(esp32_huart, tx_frame, 7, 10);
+    HAL_StatusTypeDef status = HAL_UART_Transmit(esp32_huart, tx_frame, 8, 10);
     if (status != HAL_OK) {
         esp32_huart->gState = HAL_UART_STATE_READY;
         __HAL_UNLOCK(esp32_huart);
