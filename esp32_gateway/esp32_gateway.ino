@@ -65,6 +65,10 @@ uint8_t firebase_node = 255;  // 255 = Không có lệnh
 uint8_t firebase_h_cmd = 255; // 255 = Không có lệnh
 unsigned long last_firebase_cmd_time = 0;
 
+// Biến trạng thái gửi lên Firebase
+uint8_t current_arrived_status = 255;
+bool need_send_status = false;
+
 // Biến quản lý trạng thái cảm biến (Fail-safe)
 SparkFun_VL53L5CX myImager;
 VL53L5CX_ResultsData measurementData;
@@ -103,21 +107,28 @@ uint8_t calculate_checksum(uint8_t *data, uint8_t start, uint8_t end) {
 
 // Xử lý gói tin nhị phân nhận từ STM32
 void parse_rs485_frame() {
-  if (rs485_rx_index == 7) {
+  if (rs485_rx_index == 8) {
     // --- DEBUG RX ---
     Serial.print("[RX]: ");
-    for(int i=0; i<7; i++) {
+    for(int i=0; i<8; i++) {
       Serial.printf("%02X ", rs485_rx_buffer[i]);
     }
     // ----------------
 
     if (rs485_rx_buffer[0] == 0xAA && rs485_rx_buffer[1] == 0x55) {
       if (rs485_rx_buffer[2] == RS485_ADDR) {
-        if (calculate_checksum(rs485_rx_buffer, 2, 5) == rs485_rx_buffer[6]) {
+        if (calculate_checksum(rs485_rx_buffer, 2, 6) == rs485_rx_buffer[7]) {
           // STM32 yêu cầu lấy Yaw và gửi Node hiện tại
           if (rs485_rx_buffer[3] == 0x01) {
             current_node = (rs485_rx_buffer[4] << 8) | rs485_rx_buffer[5];
             
+            // Đọc trạng thái đã đến đích từ STM32
+            uint8_t is_arrived = rs485_rx_buffer[6];
+            if (is_arrived != current_arrived_status && is_arrived <= 1) {
+                current_arrived_status = is_arrived;
+                need_send_status = true;
+            }
+
             // Đọc thực tế từ BNO055
             int16_t yaw_int = 0x7FFF; // Mặc định là lỗi đứt dây (0x7FFF thay vì 0xFFFF để tránh trùng góc âm)
             if (bno055_ok) {
@@ -484,6 +495,17 @@ void FirebaseTask(void *pvParameters) {
             Serial.println("[FIREBASE] Ket noi Server thanh cong!");
             fb_connected = true;
           }
+
+          // Xử lý gửi trạng thái đã đến đích
+          if (need_send_status) {
+            if (Firebase.setInt(firebaseData, "/robot/camera_command/status", current_arrived_status)) {
+              Serial.printf("[FIREBASE] Da gui trang thai den dich = %d\n", current_arrived_status);
+              need_send_status = false;
+            } else {
+              Serial.printf("[FIREBASE] Loi gui trang thai: %s\n", firebaseData.errorReason().c_str());
+            }
+          }
+
           double newTimestamp = 0;
           if (Firebase.getDouble(firebaseData, "/robot/camera_command/timestamp")) {
             newTimestamp = firebaseData.doubleData();
@@ -568,14 +590,15 @@ void setup() {
 
   Serial.println("Dang nap 90KB Firmware cho VL53L5CX (Se mat ~0.6s)...");
   if (myImager.begin()) {
-    // Cau hinh 64 vung (8x8) de co the loc duoc cac vung ria bi che
-    // Tang integration time de sensor nhay hon khi can do xa hon.
-    myImager.setResolution(8 * 8); 
+    // Chuyển sang chế độ 4x4 để tăng tầm đo xa (lên đến 4m).
+    // Chế độ 8x8 xử lý làm 4 khung hình phụ nên ở 10Hz max Integration chỉ được ~20ms, 
+    // khiến cho xe bị "cận thị". Chuyển sang 4x4 cho phép Integration Time lên đến 90ms.
+    myImager.setResolution(4 * 4); 
     myImager.setRangingFrequency(10); 
     myImager.setIntegrationTime(50);
     myImager.startRanging();
     vl53_ok = true;
-    Serial.println("[OK] VL53L5CX ket noi thanh cong! (Mode 8x8, 10Hz, Integration 50ms)");
+    Serial.println("[OK] VL53L5CX ket noi thanh cong! (Mode 4x4, 10Hz, Integration 50ms)");
   } else {
     Serial.println("[LOI] VL53L5CX khong phan hoi hoac loi nap Firmware!");
   }
@@ -690,18 +713,21 @@ void loop() {
     myImager.getRangingData(&measurementData);
 
     uint16_t min_dist = 65534;
-    const int vl53_zone_count = 64;
+    const int vl53_zone_count = 16; // Chế độ 4x4 có 16 vùng
     for (int i = 0; i < vl53_zone_count; i++) {
-      int row = i / 8;
-      int col = i % 8;
+      int row = i / 4;
+      int col = i % 4;
       
-      if (row < 2 || row > 5 || col < 2 || col > 5) continue;
+      // Bỏ qua các vùng rìa (tránh chạm sàn hoặc nhiễu). Chỉ lấy 4 vùng lõi ở giữa.
+      if (row < 1 || row > 2 || col < 1 || col > 2) continue;
 
       uint8_t st = measurementData.target_status[i];
       uint16_t dist = measurementData.distance_mm[i];
-      // st == 5: OK, st == 9: OK
-      // Bỏ st == 0 và st == 6 vì đó là nhiễu / không có vật cản thực tế
-      if ((st == 5 || st == 9) && dist > 0 && dist < min_dist) {
+      // Target Status (Theo VL53L5CX):
+      // 5: Range Valid, 9: Range Valid Merged Pulse, 
+      // 10: Range Valid No Wraparound Check (Thường xuất hiện khi đo xa trên 1.5m)
+      // 12: Target Blurred (Tín hiệu yếu, nhưng vẫn đo được khoảng cách)
+      if ((st == 5 || st == 9 || st == 10 || st == 12) && dist > 0 && dist < min_dist) {
         min_dist = dist;
       }
     }
@@ -789,7 +815,7 @@ void loop() {
       rs485_rx_buffer[rs485_rx_index++] = b;
     }
     last_rs485_rx_time = millis();
-    if (rs485_rx_index == 7) {
+    if (rs485_rx_index == 8) {
       parse_rs485_frame();
     }
     
