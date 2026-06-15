@@ -858,15 +858,7 @@ int main(void) {
       }
     }
 
-    if (agv_state.run_mode == MODE_4_FULL_RUN) {
-      // Chỉ timeout khi đang chạy, KHÔNG timeout khi đang dừng chờ QR tại ngã
-      // tư
-      if (agv_state.follow_line_enable && !agv_state.is_at_intersection &&
-          (HAL_GetTick() - agv_state.last_qr_time > 15000)) {
-        agv_state.follow_line_enable = false;
-        AGV_Stop(&h_agv);
-      }
-    }
+
 
     if (qr50.Data.New_Data_Flag) {
       qr50.Data.New_Data_Flag = false;

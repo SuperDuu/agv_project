@@ -288,7 +288,8 @@ void AGV_TrackLine_Sync(AGV_HandleTypeDef *hagv, uint32_t duration_ms) {
     HMI_Process();
     if (HAL_GetTick() - last_esp_req > 50) {
       last_esp_req = HAL_GetTick();
-      uint8_t is_arrived = (agv_state.current_node == agv_state.destination_node) ? 1 : 0;
+      uint8_t is_arrived =
+          (agv_state.current_node == agv_state.destination_node) ? 1 : 0;
       ESP32_RequestData(agv_state.current_node, is_arrived);
     }
 
@@ -337,7 +338,7 @@ void AGV_BlindForward(AGV_HandleTypeDef *hagv, uint32_t delay_ms) {
   // Đi mù bằng tốc độ rẽ (turn_speed) vì nó đủ an toàn và dứt khoát
   Motor_SetSpeed(hagv->motor_left, agv_config.turn_speed);
   Motor_SetSpeed(hagv->motor_right, agv_config.turn_speed);
-  
+
   AGV_Delay(delay_ms);
 
   // Khôi phục lại tốc độ hiện tại (giúp xe gia tốc mượt mà sau khi rẽ)
@@ -453,6 +454,11 @@ void AGV_UpdateGlobalYaw(void) {
   static bool imu_initialized = false;
   float current_imu = ESP32_GetSafeData().Yaw;
 
+  // Bỏ qua giá trị 65535.0f (bị ngắt kết nối)
+  if (current_imu >= 65535.0f) {
+    return;
+  }
+
   // Chờ cho đến khi có dữ liệu IMU thực sự (khác 0) để khởi tạo mốc 0 độ
   if (!imu_initialized) {
     if (current_imu != 0.0f) {
@@ -527,7 +533,8 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
 
     if (HAL_GetTick() - last_esp_req > 50) {
       last_esp_req = HAL_GetTick();
-      uint8_t is_arrived = (agv_state.current_node == agv_state.destination_node) ? 1 : 0;
+      uint8_t is_arrived =
+          (agv_state.current_node == agv_state.destination_node) ? 1 : 0;
       ESP32_RequestData(agv_state.current_node, is_arrived);
     }
 
@@ -603,7 +610,8 @@ void AGV_Turn180_IMU(AGV_HandleTypeDef *hagv, uint8_t current_heading) {
   AGV_BlindForward(hagv, 500);
 
   // BỎ DỪNG: Rẽ luôn để giữ quán tính mượt mà
-  // Nếu đang đi ngược hướng ban đầu (HEAD_SOUTH = 2) hoặc ngược hướng rẽ phải (HEAD_WEST = 3)
+  // Nếu đang đi ngược hướng ban đầu (HEAD_SOUTH = 2) hoặc ngược hướng rẽ phải
+  // (HEAD_WEST = 3)
   if (current_heading == 2 || current_heading == 3) {
     // Rẽ cùng chiều kim đồng hồ (Right)
     Turn_IMU_Based(hagv, 170.0f, agv_config.turn_speed, -agv_config.turn_speed,
