@@ -596,6 +596,11 @@ void setup() {
     myImager.setResolution(4 * 4); 
     myImager.setRangingFrequency(10); 
     myImager.setIntegrationTime(80); // Tăng lên 80ms để thu nhiều sáng hơn
+    
+    // THỬ SỬA BẰNG PHẦN MỀM: Bóp hẹp góc nhìn (FOV) của cảm biến lại để tia laser nhỏ hơn, lọt qua lỗ
+    // Giá trị từ 0 đến 99%. Mặc định là 5%. Tăng lên 50% sẽ làm hẹp góc quét đáng kể.
+    myImager.setSharpenerPercent(50); 
+    
     myImager.startRanging();
     vl53_ok = true;
     Serial.println("[OK] VL53L5CX ket noi thanh cong! (Mode 4x4, 10Hz, Integration 80ms)");
