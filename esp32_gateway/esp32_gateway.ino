@@ -737,22 +737,21 @@ void loop() {
     obstacle_distance = 0xFFFF;
   }
 
-  /*
-  if (millis() - lastSensorDebugTime >= SENSOR_DEBUG_INTERVAL_MS) {
-    lastSensorDebugTime = millis();
-    Serial.printf("[SENSOR] raw_yaw=%.2f delta=%.2f total_yaw=%.2f vl53_min=%u bno=%d vl53=%d\n",
-                  current_yaw, imu_delta_yaw, imu_total_yaw, obstacle_distance, bno055_ok ? 1 : 0, vl53_ok ? 1 : 0);
-
+  static unsigned long last_vl53_debug = 0;
+  if (millis() - last_vl53_debug >= 1000) {
+    last_vl53_debug = millis();
     if (vl53_ok) {
-      Serial.print("[VL53] ");
-      for (int i = 0; i < 16; i++) {
-        Serial.printf("%u(%u)%s", measurementData.distance_mm[i], measurementData.target_status[i], (i == 15) ? "" : " ");
+      Serial.println("--- VL53L5CX 4x4 GRID (Distance mm) ---");
+      for (int r = 0; r < 4; r++) {
+        for (int c = 0; c < 4; c++) {
+          int i = r * 4 + c;
+          Serial.printf("%4d ", measurementData.distance_mm[i]);
+        }
+        Serial.println();
       }
-      Serial.println();
+      Serial.println("---------------------------------------");
     }
   }
-  */
-
   /*
   // CƠ CHẾ GỬI LẠI UART (CHỜ ACK TỪ STM32) - ĐÃ BỎ VÌ DÙNG KHUNG NHỊ PHÂN
   if (!isAckReceived && (millis() - lastSendTime >= 1000)) {
