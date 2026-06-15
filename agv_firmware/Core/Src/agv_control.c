@@ -184,7 +184,7 @@ void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
     if (lost_line_time == 0)
       lost_line_time = HAL_GetTick();
 
-    if (HAL_GetTick() - lost_line_time > 1000) {
+    if (HAL_GetTick() - lost_line_time > 10000) {
       if (agv_state.run_mode == MODE_4_FULL_RUN) {
         agv_state.follow_line_enable = false;
         agv_state.indicator_state = 3; // Lỗi mất line (State 3: Error)
@@ -281,14 +281,15 @@ void AGV_Stop(AGV_HandleTypeDef *hagv) {
 void AGV_TrackLine_Sync(AGV_HandleTypeDef *hagv, uint32_t duration_ms) {
   uint32_t start_time = HAL_GetTick();
   extern void HMI_Process(void);
-  extern void ESP32_RequestData(uint16_t node);
+  extern void ESP32_RequestData(uint16_t node, uint8_t is_arrived);
   static uint32_t last_esp_req = 0;
 
   while (HAL_GetTick() - start_time < duration_ms) {
     HMI_Process();
     if (HAL_GetTick() - last_esp_req > 50) {
       last_esp_req = HAL_GetTick();
-      ESP32_RequestData(agv_state.current_node);
+      uint8_t is_arrived = (agv_state.current_node == agv_state.destination_node) ? 1 : 0;
+      ESP32_RequestData(agv_state.current_node, is_arrived);
     }
 
     uint16_t line_val = LineSensor_Read(hagv->line_sensor);
@@ -526,7 +527,8 @@ static void Turn_IMU_Based(AGV_HandleTypeDef *hagv, float target_angle,
 
     if (HAL_GetTick() - last_esp_req > 50) {
       last_esp_req = HAL_GetTick();
-      ESP32_RequestData(agv_state.current_node);
+      uint8_t is_arrived = (agv_state.current_node == agv_state.destination_node) ? 1 : 0;
+      ESP32_RequestData(agv_state.current_node, is_arrived);
     }
 
     AGV_UpdateGlobalYaw(); // Cập nhật liên tục biến dẫn hướng toàn cục
