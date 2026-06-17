@@ -1,0 +1,20 @@
+Removed Pin From Net: NetName=12V Pin=U1-1
+Removed Pin From Net: NetName=G Pin=U1-2
+Removed Pin From Net: NetName=GND Pin=U1-4
+Removed Pin From Net: NetName=NetAMS1_3 Pin=U1-6
+Removed Member From Class: ClassName=arm Member=U1
+Added Component: Designator=PS1(B1205S2WR3)
+Add component (AddParameter): Name = "Arrow Part Number"; Value = ""; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Arrow Price/Stock"; Value = ""; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Datasheet Link"; Value = "https://www.mornsun-power.com/html/pdf/B1205S-2WR3.html"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Height"; Value = "10.41mm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer_Name"; Value = "Mornsun Power"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Manufacturer_Part_Number"; Value = "B1205S-2WR3"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Mouser Part Number"; Value = ""; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Mouser Price/Stock"; Value = ""; VariantName = "[No Variations]"
+Added Pin To Net: NetName=12V Pin=PS1-1
+Added Pin To Net: NetName=G Pin=PS1-2
+Added Pin To Net: NetName=GND Pin=PS1-4
+Added Pin To Net: NetName=NetAMS1_3 Pin=PS1-6
+Added Member To Class: ClassName=arm Member=Component PS1 B1205S-2WR3
+Added Room: Name=arm

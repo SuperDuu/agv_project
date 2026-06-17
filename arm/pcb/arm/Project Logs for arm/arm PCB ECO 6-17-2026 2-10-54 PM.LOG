@@ -1,0 +1,17 @@
+Removed Pin From Net: NetName=IE1A Pin=H3-3
+Removed Pin From Net: NetName=IE1B Pin=H3-4
+Removed Pin From Net: NetName=IE1A Pin=H4-3
+Removed Pin From Net: NetName=IE1B Pin=H4-4
+Removed Pin From Net: NetName=IE1A Pin=H5-3
+Removed Pin From Net: NetName=IE1B Pin=H5-4
+Removed Pin From Net: NetName=IE1A Pin=H6-3
+Removed Pin From Net: NetName=IE1B Pin=H6-4
+Added Pin To Net: NetName=IE2A Pin=H3-3
+Added Pin To Net: NetName=IE2B Pin=H3-4
+Added Pin To Net: NetName=IE3A Pin=H4-3
+Added Pin To Net: NetName=IE3B Pin=H4-4
+Added Pin To Net: NetName=IE4A Pin=H5-3
+Added Pin To Net: NetName=IE4B Pin=H5-4
+Added Pin To Net: NetName=IE5A Pin=H6-3
+Added Pin To Net: NetName=IE5B Pin=H6-4
+Added Room: Name=arm

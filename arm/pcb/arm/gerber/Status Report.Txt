@@ -1,0 +1,12 @@
+Output: NC Drill Files
+Type  : NC Drill
+From  : Project [arm.PrjPcb]
+   Generated File[arm.TXT]
+   Generated File[arm.LDP]
+   Generated File[arm.DRR]
+
+
+Files Generated   : 3
+Documents Printed : 0
+
+Finished Output Generation At 5:03:33 PM On 6/17/2026
