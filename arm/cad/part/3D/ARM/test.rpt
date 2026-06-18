@@ -1,0 +1,27 @@
+*****************************************************************
+      SolidWorks Corporation - IGES Processor Status Report
+*****************************************************************
+WARNING: Unable to read IGES file. File was truncated or contains invalid data.                                
+
+
+=================================================================
+Entity Summary
+=================================================================
+-----------------------------------------------------------------
+Type Name                                         Count Converted
+---- ----                                         ----- ---------
+_________________________________________________________________
+
+
+=================================================================
+Result Summary
+=================================================================
+SolidWorks Feature Type                Count
+-----------------------                -----
+Solid feature(s)                       0
+Surface feature(s)                     0
+Curve/Sketch feature(s)                0
+--------------------------------------------
+Start time: Wednesday, June 17, 2026 09:54:31
+Finish time: Wednesday, June 17, 2026 09:54:39
+Processing time: 0 days, 00 hours, 00 mins, 08 secs
