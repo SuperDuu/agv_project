@@ -9,4 +9,6 @@ agv_firmware/.vscode/
 *.hex
 *.map
 *.lst
+*.STEP
+*.step
 agv_firmware/Debug/
