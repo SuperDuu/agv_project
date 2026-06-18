@@ -198,55 +198,6 @@ Used DCodes :
 *************************************************************
 
 *************************************************************
-Generating : Bottom Pad Master
-      File : arm.GPB
-
-    Adding Layer      : Bottom Layer
-
-    Adding Layer      : Multi-Layer
-
-
-Used DCodes :
-    D23
-    D66
-    D67
-    D68
-    D69
-    D70
-    D71
-    D72
-    D73
-    D76
-*************************************************************
-
-*************************************************************
-Generating : Bottom Layer
-      File : arm.GBL
-
-    Adding Layer      : Bottom Layer
-
-    Adding Layer      : Multi-Layer
-
-
-Used DCodes :
-    D13
-    D23
-    D64
-    D65
-    D66
-    D67
-    D68
-    D69
-    D70
-    D71
-    D72
-    D73
-    D74
-    D75
-    D76
-*************************************************************
-
-*************************************************************
 Generating : Top Layer
       File : arm.GTL
 
@@ -285,6 +236,55 @@ Used DCodes :
     D73
     D74
     D75
+*************************************************************
+
+*************************************************************
+Generating : Bottom Layer
+      File : arm.GBL
+
+    Adding Layer      : Bottom Layer
+
+    Adding Layer      : Multi-Layer
+
+
+Used DCodes :
+    D13
+    D23
+    D64
+    D65
+    D66
+    D67
+    D68
+    D69
+    D70
+    D71
+    D72
+    D73
+    D74
+    D75
+    D76
+*************************************************************
+
+*************************************************************
+Generating : Bottom Pad Master
+      File : arm.GPB
+
+    Adding Layer      : Bottom Layer
+
+    Adding Layer      : Multi-Layer
+
+
+Used DCodes :
+    D23
+    D66
+    D67
+    D68
+    D69
+    D70
+    D71
+    D72
+    D73
+    D76
 *************************************************************
 
 *************************************************************
