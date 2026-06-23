@@ -23,6 +23,8 @@
 /* USER CODE BEGIN Includes */
 #include "servo.h"
 #include "encoder.h"
+#include "pid.h"
+#include "joint_control.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -127,12 +129,15 @@ int main(void)
   /* USER CODE BEGIN 2 */
   Servo_Init();
   Encoder_Init();
+  JointControl_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    JointControl_Update(0.010f);
+    HAL_Delay(10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
