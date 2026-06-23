@@ -10,3 +10,17 @@ agv_firmware/.vscode/
 *.map
 *.lst
 agv_firmware/Debug/
+# SolidWorks temporary files
+~$*.SLDPRT
+~$*.SLDASM
+~$*.txt
+~*
+
+# SolidWorks backup and journal files
+*.swp
+*.sldlfp
+*.swj
+
+# STM32/CubeIDE build artifacts (Giữ lại Src/ và Inc/, chặn file build sinh ra)
+**/Debug/
+**/Release/
