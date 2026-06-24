@@ -14,9 +14,22 @@ import static kinematics.Kinematics.*;
 public final class MainFrame extends JFrame implements ActionListener, ChangeListener {
     private static final double MAX_IK_POSITION_ERROR = 0.35; // General IK strict threshold
     private static final double TRAJ_RELAXED_ERROR = 2.50; // Trajectory fallback threshold
-    double[] angles = { 0, 0, 0, 0, 0, 0 };
-    double[] targetAngles = { 0, 0, 0, 0, 0, 0 };
-    double[] lastSentAngles = { -999, -999, -999, -999, -999, -999 };
+    double[] anglesRight = { 0, 0, 0, 0, 0, 0 };
+    double[] targetAnglesRight = { 0, 0, 0, 0, 0, 0 };
+    double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
+
+    double[] anglesLeft = { 0, 0, 0, 0, 0, 0 };
+    double[] targetAnglesLeft = { 0, 0, 0, 0, 0, 0 };
+    double[] lastSentAnglesLeft = { -999, -999, -999, -999, -999, -999 };
+
+    public double[] angles = anglesRight;
+    public double[] targetAngles = targetAnglesRight;
+    public double[] lastSentAngles = lastSentAnglesRight;
+
+    public boolean isRightArmSelected = true;
+
+    public double[] getAnglesRight() { return anglesRight; }
+    public double[] getAnglesLeft() { return anglesLeft; }
 
     JPanel controlPanel = new JPanel();
     JPanel topPanel = new JPanel();
@@ -124,6 +137,32 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         JPanel manualPanel = new JPanel();
         manualPanel.setLayout(new BoxLayout(manualPanel, BoxLayout.Y_AXIS));
         manualPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+
+        JComboBox<String> armCombo = new JComboBox<>(new String[] { "Cánh Tay Phải (Right Arm)", "Cánh Tay Trái (Left Arm)" });
+        armCombo.setMaximumSize(new Dimension(320, 30));
+        armCombo.setAlignmentX(Component.LEFT_ALIGNMENT);
+        armCombo.addActionListener(e -> {
+            boolean rightSelected = armCombo.getSelectedIndex() == 0;
+            if (rightSelected) {
+                angles = anglesRight;
+                targetAngles = targetAnglesRight;
+                lastSentAngles = lastSentAnglesRight;
+                isRightArmSelected = true;
+            } else {
+                angles = anglesLeft;
+                targetAngles = targetAnglesLeft;
+                lastSentAngles = lastSentAnglesLeft;
+                isRightArmSelected = false;
+            }
+            // Sync sliders and labels to the newly selected arm's angles
+            for (int j = 0; j < NUM_JOINTS; j++) {
+                sliders[j].setValue((int) angles[j]);
+                angleLbls[j].setText((int) angles[j] + "°");
+            }
+            updateArm();
+        });
+        manualPanel.add(armCombo);
+        manualPanel.add(Box.createVerticalStrut(10));
 
         for (int i = 0; i < NUM_JOINTS; i++) {
             JPanel jointPanel = new JPanel(new BorderLayout());
@@ -634,7 +673,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (!changed)
                 return;
 
-            StringBuilder sb = new StringBuilder("S:");
+            StringBuilder sb = new StringBuilder(isRightArmSelected ? "R:" : "L:");
             for (int i = 0; i < NUM_JOINTS; i++) {
                 // Send as integers to reduce packet size and STM32 CPU load
                 sb.append(String.format("%d", (int) Math.round(angles[i])));
