@@ -1513,7 +1513,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             qInit[i] = Math.toRadians(angles[i]);
         }
         
-        double[] q = solveIK(px, py, pz, R_target, qInit);
+        double[] q = solveIK(px, py, pz, R_target, qInit, isRightArmSelected);
         if (q != null && isWithinLimits(q)) {
             validSolutions.add(q);
         } else {
@@ -1521,7 +1521,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             qHome[0] = qInit[0];
             qHome[1] = 0.5;
             qHome[2] = -0.5;
-            double[] q2 = solveIK(px, py, pz, R_target, qHome);
+            double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
             if (q2 != null && isWithinLimits(q2)) {
                 validSolutions.add(q2);
             }
@@ -1534,7 +1534,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         for (int i = 0; i < NUM_JOINTS; i++) {
             qInit[i] = Math.toRadians(angles[i]);
         }
-        double[] q = solveIK(px, py, pz, R_target, qInit);
+        double[] q = solveIK(px, py, pz, R_target, qInit, isRightArmSelected);
         if (q != null && isWithinLimits(q)) {
             return q;
         }
@@ -1543,7 +1543,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         qHome[0] = Math.atan2(py, px);
         qHome[1] = 0.5;
         qHome[2] = -0.5;
-        q = solveIK(px, py, pz, R_target, qHome);
+        q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
         if (q != null && isWithinLimits(q)) {
             return q;
         }
