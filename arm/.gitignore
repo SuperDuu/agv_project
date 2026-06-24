@@ -1,0 +1,8 @@
+# NetBeans & Java Build Artifacts
+java_app/arm/build/
+java_app/arm/dist/
+*.class
+
+# Temporary / Data Files
+java_app/arm/workspace_points.csv
+java_app/arm/uart_temp/
