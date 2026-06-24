@@ -15,8 +15,8 @@ public class Kinematics {
     public static final double L7 = 10.0;
 
     public static final String[] JOINT_NAMES = { "Khớp 1", "Khớp 2", "Khớp 3", "Khớp 4", "Khớp 5", "Khớp 6" };
-    public static final double[] JOINT_MIN = { -180, -180, -180, -180, -180, -180 };
-    public static final double[] JOINT_MAX = { 180, 180, 180, 180, 180, 180 };
+    public static final double[] JOINT_MIN = { -90, -90, -90, -50, -90, -90 };
+    public static final double[] JOINT_MAX = { 90, 90, 90, 50, 90, 90 };
 
     /**
      * Solve inverse kinematics using Damped Least Squares (DLS) numerical loop.
@@ -25,46 +25,49 @@ public class Kinematics {
         return solveIK(px, py, pz, R_target, qInitRad, true); // default to Right arm
     }
 
-    public static double[] solveIK(double px, double py, double pz, double[][] R_target, double[] qInitRad, boolean isRight) {
+    public static double[] solveIK(double px, double py, double pz, double[][] R_target, double[] qInitRad,
+            boolean isRight) {
         double[] q = qInitRad.clone();
-        
+
         // Target matrix
         double[][] T_target = {
-            { R_target[0][0], R_target[0][1], R_target[0][2], px },
-            { R_target[1][0], R_target[1][1], R_target[1][2], py },
-            { R_target[2][0], R_target[2][1], R_target[2][2], pz },
-            { 0, 0, 0, 1 }
+                { R_target[0][0], R_target[0][1], R_target[0][2], px },
+                { R_target[1][0], R_target[1][1], R_target[1][2], py },
+                { R_target[2][0], R_target[2][1], R_target[2][2], pz },
+                { 0, 0, 0, 1 }
         };
-        
+
         int maxIter = 250;
         double tol = 1e-3;
         double alpha = 0.5; // Step size
-        
+
         for (int iter = 0; iter < maxIter; iter++) {
             double[][] T_curr = computeFKMatrix(q, isRight);
             double[] e = computeTr2Delta(T_curr, T_target);
-            
+
             double errNorm = 0;
             for (int i = 0; i < 6; i++) {
                 errNorm += e[i] * e[i];
             }
             errNorm = Math.sqrt(errNorm);
-            
+
             if (errNorm < tol) {
                 // Convert back to degrees and wrap to [-180, 180]
                 double[] q_deg = new double[NUM_JOINTS];
                 for (int i = 0; i < NUM_JOINTS; i++) {
                     double deg = Math.toDegrees(q[i]);
-                    while (deg > 180) deg -= 360;
-                    while (deg < -180) deg += 360;
+                    while (deg > 180)
+                        deg -= 360;
+                    while (deg < -180)
+                        deg += 360;
                     q_deg[i] = deg;
                 }
                 return q_deg;
             }
-            
+
             double[][] J = computeJacobianEE(q, isRight);
             double[] dq = solveDLS(J, e, 0.05); // lambda = 0.05
-            
+
             for (int i = 0; i < NUM_JOINTS; i++) {
                 q[i] = wrapToPi(q[i] + alpha * dq[i]);
             }
@@ -75,10 +78,11 @@ public class Kinematics {
     /**
      * Overloaded solveIK for compatibility with the existing calling convention.
      */
-    public static double[] solveIK(double px, double py, double pz, double[][] R_target, String config, String configElbow) {
+    public static double[] solveIK(double px, double py, double pz, double[][] R_target, String config,
+            String configElbow) {
         double[] qInit = new double[NUM_JOINTS];
         double phi = Math.atan2(py, px);
-        
+
         if (config.equals("+")) {
             qInit[0] = phi;
             qInit[1] = 0.5;
@@ -91,7 +95,7 @@ public class Kinematics {
         if (configElbow.equals("-")) {
             qInit[2] = -qInit[2];
         }
-        
+
         return solveIK(px, py, pz, R_target, qInit);
     }
 
@@ -132,70 +136,70 @@ public class Kinematics {
                 { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, q[4] },
                 { -Math.PI / 2, 0, 0, 0, q[5] }
         };
-        
+
         double[][] z0 = new double[NUM_JOINTS][3];
         double[][] p0 = new double[NUM_JOINTS][3];
-        
+
         for (int i = 0; i < NUM_JOINTS; i++) {
             double alpha = params[i][0];
             double a = params[i][2];
             double d = params[i][1];
             double offset = params[i][3];
             double qi = params[i][4];
-            
+
             // intermediate frame T_i' = T * Rx(alpha) * Tx(a)
             double ca = Math.cos(alpha), sa = Math.sin(alpha);
             double[][] RxTx = {
-                { 1, 0, 0, a },
-                { 0, ca, -sa, 0 },
-                { 0, sa, ca, 0 },
-                { 0, 0, 0, 1 }
+                    { 1, 0, 0, a },
+                    { 0, ca, -sa, 0 },
+                    { 0, sa, ca, 0 },
+                    { 0, 0, 0, 1 }
             };
             double[][] T_i_prime = multiply4x4(T, RxTx);
-            
+
             // Joint i's axis in base frame
             z0[i][0] = T_i_prime[0][2];
             z0[i][1] = T_i_prime[1][2];
             z0[i][2] = T_i_prime[2][2];
-            
+
             // Joint i's origin in base frame
             p0[i][0] = T_i_prime[0][3];
             p0[i][1] = T_i_prime[1][3];
             p0[i][2] = T_i_prime[2][3];
-            
+
             // Complete transition T = T_i_prime * Rz(theta) * Tz(d)
             double theta = qi + offset;
             double ct = Math.cos(theta), st = Math.sin(theta);
             double[][] RzTz = {
-                { ct, -st, 0, 0 },
-                { st, ct, 0, 0 },
-                { 0, 0, 1, d },
-                { 0, 0, 0, 1 }
+                    { ct, -st, 0, 0 },
+                    { st, ct, 0, 0 },
+                    { 0, 0, 1, d },
+                    { 0, 0, 0, 1 }
             };
             T = multiply4x4(T_i_prime, RzTz);
         }
-        
+
         double[][] T_tool = multiply4x4(T, getToolMatrix());
         double[] p_tool = { T_tool[0][3], T_tool[1][3], T_tool[2][3] };
         double[][] R_tool = extractRotation(T_tool);
-        
+
         // Construct Jacobian in base frame J0
         double[][] J0 = new double[6][NUM_JOINTS];
         for (int i = 0; i < NUM_JOINTS; i++) {
             double dx = p_tool[0] - p0[i][0];
             double dy = p_tool[1] - p0[i][1];
             double dz = p_tool[2] - p0[i][2];
-            
+
             // z0[i] x (p_tool - p0[i])
             J0[0][i] = z0[i][1] * dz - z0[i][2] * dy;
             J0[1][i] = z0[i][2] * dx - z0[i][0] * dz;
             J0[2][i] = z0[i][0] * dy - z0[i][1] * dx;
-            
+
             J0[3][i] = z0[i][0];
             J0[4][i] = z0[i][1];
             J0[5][i] = z0[i][2];
         }
-        
+
         // Rotate Jacobian to end-effector frame: Je = R_tool^T * J0
         double[][] RT = transpose3x3(R_tool);
         double[][] Je = new double[6][NUM_JOINTS];
@@ -203,7 +207,7 @@ public class Kinematics {
             Je[0][j] = RT[0][0] * J0[0][j] + RT[0][1] * J0[1][j] + RT[0][2] * J0[2][j];
             Je[1][j] = RT[1][0] * J0[0][j] + RT[1][1] * J0[1][j] + RT[1][2] * J0[2][j];
             Je[2][j] = RT[2][0] * J0[0][j] + RT[2][1] * J0[1][j] + RT[2][2] * J0[2][j];
-            
+
             Je[3][j] = RT[0][0] * J0[3][j] + RT[0][1] * J0[4][j] + RT[0][2] * J0[5][j];
             Je[4][j] = RT[1][0] * J0[3][j] + RT[1][1] * J0[4][j] + RT[1][2] * J0[5][j];
             Je[5][j] = RT[2][0] * J0[3][j] + RT[2][1] * J0[4][j] + RT[2][2] * J0[5][j];
@@ -215,24 +219,24 @@ public class Kinematics {
         double[][] R0 = extractRotation(T0);
         double[][] R1 = extractRotation(T1);
         double[][] R0T = transpose3x3(R0);
-        
+
         double[][] R = multiplyMatrices(R0T, R1);
-        
+
         double dx = T1[0][3] - T0[0][3];
         double dy = T1[1][3] - T0[1][3];
         double dz = T1[2][3] - T0[2][3];
         double[] dp = {
-            R0T[0][0] * dx + R0T[0][1] * dy + R0T[0][2] * dz,
-            R0T[1][0] * dx + R0T[1][1] * dy + R0T[1][2] * dz,
-            R0T[2][0] * dx + R0T[2][1] * dy + R0T[2][2] * dz
+                R0T[0][0] * dx + R0T[0][1] * dy + R0T[0][2] * dz,
+                R0T[1][0] * dx + R0T[1][1] * dy + R0T[1][2] * dz,
+                R0T[2][0] * dx + R0T[2][1] * dy + R0T[2][2] * dz
         };
-        
+
         double[] dw = {
-            0.5 * (R[2][1] - R[1][2]),
-            0.5 * (R[0][2] - R[2][0]),
-            0.5 * (R[1][0] - R[0][1])
+                0.5 * (R[2][1] - R[1][2]),
+                0.5 * (R[0][2] - R[2][0]),
+                0.5 * (R[1][0] - R[0][1])
         };
-        
+
         return new double[] { dp[0], dp[1], dp[2], dw[0], dw[1], dw[2] };
     }
 
@@ -249,10 +253,11 @@ public class Kinematics {
             }
             JJT[i][i] += lambda * lambda;
         }
-        
+
         double[] x = solveLinearSystem(JJT, e);
-        if (x == null) return new double[NUM_JOINTS];
-        
+        if (x == null)
+            return new double[NUM_JOINTS];
+
         double[] dq = new double[NUM_JOINTS];
         for (int i = 0; i < NUM_JOINTS; i++) {
             double sum = 0;
@@ -271,7 +276,7 @@ public class Kinematics {
             System.arraycopy(A[i], 0, M[i], 0, n);
             M[i][n] = b[i];
         }
-        
+
         for (int i = 0; i < n; i++) {
             int max = i;
             for (int k = i + 1; k < n; k++) {
@@ -282,11 +287,11 @@ public class Kinematics {
             double[] temp = M[i];
             M[i] = M[max];
             M[max] = temp;
-            
+
             if (Math.abs(M[i][i]) < 1e-12) {
                 return null;
             }
-            
+
             for (int k = i + 1; k < n; k++) {
                 double factor = M[k][i] / M[i][i];
                 for (int j = i; j <= n; j++) {
@@ -294,7 +299,7 @@ public class Kinematics {
                 }
             }
         }
-        
+
         double[] x = new double[n];
         for (int i = n - 1; i >= 0; i--) {
             double sum = 0;
@@ -307,8 +312,10 @@ public class Kinematics {
     }
 
     public static double wrapToPi(double rad) {
-        while (rad > Math.PI) rad -= 2 * Math.PI;
-        while (rad < -Math.PI) rad += 2 * Math.PI;
+        while (rad > Math.PI)
+            rad -= 2 * Math.PI;
+        while (rad < -Math.PI)
+            rad += 2 * Math.PI;
         return rad;
     }
 

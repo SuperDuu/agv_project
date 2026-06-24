@@ -1420,7 +1420,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double minCost = Double.MAX_VALUE;
         double[] bestQ = null;
         double bestAlpha = alphaSlider.getValue();
-        double[] q_pref = { 0, 0, 0, 0, 0, 0 }; // Home posture preference
+        double[] q_pref = { 0, 0, 0, 30.0, 0, 0 }; // Home posture preference (favor positive Joint 4)
 
         // Optimization Loop: Scan likely alpha range [-90, 30] as per Matlab phi range
         // [-pi/2, pi/6]
@@ -1565,6 +1565,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             qHome[0] = qInit[0];
             qHome[1] = 0.5;
             qHome[2] = -0.5;
+            qHome[3] = Math.toRadians(30.0); // Bias Joint 4 to positive
             double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
             if (q2 != null && isWithinLimits(q2)) {
                 validSolutions.add(q2);
@@ -1587,6 +1588,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         qHome[0] = Math.atan2(py, px);
         qHome[1] = 0.5;
         qHome[2] = -0.5;
+        qHome[3] = Math.toRadians(30.0); // Bias Joint 4 to positive
         q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
         if (q != null && isWithinLimits(q)) {
             return q;
