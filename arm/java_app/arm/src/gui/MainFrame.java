@@ -1422,11 +1422,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double bestAlpha = alphaSlider.getValue();
         double[] q_pref = new double[NUM_JOINTS];
         if (isRightArmSelected) {
-            q_pref[2] = 30.0;   // Right arm: Joint 3 positive
-            q_pref[3] = -30.0;  // Right arm: Joint 4 negative
+            q_pref[2] = 60.0;   // Right arm: Joint 3 positive (strongly bent elbow)
+            q_pref[3] = -35.0;  // Right arm: Joint 4 negative (wrist pitch)
         } else {
-            q_pref[2] = -30.0;  // Left arm: Joint 3 negative
-            q_pref[3] = 30.0;   // Left arm: Joint 4 positive
+            q_pref[2] = -60.0;  // Left arm: Joint 3 negative (strongly bent elbow)
+            q_pref[3] = 35.0;   // Left arm: Joint 4 positive (wrist pitch)
         }
 
         // Optimization Loop: Scan likely alpha range [-90, 30] as per Matlab phi range
@@ -1530,7 +1530,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // 3. Posture (w=1.5): Deviation from preferred home (normalized by pi/2).
         // Increased weight for beauty.
         double jPosture = 0;
-        for (int i = 0; i < NUM_JOINTS; i++) {
+        // Only penalize posture for Joint 3 (index 2) and Joint 4 (index 3) to allow shoulder/waist to move freely
+        for (int i = 2; i <= 3; i++) {
             jPosture += Math.pow(Math.toRadians(q[i] - q_pref[i]) / (Math.PI / 2.0), 2);
         }
 
@@ -1572,11 +1573,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             qHome[0] = qInit[0];
             qHome[1] = 0.5;
             if (isRightArmSelected) {
-                qHome[2] = 0.5;                     // Right Arm: Joint 3 positive bias
-                qHome[3] = Math.toRadians(-30.0);   // Right Arm: Joint 4 negative bias
+                qHome[2] = 1.0;                     // Right Arm: Joint 3 positive bias
+                qHome[3] = Math.toRadians(-35.0);   // Right Arm: Joint 4 negative bias
             } else {
-                qHome[2] = -0.5;                    // Left Arm: Joint 3 negative bias
-                qHome[3] = Math.toRadians(30.0);    // Left Arm: Joint 4 positive bias
+                qHome[2] = -1.0;                    // Left Arm: Joint 3 negative bias
+                qHome[3] = Math.toRadians(35.0);    // Left Arm: Joint 4 positive bias
             }
             double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
             if (q2 != null && isWithinLimits(q2)) {
@@ -1600,11 +1601,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         qHome[0] = Math.atan2(py, px);
         qHome[1] = 0.5;
         if (isRightArmSelected) {
-            qHome[2] = 0.5;                     // Right Arm: Joint 3 positive bias
-            qHome[3] = Math.toRadians(-30.0);   // Right Arm: Joint 4 negative bias
+            qHome[2] = 1.0;                     // Right Arm: Joint 3 positive bias
+            qHome[3] = Math.toRadians(-35.0);   // Right Arm: Joint 4 negative bias
         } else {
-            qHome[2] = -0.5;                    // Left Arm: Joint 3 negative bias
-            qHome[3] = Math.toRadians(30.0);    // Left Arm: Joint 4 positive bias
+            qHome[2] = -1.0;                    // Left Arm: Joint 3 negative bias
+            qHome[3] = Math.toRadians(35.0);    // Left Arm: Joint 4 positive bias
         }
         q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
         if (q != null && isWithinLimits(q)) {
