@@ -214,7 +214,8 @@ public class ArmPanel extends JPanel
             drawables.add(new JointSphere(pts3dRight[i], tw, new Color(50, 120, 200)));
             drawables.add(new TubeSegment(pts3dRight[i], pts3dRight[i + 1], tw, color));
         }
-        drawables.add(new GripperDrawable(T_end_right, pts3dRight[7], 11.0));
+        drawables.add(new JointSphere(pts3dRight[7], tubeWidths[tubeWidths.length - 1], new Color(50, 120, 200)));
+        drawables.add(new GripperDrawable(T_end_right, pts3dRight[7]));
 
         // Left Arm segments (skip base to avoid overlapping torso)
         for (int i = 1; i < pts3dLeft.length - 1; i++) {
@@ -223,7 +224,8 @@ public class ArmPanel extends JPanel
             drawables.add(new JointSphere(pts3dLeft[i], tw, new Color(200, 80, 80)));
             drawables.add(new TubeSegment(pts3dLeft[i], pts3dLeft[i + 1], tw, color));
         }
-        drawables.add(new GripperDrawable(T_end_left, pts3dLeft[7], 11.0));
+        drawables.add(new JointSphere(pts3dLeft[7], tubeWidths[tubeWidths.length - 1], new Color(200, 80, 80)));
+        drawables.add(new GripperDrawable(T_end_left, pts3dLeft[7]));
 
         // 3. Sort by depth (vz descending - Painter's Algorithm)
         drawables.sort((a, b) -> Double.compare(b.getDepth(), a.getDepth()));
@@ -453,15 +455,12 @@ public class ArmPanel extends JPanel
         double[][] T;
         double[] p3D;
         double depth;
-        double wFingerLen;
 
-        GripperDrawable(double[][] T, double[] p, double wFingerLen) {
+        GripperDrawable(double[][] T, double[] p) {
             this.T = T;
             this.p3D = p.clone();
-            double ux = T[0][2], uy = T[1][2], uz = T[2][2];
-            double[] pWrist = { p[0] - ux * L7, p[1] - uy * L7, p[2] - uz * L7 };
-            this.depth = Math.min(getVz(p), getVz(pWrist)) - 0.1;
-            this.wFingerLen = wFingerLen;
+            // Force gripper to always draw ON TOP of the wrist by artificially lowering depth
+            this.depth = getVz(p) - 50.0;
         }
 
         @Override
@@ -475,101 +474,54 @@ public class ArmPanel extends JPanel
             double nx = T[0][0], ny = T[1][0], nz = T[2][0]; // Normal vector
             double f = getScaleFactor(p3D);
 
-            double wOpening = robot.isGripped ? 1.0 : 3.5;
-            
-            // Calculate key points along the approach axis
-            double[] pActuatorStart = { p3D[0] - ux * 8.0, p3D[1] - uy * 8.0, p3D[2] - uz * 8.0 };
-            double[] pRailCenter = { p3D[0] - ux * 5.0, p3D[1] - uy * 5.0, p3D[2] - uz * 5.0 };
+            // Sleek Vacuum Suction Cup Design
+            double[] pActuatorStart = { p3D[0] - ux * 6.0, p3D[1] - uy * 6.0, p3D[2] - uz * 6.0 };
+            double[] pActuatorEnd = { p3D[0] - ux * 2.0, p3D[1] - uy * 2.0, p3D[2] - uz * 2.0 };
             
             int[] sActuatorStart = project(pActuatorStart, cx, cy);
-            int[] sRailCenter = project(pRailCenter, cx, cy);
+            int[] sActuatorEnd = project(pActuatorEnd, cx, cy);
             
-            // 1. Actuator body (cylinder) - sleek and dark metal
-            int actuatorThickness = (int) (5.0 * f * scale);
+            // 1. Actuator body (sleek silver cylinder)
+            int actuatorThickness = (int) (6.0 * f * scale);
             if (actuatorThickness < 1) actuatorThickness = 1;
-            g2.setColor(new Color(40, 42, 46));
+            
+            g2.setColor(new Color(20, 20, 25, 60)); // Shadow
+            g2.setStroke(new BasicStroke(actuatorThickness + 2, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(sActuatorStart[0], sActuatorStart[1] + 2, sActuatorEnd[0], sActuatorEnd[1] + 2);
+            
+            LinearGradientPaint gp = new LinearGradientPaint(
+                sActuatorStart[0], sActuatorStart[1] - actuatorThickness/2.0f, 
+                sActuatorStart[0], sActuatorStart[1] + actuatorThickness/2.0f,
+                new float[] { 0.0f, 0.4f, 1.0f },
+                new Color[] { new Color(180, 185, 190), new Color(240, 245, 255), new Color(120, 125, 130) }
+            );
+            g2.setPaint(gp);
             g2.setStroke(new BasicStroke(actuatorThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sActuatorStart[0], sActuatorStart[1], sRailCenter[0], sRailCenter[1]);
-            
-            // Actuator highlight
-            g2.setColor(new Color(75, 78, 84));
-            g2.setStroke(new BasicStroke((float)(actuatorThickness * 0.3), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sActuatorStart[0], sActuatorStart[1], sRailCenter[0], sRailCenter[1]);
+            g2.drawLine(sActuatorStart[0], sActuatorStart[1], sActuatorEnd[0], sActuatorEnd[1]);
 
-            // 2. Guide Rail Crossbar - thin silver rail
-            double[] pRailLeft = { pRailCenter[0] + nx * (wOpening + 1.5), pRailCenter[1] + ny * (wOpening + 1.5), pRailCenter[2] + nz * (wOpening + 1.5) };
-            double[] pRailRight = { pRailCenter[0] - nx * (wOpening + 1.5), pRailCenter[1] - ny * (wOpening + 1.5), pRailCenter[2] - nz * (wOpening + 1.5) };
-            int[] sRailLeft = project(pRailLeft, cx, cy);
-            int[] sRailRight = project(pRailRight, cx, cy);
+            // 2. Rubber Suction Cup (Flaring out)
+            double cupRadius = robot.isGripped ? 2.5 : 4.0;
+            double[] pCupLeft = { p3D[0] + nx * cupRadius, p3D[1] + ny * cupRadius, p3D[2] + nz * cupRadius };
+            double[] pCupRight = { p3D[0] - nx * cupRadius, p3D[1] - ny * cupRadius, p3D[2] - nz * cupRadius };
             
-            int railThickness = (int) (2.5 * f * scale);
-            if (railThickness < 1) railThickness = 1;
-            g2.setColor(new Color(170, 172, 178));
-            g2.setStroke(new BasicStroke(railThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sRailLeft[0], sRailLeft[1], sRailRight[0], sRailRight[1]);
+            int[] sCupLeft = project(pCupLeft, cx, cy);
+            int[] sCupRight = project(pCupRight, cx, cy);
             
-            // 3. Fingers (CNC Orange, sleek, L-shaped/Curved)
-            double[] pLeftBase = { pRailCenter[0] + nx * wOpening, pRailCenter[1] + ny * wOpening, pRailCenter[2] + nz * wOpening };
-            double[] pRightBase = { pRailCenter[0] - nx * wOpening, pRailCenter[1] - ny * wOpening, pRailCenter[2] - nz * wOpening };
+            Polygon cup = new Polygon();
+            cup.addPoint(sActuatorEnd[0] - (int)(nx*actuatorThickness/2.0), sActuatorEnd[1] - (int)(ny*actuatorThickness/2.0));
+            cup.addPoint(sActuatorEnd[0] + (int)(nx*actuatorThickness/2.0), sActuatorEnd[1] + (int)(ny*actuatorThickness/2.0));
+            cup.addPoint(sCupLeft[0], sCupLeft[1]);
+            cup.addPoint(sCupRight[0], sCupRight[1]);
             
-            double[] l1 = pLeftBase;
-            double[] l2 = { pLeftBase[0] + ux * 3.5 + nx * 0.8, pLeftBase[1] + uy * 3.5 + ny * 0.8, pLeftBase[2] + uz * 3.5 + nz * 0.8 };
-            double[] l3 = { p3D[0] + ux * 1.0 + nx * 0.3, p3D[1] + uy * 1.0 + ny * 0.3, p3D[2] + uz * 1.0 + nz * 0.3 };
+            g2.setColor(new Color(30, 32, 35)); // Dark industrial rubber
+            g2.fillPolygon(cup);
+            g2.setColor(new Color(15, 15, 18));
+            g2.setStroke(new BasicStroke(1.5f));
+            g2.drawPolygon(cup);
             
-            double[] r1 = pRightBase;
-            double[] r2 = { pRightBase[0] + ux * 3.5 - nx * 0.8, pRightBase[1] + uy * 3.5 - ny * 0.8, pRightBase[2] + uz * 3.5 - nz * 0.8 };
-            double[] r3 = { p3D[0] + ux * 1.0 - nx * 0.3, p3D[1] + uy * 1.0 - ny * 0.3, p3D[2] + uz * 1.0 - nz * 0.3 };
-            
-            int[] sL1 = project(l1, cx, cy);
-            int[] sL2 = project(l2, cx, cy);
-            int[] sL3 = project(l3, cx, cy);
-            
-            int[] sR1 = project(r1, cx, cy);
-            int[] sR2 = project(r2, cx, cy);
-            int[] sR3 = project(r3, cx, cy);
-            
-            int fingerThickness = (int) (2.5 * f * scale);
-            if (fingerThickness < 1) fingerThickness = 1;
-            g2.setColor(new Color(245, 125, 20));
-            g2.setStroke(new BasicStroke(fingerThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            
-            // Left Finger
-            g2.drawLine(sL1[0], sL1[1], sL2[0], sL2[1]);
-            g2.drawLine(sL2[0], sL2[1], sL3[0], sL3[1]);
-            
-            // Right Finger
-            g2.drawLine(sR1[0], sR1[1], sR2[0], sR2[1]);
-            g2.drawLine(sR2[0], sR2[1], sR3[0], sR3[1]);
-            
-            // Highlight
-            g2.setColor(new Color(255, 185, 120));
-            g2.setStroke(new BasicStroke((float)(fingerThickness * 0.35), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sL1[0], sL1[1], sL2[0], sL2[1]);
-            g2.drawLine(sL2[0], sL2[1], sL3[0], sL3[1]);
-            g2.drawLine(sR1[0], sR1[1], sR2[0], sR2[1]);
-            g2.drawLine(sR2[0], sR2[1], sR3[0], sR3[1]);
-            
-            // 4. Rubber Gripping Pads
-            double[] lPadStart = l3;
-            double[] lPadEnd = { l3[0] - ux * 3.0, l3[1] - uy * 3.0, l3[2] - uz * 3.0 };
-            double[] rPadStart = r3;
-            double[] rPadEnd = { r3[0] - ux * 3.0, r3[1] - uy * 3.0, r3[2] - uz * 3.0 };
-            
-            int[] sLpadStart = project(lPadStart, cx, cy);
-            int[] sLpadEnd = project(lPadEnd, cx, cy);
-            int[] sRpadStart = project(rPadStart, cx, cy);
-            int[] sRpadEnd = project(rPadEnd, cx, cy);
-            
-            int padThickness = (int) (1.8 * f * scale);
-            if (padThickness < 1) padThickness = 1;
-            g2.setColor(new Color(30, 30, 32));
-            g2.setStroke(new BasicStroke(padThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sLpadStart[0], sLpadStart[1], sLpadEnd[0], sLpadEnd[1]);
-            g2.drawLine(sRpadStart[0], sRpadStart[1], sRpadEnd[0], sRpadEnd[1]);
-            
-            // 5. Tool Center Point
+            // 3. Tool Center Point (Red Dot)
             int[] sTip = project(p3D, cx, cy);
-            g2.setColor(new Color(230, 40, 40));
+            g2.setColor(new Color(255, 30, 30));
             g2.fillOval(sTip[0] - 2, sTip[1] - 2, 4, 4);
         }
     }
