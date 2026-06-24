@@ -535,41 +535,18 @@ public class ArmPanel extends JPanel
             drawThickLink(g2, 1.5, 1.2, 5.5, 1.2, 0.5, new Color(200, 205, 210), new Color(120, 125, 130), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
             drawThickLink(g2, 1.5, -1.2, 5.5, -1.2, 0.5, new Color(200, 205, 210), new Color(120, 125, 130), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
 
-            // 4. Fingers opening logic
-            double w = robot.isGripped ? 2.5 : 5.0; 
+            // 4. Fingers opening logic (Parallel sliding bars)
+            double w = robot.isGripped ? 1.0 : 3.5; 
 
-            // Left Finger Link 1 (CNC Anodized Orange)
-            drawThickLink(g2, 5.5, 1.5, 9.0, 1.5 + w, 1.0, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
-            // Left Finger Link 2 (CNC Anodized Orange)
-            drawThickLink(g2, 9.0, 1.5 + w, L7, 0.3 + w * 0.2, 0.8, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
-            // Left Pad (black rubber)
-            drawThickLink(g2, L7 - 2.5, 0.3 + w * 0.2 - 0.2, L7, 0.3 + w * 0.2 - 0.2, 0.35, new Color(30, 30, 30), Color.BLACK, ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+            // Left Finger (Parallel bar, CNC Anodized Orange)
+            drawThickLink(g2, 5.5, w, L7, w, 0.9, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+            // Left Rubber Pad (inside surface of Left Finger)
+            drawThickLink(g2, 8.0, w - 0.3, L7 - 0.5, w - 0.3, 0.4, new Color(30, 30, 30), Color.BLACK, ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
 
-            // Right Finger Link 1 (CNC Anodized Orange)
-            drawThickLink(g2, 5.5, -1.5, 9.0, -1.5 - w, 1.0, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
-            // Right Finger Link 2 (CNC Anodized Orange)
-            drawThickLink(g2, 9.0, -1.5 - w, L7, -0.3 - w * 0.2, 0.8, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
-            // Right Pad (black rubber)
-            drawThickLink(g2, L7 - 2.5, -0.3 - w * 0.2 + 0.2, L7, -0.3 - w * 0.2 + 0.2, 0.35, new Color(30, 30, 30), Color.BLACK, ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
-
-            // Pins (rivets)
-            int[] pinL1 = projectRel(5.5, 1.5, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
-            int[] pinL2 = projectRel(9.0, 1.5 + w, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
-            int[] pinR1 = projectRel(5.5, -1.5, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
-            int[] pinR2 = projectRel(9.0, -1.5 - w, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
-            
-            int pinRad = (int)(0.9 * f * scale);
-            if (pinRad < 1) pinRad = 1;
-            g2.setColor(new Color(220, 220, 220));
-            g2.fillOval(pinL1[0] - pinRad, pinL1[1] - pinRad, pinRad*2, pinRad*2);
-            g2.fillOval(pinL2[0] - pinRad, pinL2[1] - pinRad, pinRad*2, pinRad*2);
-            g2.fillOval(pinR1[0] - pinRad, pinR1[1] - pinRad, pinRad*2, pinRad*2);
-            g2.fillOval(pinR2[0] - pinRad, pinR2[1] - pinRad, pinRad*2, pinRad*2);
-            g2.setColor(Color.DARK_GRAY);
-            g2.drawOval(pinL1[0] - pinRad, pinL1[1] - pinRad, pinRad*2, pinRad*2);
-            g2.drawOval(pinL2[0] - pinRad, pinL2[1] - pinRad, pinRad*2, pinRad*2);
-            g2.drawOval(pinR1[0] - pinRad, pinR1[1] - pinRad, pinRad*2, pinRad*2);
-            g2.drawOval(pinR2[0] - pinRad, pinR2[1] - pinRad, pinRad*2, pinRad*2);
+            // Right Finger (Parallel bar, CNC Anodized Orange)
+            drawThickLink(g2, 5.5, -w, L7, -w, 0.9, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+            // Right Rubber Pad (inside surface of Right Finger)
+            drawThickLink(g2, 8.0, -w + 0.3, L7 - 0.5, -w + 0.3, 0.4, new Color(30, 30, 30), Color.BLACK, ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
 
             // TCP Red Dot
             int[] sTip = project(p3D, cx, cy);
