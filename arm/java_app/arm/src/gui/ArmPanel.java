@@ -150,17 +150,13 @@ public class ArmPanel extends JPanel
             g2.drawString(workspaceStatus, getWidth() - 400, 30);
         }
 
-        double[][] pts3d = computeAllJoints3D();
+        double[][] pts3dRight = computeAllJoints3DRight();
+        double[][] pts3dLeft = computeAllJoints3DLeft();
 
-        int[][] s = new int[pts3d.length][2];
-        for (int i = 0; i < pts3d.length; i++) {
-            int[] proj = project(pts3d[i], cx, cy);
-            s[i][0] = proj[0];
-            s[i][1] = proj[1];
-        }
+        double[][] pts3dActive = robot.isRightArmSelected ? pts3dRight : pts3dLeft;
 
         if (robot.showTrailCb.isSelected()) {
-            double[] currentEE = pts3d[NUM_JOINTS + 1];
+            double[] currentEE = pts3dActive[NUM_JOINTS + 1];
             if (trail.isEmpty()) {
                 trail.add(currentEE.clone());
             } else {
@@ -176,14 +172,19 @@ public class ArmPanel extends JPanel
             drawTrail(g2, cx, cy);
         }
 
-        double[][] T_end = computeEndEffectorMatrix();
+        double[][] T_end_right = computeEndEffectorMatrixRight();
+        double[][] T_end_left = computeEndEffectorMatrixLeft();
 
         // --- Depth Sorting and Perspective Scaling ---
         java.util.List<Drawable> drawables = new java.util.ArrayList<>();
 
-        // 1. Collect Links (Tubes) and Joints (Spheres)
+        // Draw humanoid central vertical torso
+        drawables.add(new TubeSegment(new double[] { 0, 0, 0 }, new double[] { 0, 0, 120 }, 12, new Color(50, 55, 60)));
+        drawables.add(new JointSphere(new double[] { 0, 0, 0 }, 12, new Color(40, 40, 40)));
+        drawables.add(new JointSphere(new double[] { 0, 0, 120 }, 10, new Color(40, 40, 40)));
+
         int[] tubeWidths = { 7, 6, 5, 4, 3, 2, 2 };
-        Color[] tubeColors = {
+        Color[] tubeColorsRight = {
                 new Color(80, 80, 80),
                 new Color(90, 90, 90),
                 new Color(100, 100, 100),
@@ -192,25 +193,35 @@ public class ArmPanel extends JPanel
                 new Color(130, 130, 130),
                 new Color(140, 140, 140)
         };
-        for (int i = 0; i < pts3d.length - 1; i++) {
+        Color[] tubeColorsLeft = {
+                new Color(80, 100, 80),
+                new Color(90, 110, 90),
+                new Color(100, 120, 100),
+                new Color(110, 130, 110),
+                new Color(120, 140, 120),
+                new Color(130, 150, 130),
+                new Color(140, 160, 140)
+        };
+
+        // Right Arm segments
+        for (int i = 0; i < pts3dRight.length - 1; i++) {
             final int tw = (i < tubeWidths.length) ? tubeWidths[i] : tubeWidths[tubeWidths.length - 1];
-            final Color color = (i < tubeColors.length) ? tubeColors[i] : tubeColors[tubeColors.length - 1];
-
-            // Sphere at joint start
-            drawables.add(new JointSphere(pts3d[i], tw, new Color(50, 120, 200)));
-
-            // Tube segment
-            drawables.add(new TubeSegment(pts3d[i], pts3d[i + 1], tw, color));
+            final Color color = (i < tubeColorsRight.length) ? tubeColorsRight[i] : tubeColorsRight[tubeColorsRight.length - 1];
+            drawables.add(new JointSphere(pts3dRight[i], tw, new Color(50, 120, 200)));
+            drawables.add(new TubeSegment(pts3dRight[i], pts3dRight[i + 1], tw, color));
         }
+        drawables.add(new JointSphere(pts3dRight[6], 2, new Color(170, 170, 180)));
+        drawables.add(new GripperDrawable(T_end_right, pts3dRight[7], 3.5));
 
-        // Add Sphere for Joint 6 (Wrist / Flange)
-        drawables.add(new JointSphere(pts3d[6], 2, new Color(170, 170, 180)));
-
-        // Gripper base is at tool tip (pts3d[7])
-        double[] pTCP = pts3d[7];
-
-        // Draw Gripper fingers assembly (Visual-only, 3.5 units long)
-        drawables.add(new GripperDrawable(T_end, pTCP, 3.5));
+        // Left Arm segments
+        for (int i = 0; i < pts3dLeft.length - 1; i++) {
+            final int tw = (i < tubeWidths.length) ? tubeWidths[i] : tubeWidths[tubeWidths.length - 1];
+            final Color color = (i < tubeColorsLeft.length) ? tubeColorsLeft[i] : tubeColorsLeft[tubeColorsLeft.length - 1];
+            drawables.add(new JointSphere(pts3dLeft[i], tw, new Color(200, 80, 80)));
+            drawables.add(new TubeSegment(pts3dLeft[i], pts3dLeft[i + 1], tw, color));
+        }
+        drawables.add(new JointSphere(pts3dLeft[6], 2, new Color(180, 170, 170)));
+        drawables.add(new GripperDrawable(T_end_left, pts3dLeft[7], 3.5));
 
         // 3. Sort by depth (vz descending - Painter's Algorithm)
         drawables.sort((a, b) -> Double.compare(b.getDepth(), a.getDepth()));
@@ -227,7 +238,7 @@ public class ArmPanel extends JPanel
         }
 
         g2.setColor(Color.BLACK);
-        g2.drawString("Mô Phỏng Cánh Tay Robot 6-Dof", 10, 20);
+        g2.drawString("Mô Phỏng Robot Song Arm Humanoid (6-Dof)", 10, 20);
     }
 
     // L-elbow method removed for 6-DOF robot
@@ -447,14 +458,35 @@ public class ArmPanel extends JPanel
     }
 
     double[][] computeEndEffectorMatrix() {
+        return robot.isRightArmSelected ? computeEndEffectorMatrixRight() : computeEndEffectorMatrixLeft();
+    }
+
+    double[][] computeEndEffectorMatrixRight() {
         double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
         double[][] params = {
-                { 0, L1 + L0, 0, -Math.PI / 2, Math.toRadians(robot.angles[0]) },
-                { -Math.PI / 2, L2 + L3, 0, -Math.PI / 2, Math.toRadians(robot.angles[1]) },
-                { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(robot.angles[2]) },
-                { 0, 0, L4, -Math.PI / 2, Math.toRadians(robot.angles[3]) },
-                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(robot.angles[4]) },
-                { -Math.PI / 2, 0, 0, 0, Math.toRadians(robot.angles[5]) }
+                { 0, L1 + L0, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesRight()[0]) },
+                { -Math.PI / 2, L2 + L3, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesRight()[1]) },
+                { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(robot.getAnglesRight()[2]) },
+                { 0, 0, L4, -Math.PI / 2, Math.toRadians(robot.getAnglesRight()[3]) },
+                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesRight()[4]) },
+                { -Math.PI / 2, 0, 0, 0, Math.toRadians(robot.getAnglesRight()[5]) }
+        };
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            T = multiply4x4(T,
+                    getMDHMatrix(params[i][0], params[i][1], params[i][2], params[i][3], params[i][4]));
+        }
+        return multiply4x4(T, getToolMatrix());
+    }
+
+    double[][] computeEndEffectorMatrixLeft() {
+        double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
+        double[][] params = {
+                { 0, L1 + L0, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesLeft()[0]) },
+                { -Math.PI / 2, -(L2 + L3), 0, -Math.PI / 2, Math.toRadians(robot.getAnglesLeft()[1]) },
+                { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(robot.getAnglesLeft()[2]) },
+                { 0, 0, L4, -Math.PI / 2, Math.toRadians(robot.getAnglesLeft()[3]) },
+                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesLeft()[4]) },
+                { -Math.PI / 2, 0, 0, 0, Math.toRadians(robot.getAnglesLeft()[5]) }
         };
         for (int i = 0; i < NUM_JOINTS; i++) {
             T = multiply4x4(T,
@@ -474,17 +506,47 @@ public class ArmPanel extends JPanel
     }
 
     public double[][] computeAllJoints3D() {
+        return robot.isRightArmSelected ? computeAllJoints3DRight() : computeAllJoints3DLeft();
+    }
+
+    public double[][] computeAllJoints3DRight() {
         double[][] pts = new double[NUM_JOINTS + 2][3];
         double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
         pts[0] = new double[] { 0, 0, 0 };
 
         double[][] params = {
-                { 0, L1 + L0, 0, -Math.PI / 2, Math.toRadians(robot.angles[0]) },
-                { -Math.PI / 2, L2 + L3, 0, -Math.PI / 2, Math.toRadians(robot.angles[1]) },
-                { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(robot.angles[2]) },
-                { 0, 0, L4, -Math.PI / 2, Math.toRadians(robot.angles[3]) },
-                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(robot.angles[4]) },
-                { -Math.PI / 2, 0, 0, 0, Math.toRadians(robot.angles[5]) }
+                { 0, L1 + L0, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesRight()[0]) },
+                { -Math.PI / 2, L2 + L3, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesRight()[1]) },
+                { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(robot.getAnglesRight()[2]) },
+                { 0, 0, L4, -Math.PI / 2, Math.toRadians(robot.getAnglesRight()[3]) },
+                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesRight()[4]) },
+                { -Math.PI / 2, 0, 0, 0, Math.toRadians(robot.getAnglesRight()[5]) }
+        };
+
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            T = multiply4x4(T,
+                    getMDHMatrix(params[i][0], params[i][1], params[i][2], params[i][3], params[i][4]));
+            pts[i + 1] = new double[] { T[0][3], T[1][3], T[2][3] };
+        }
+
+        T = multiply4x4(T, getToolMatrix());
+        pts[NUM_JOINTS + 1] = new double[] { T[0][3], T[1][3], T[2][3] };
+
+        return pts;
+    }
+
+    public double[][] computeAllJoints3DLeft() {
+        double[][] pts = new double[NUM_JOINTS + 2][3];
+        double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
+        pts[0] = new double[] { 0, 0, 0 };
+
+        double[][] params = {
+                { 0, L1 + L0, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesLeft()[0]) },
+                { -Math.PI / 2, -(L2 + L3), 0, -Math.PI / 2, Math.toRadians(robot.getAnglesLeft()[1]) }, // Symmetrical shoulder offset
+                { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(robot.getAnglesLeft()[2]) },
+                { 0, 0, L4, -Math.PI / 2, Math.toRadians(robot.getAnglesLeft()[3]) },
+                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesLeft()[4]) },
+                { -Math.PI / 2, 0, 0, 0, Math.toRadians(robot.getAnglesLeft()[5]) }
         };
 
         for (int i = 0; i < NUM_JOINTS; i++) {
