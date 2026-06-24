@@ -15,11 +15,11 @@ public class Kinematics {
     public static final double L7 = 10.0;
 
     public static final String[] JOINT_NAMES = { "Khớp 1", "Khớp 2", "Khớp 3", "Khớp 4", "Khớp 5", "Khớp 6" };
-    public static final double[] JOINT_MIN_RIGHT = { -90, -90, -90, -140, -90, -90 };
-    public static final double[] JOINT_MAX_RIGHT = { 90, 90, 90, -30, 90, 90 };
+    public static final double[] JOINT_MIN_RIGHT = { -45, -90, -90, -140, -90, -90 };
+    public static final double[] JOINT_MAX_RIGHT = { 45, 90, 90, -30, 90, 90 };
 
-    public static final double[] JOINT_MIN_LEFT = { -90, -90, -90, 30, -90, -90 };
-    public static final double[] JOINT_MAX_LEFT = { 90, 90, 90, 140, 90, 90 };
+    public static final double[] JOINT_MIN_LEFT = { -45, -90, -90, 30, -90, -90 };
+    public static final double[] JOINT_MAX_LEFT = { 45, 90, 90, 140, 90, 90 };
 
     public static final double[] JOINT_MIN = JOINT_MIN_RIGHT;
     public static final double[] JOINT_MAX = JOINT_MAX_RIGHT;
@@ -34,6 +34,8 @@ public class Kinematics {
     public static double[] solveIK(double px, double py, double pz, double[][] R_target, double[] qInitRad,
             boolean isRight) {
         double[] q = qInitRad.clone();
+        double[] bestQ = q.clone();
+        double bestErrNorm = Double.MAX_VALUE;
 
         // Target matrix
         double[][] T_target = {
@@ -57,6 +59,11 @@ public class Kinematics {
             }
             errNorm = Math.sqrt(errNorm);
 
+            if (errNorm < bestErrNorm) {
+                bestErrNorm = errNorm;
+                bestQ = q.clone();
+            }
+
             if (errNorm < tol) {
                 // Convert back to degrees and wrap to [-180, 180]
                 double[] q_deg = new double[NUM_JOINTS];
@@ -74,10 +81,33 @@ public class Kinematics {
             double[][] J = computeJacobianEE(q, isRight);
             double[] dq = solveDLS(J, e, 0.05); // lambda = 0.05
 
+            // Lock Joint 2 at its initial guess for the first 150 iterations.
+            // This forces the other 5 joints to converge around the given q2 value,
+            // ensuring multi-start guesses (q2=0.8, 0, -0.8) produce genuinely
+            // different solutions instead of all drifting back to q2=0.
+            if (iter < 150) {
+                dq[1] = 0;
+            }
+
             for (int i = 0; i < NUM_JOINTS; i++) {
                 q[i] = wrapToPi(q[i] + alpha * dq[i]);
             }
         }
+
+        // Fallback to best-effort solution if it is sufficiently close (1.5mm)
+        if (bestErrNorm < 1.5) {
+            double[] q_deg = new double[NUM_JOINTS];
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                double deg = Math.toDegrees(bestQ[i]);
+                while (deg > 180)
+                    deg -= 360;
+                while (deg < -180)
+                    deg += 360;
+                q_deg[i] = deg;
+            }
+            return q_deg;
+        }
+
         return null; // Failed to converge
     }
 

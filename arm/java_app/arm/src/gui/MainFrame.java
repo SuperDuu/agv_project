@@ -12,7 +12,7 @@ import javax.swing.event.ChangeListener;
 import static kinematics.Kinematics.*;
 
 public final class MainFrame extends JFrame implements ActionListener, ChangeListener {
-    private static final double MAX_IK_POSITION_ERROR = 0.35; // General IK strict threshold
+    private static final double MAX_IK_POSITION_ERROR = 1.5; // General IK threshold (allow a bit of error)
     private static final double TRAJ_RELAXED_ERROR = 2.50; // Trajectory fallback threshold
     double[] anglesRight = { 0, 0, 0, -30, 0, 0 };
     double[] targetAnglesRight = { 0, 0, 0, -30, 0, 0 };
@@ -1510,8 +1510,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private double calculateIKCost(double alphaDeg, double[] q, double[] q_prev, double[] q_pref, String cfg,
             String prefCfg) {
         // 1. Smoothness (w=1.0): Sum of squared joint differences (in Radians)
+        // Exclude Joint 2 (i==1) from smoothness penalty to allow shoulder pitch to move freely
         double jSmooth = 0;
         for (int i = 0; i < NUM_JOINTS; i++) {
+            if (i == 1) continue; // Let Joint 2 change without smoothness cost
             double diffDeg = q[i] - q_prev[i];
             while (diffDeg > 180)
                 diffDeg -= 360;
@@ -1559,7 +1561,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private List<double[]> tryAlpha(double px, double py, double pz, double alphaDeg, String prefCfg) {
         List<double[]> validSolutions = new ArrayList<>();
         double alpha_rad = Math.toRadians(alphaDeg);
-        double q1 = Math.atan2(py, px);
+        double q1_min = isRightArmSelected ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
+        double q1_max = isRightArmSelected ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
+        double q1 = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), Math.atan2(py, px)));
         double c1 = Math.cos(q1), s1 = Math.sin(q1);
 
         double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
@@ -1579,31 +1583,34 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             validSolutions.add(q);
         }
 
-        // 2. Always try standard home posture to find the preferred configuration
-        double[] qHome = new double[NUM_JOINTS];
-        qHome[0] = qInit[0];
-        qHome[1] = 0.5;
-        // Joint 3: Right Arm prefers positive (1.0), Left Arm prefers negative (-1.0)
-        qHome[2] = isRightArmSelected ? 1.0 : -1.0;
-        // Joint 4: Right Arm prefers negative (-35 deg), Left Arm prefers positive (35 deg)
-        qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
-        
-        double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
-        if (q2 != null && isWithinLimits(q2)) {
-            // Avoid duplicates
-            boolean duplicate = false;
-            for (double[] existing : validSolutions) {
-                double diff = 0;
-                for (int j = 0; j < NUM_JOINTS; j++) {
-                    diff += Math.abs(existing[j] - q2[j]);
+        // 2. Try standard home postures with multiple Joint 2 initial guesses to avoid local minima
+        double[] q2_guesses = { 1.2, 0.8, 0.4, 0.0, -0.4, -0.8, -1.2 };
+        for (double q2_val : q2_guesses) {
+            double[] qHome = new double[NUM_JOINTS];
+            qHome[0] = qInit[0];
+            qHome[1] = q2_val;
+            // Joint 3: Right Arm prefers positive (1.0), Left Arm prefers negative (-1.0)
+            qHome[2] = isRightArmSelected ? 1.0 : -1.0;
+            // Joint 4: Right Arm prefers negative (-35 deg), Left Arm prefers positive (35 deg)
+            qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
+            
+            double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
+            if (q2 != null && isWithinLimits(q2)) {
+                // Avoid duplicates
+                boolean duplicate = false;
+                for (double[] existing : validSolutions) {
+                    double diff = 0;
+                    for (int j = 0; j < NUM_JOINTS; j++) {
+                        diff += Math.abs(existing[j] - q2[j]);
+                    }
+                    if (diff < 0.1) {
+                        duplicate = true;
+                        break;
+                    }
                 }
-                if (diff < 0.1) {
-                    duplicate = true;
-                    break;
+                if (!duplicate) {
+                    validSolutions.add(q2);
                 }
-            }
-            if (!duplicate) {
-                validSolutions.add(q2);
             }
         }
         return validSolutions;
@@ -1619,22 +1626,29 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return q;
         }
         
-        double[] qHome = new double[NUM_JOINTS];
-        qHome[0] = Math.atan2(py, px);
-        qHome[1] = 0.5;
-        qHome[2] = isRightArmSelected ? 1.0 : -1.0;
-        qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
-        
-        q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
-        if (q != null && isWithinLimits(q)) {
-            return q;
+        double[] q2_guesses = { 1.2, 0.8, 0.4, 0.0, -0.4, -0.8, -1.2 };
+        for (double q2_val : q2_guesses) {
+            double[] qHome = new double[NUM_JOINTS];
+            double q1_min = isRightArmSelected ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
+            double q1_max = isRightArmSelected ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
+            qHome[0] = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), Math.atan2(py, px)));
+            qHome[1] = q2_val;
+            qHome[2] = isRightArmSelected ? 1.0 : -1.0;
+            qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
+            
+            q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
+            if (q != null && isWithinLimits(q)) {
+                return q;
+            }
         }
         return null;
     }
 
     public double[] solveIKSmart(double px, double py, double pz, double alpha_deg) {
         double alpha_rad = Math.toRadians(alpha_deg);
-        double q1 = Math.atan2(py, px);
+        double q1_min = isRightArmSelected ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
+        double q1_max = isRightArmSelected ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
+        double q1 = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), Math.atan2(py, px)));
         double c1 = Math.cos(q1), s1 = Math.sin(q1);
         double ca = Math.cos(-alpha_rad), sa = Math.sin(-alpha_rad);
         double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
@@ -1657,9 +1671,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 double diffCurrent = Math.abs(qDeg - angles[i]);
                 if (diffCurrent > 180)
                     diffCurrent = 360 - diffCurrent;
-                score += diffCurrent * 2.0;
+                score += diffCurrent * ((i == 1) ? 0.3 : 2.0);
                 double center = (minLim[i] + maxLim[i]) / 2.0;
-                score += Math.abs(qDeg - center) * 0.5;
+                double wCenter = (i == 1) ? 0.05 : 0.5; // Let Joint 2 swing freely from center to expand reach
+                score += Math.abs(qDeg - center) * wCenter;
                 if (i == 2)
                     score += Math.abs(qDeg) * 1.5;
             }
