@@ -181,10 +181,7 @@ public class ArmPanel extends JPanel
 
         // Draw humanoid central vertical torso (spine) and base pedestal
         drawables.add(new TubeSegment(new double[] { 0, 0, 0 }, new double[] { 0, 0, 125 }, 12, new Color(60, 65, 70)));
-        drawables.add(new JointSphere(new double[] { 0, 0, 0 }, 16, new Color(30, 30, 30)));
-        
-        // Clavicle (shoulder crossbar)
-        drawables.add(new TubeSegment(new double[] { 0, -20, 125 }, new double[] { 0, 20, 125 }, 10, new Color(80, 85, 90)));
+        drawables.add(new BasePedestal());
         
         // Neck and Head
         drawables.add(new TubeSegment(new double[] { 0, 0, 125 }, new double[] { 0, 0, 138 }, 8, new Color(60, 60, 60)));
@@ -364,6 +361,85 @@ public class ArmPanel extends JPanel
             g2.setColor(color.darker().darker());
             g2.setStroke(new BasicStroke(1.0f));
             g2.drawOval(s[0] - jr, s[1] - jr, jr * 2, jr * 2);
+        }
+    }
+
+    class BasePedestal implements Drawable {
+        double depth;
+
+        BasePedestal() {
+            this.depth = getVz(new double[] { 0, 0, 5 });
+        }
+
+        @Override
+        public double getDepth() {
+            return depth;
+        }
+
+        @Override
+        public void draw(Graphics2D g2, int cx, int cy) {
+            double halfW = 20.0;
+            double h = 10.0;
+            double[][] corners = {
+                { -halfW, -halfW, 0 },
+                {  halfW, -halfW, 0 },
+                {  halfW,  halfW, 0 },
+                { -halfW,  halfW, 0 },
+                { -halfW, -halfW, h },
+                {  halfW, -halfW, h },
+                {  halfW,  halfW, h },
+                { -halfW,  halfW, h }
+            };
+
+            int[][] sc = new int[8][2];
+            for (int i = 0; i < 8; i++) {
+                sc[i] = project(corners[i], cx, cy);
+            }
+
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // Draw base shadow
+            g2.setColor(new Color(20, 20, 25, 60));
+            Polygon shadow = new Polygon();
+            shadow.addPoint(sc[0][0], sc[0][1] + 3);
+            shadow.addPoint(sc[1][0], sc[1][1] + 3);
+            shadow.addPoint(sc[2][0], sc[2][1] + 3);
+            shadow.addPoint(sc[3][0], sc[3][1] + 3);
+            g2.fillPolygon(shadow);
+
+            // Side faces
+            int[][] sideIndices = {
+                { 0, 1, 5, 4 },
+                { 1, 2, 6, 5 },
+                { 2, 3, 7, 6 },
+                { 3, 0, 4, 7 }
+            };
+
+            for (int i = 0; i < 4; i++) {
+                Polygon side = new Polygon();
+                side.addPoint(sc[sideIndices[i][0]][0], sc[sideIndices[i][0]][1]);
+                side.addPoint(sc[sideIndices[i][1]][0], sc[sideIndices[i][1]][1]);
+                side.addPoint(sc[sideIndices[i][2]][0], sc[sideIndices[i][2]][1]);
+                side.addPoint(sc[sideIndices[i][3]][0], sc[sideIndices[i][3]][1]);
+                
+                g2.setColor(new Color(40 + i * 5, 40 + i * 5, 45 + i * 5));
+                g2.fillPolygon(side);
+                g2.setColor(Color.DARK_GRAY);
+                g2.setStroke(new BasicStroke(1.0f));
+                g2.drawPolygon(side);
+            }
+
+            // Top face
+            Polygon top = new Polygon();
+            top.addPoint(sc[4][0], sc[4][1]);
+            top.addPoint(sc[5][0], sc[5][1]);
+            top.addPoint(sc[6][0], sc[6][1]);
+            top.addPoint(sc[7][0], sc[7][1]);
+
+            g2.setColor(new Color(75, 75, 80));
+            g2.fillPolygon(top);
+            g2.setColor(Color.DARK_GRAY);
+            g2.drawPolygon(top);
         }
     }
 
