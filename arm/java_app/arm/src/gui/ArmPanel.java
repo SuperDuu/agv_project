@@ -440,10 +440,15 @@ public class ArmPanel extends JPanel
     // drawGripper method removed (now handled by GripperDrawable class)
 
     public double[] computeFK(double q1, double q2, double q3, double q4, double q5, double q6) {
+        return computeFK(q1, q2, q3, q4, q5, q6, robot.isRightArmSelected);
+    }
+
+    public double[] computeFK(double q1, double q2, double q3, double q4, double q5, double q6, boolean isRight) {
         double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
+        double d2 = isRight ? (L2 + L3) : -(L2 + L3);
         double[][] params = {
                 { 0, L1 + L0, 0, -Math.PI / 2, Math.toRadians(q1) },
-                { -Math.PI / 2, L2 + L3, 0, -Math.PI / 2, Math.toRadians(q2) },
+                { -Math.PI / 2, d2, 0, -Math.PI / 2, Math.toRadians(q2) },
                 { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(q3) },
                 { 0, 0, L4, -Math.PI / 2, Math.toRadians(q4) },
                 { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(q5) },
