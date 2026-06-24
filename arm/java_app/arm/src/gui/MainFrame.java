@@ -1420,7 +1420,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double minCost = Double.MAX_VALUE;
         double[] bestQ = null;
         double bestAlpha = alphaSlider.getValue();
-        double[] q_pref = { 0, 0, 0, 30.0, 0, 0 }; // Home posture preference (favor positive Joint 4)
+        double[] q_pref = new double[NUM_JOINTS];
+        if (isRightArmSelected) {
+            q_pref[2] = 30.0;   // Right arm: Joint 3 positive
+            q_pref[3] = -30.0;  // Right arm: Joint 4 negative
+        } else {
+            q_pref[2] = -30.0;  // Left arm: Joint 3 negative
+            q_pref[3] = 30.0;   // Left arm: Joint 4 positive
+        }
 
         // Optimization Loop: Scan likely alpha range [-90, 30] as per Matlab phi range
         // [-pi/2, pi/6]
@@ -1564,8 +1571,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             double[] qHome = new double[NUM_JOINTS];
             qHome[0] = qInit[0];
             qHome[1] = 0.5;
-            qHome[2] = -0.5;
-            qHome[3] = Math.toRadians(30.0); // Bias Joint 4 to positive
+            if (isRightArmSelected) {
+                qHome[2] = 0.5;                     // Right Arm: Joint 3 positive bias
+                qHome[3] = Math.toRadians(-30.0);   // Right Arm: Joint 4 negative bias
+            } else {
+                qHome[2] = -0.5;                    // Left Arm: Joint 3 negative bias
+                qHome[3] = Math.toRadians(30.0);    // Left Arm: Joint 4 positive bias
+            }
             double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
             if (q2 != null && isWithinLimits(q2)) {
                 validSolutions.add(q2);
@@ -1587,8 +1599,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] qHome = new double[NUM_JOINTS];
         qHome[0] = Math.atan2(py, px);
         qHome[1] = 0.5;
-        qHome[2] = -0.5;
-        qHome[3] = Math.toRadians(30.0); // Bias Joint 4 to positive
+        if (isRightArmSelected) {
+            qHome[2] = 0.5;                     // Right Arm: Joint 3 positive bias
+            qHome[3] = Math.toRadians(-30.0);   // Right Arm: Joint 4 negative bias
+        } else {
+            qHome[2] = -0.5;                    // Left Arm: Joint 3 negative bias
+            qHome[3] = Math.toRadians(30.0);    // Left Arm: Joint 4 positive bias
+        }
         q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
         if (q != null && isWithinLimits(q)) {
             return q;
