@@ -1538,12 +1538,25 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         // 3. Posture (w=1.5): Deviation from preferred home (normalized by pi/2).
-        // Increased weight for beauty.
         double jPosture = 0;
-        // Only penalize posture for Joint 3 (index 2) and Joint 4 (index 3) to allow shoulder/waist to move freely
-        for (int i = 2; i <= 3; i++) {
-            jPosture += Math.pow(Math.toRadians(q[i] - q_pref[i]) / (Math.PI / 2.0), 2);
+        double q3 = q[2];
+        if (isRightArmSelected) {
+            if (q3 < 0) {
+                jPosture += 5.0 * Math.pow(Math.toRadians(q3), 2); // Heavy penalty for wrong sign
+            } else {
+                jPosture += 0.5 * Math.pow(Math.toRadians(q3), 2); // Small pull towards 0 to encourage Joint 2
+            }
+        } else {
+            if (q3 > 0) {
+                jPosture += 5.0 * Math.pow(Math.toRadians(q3), 2); // Heavy penalty for wrong sign
+            } else {
+                jPosture += 0.5 * Math.pow(Math.toRadians(q3), 2); // Small pull towards 0 to encourage Joint 2
+            }
         }
+
+        double q4 = q[3];
+        double q4_pref = isRightArmSelected ? -45.0 : 45.0;
+        jPosture += 0.2 * Math.pow(Math.toRadians(q4 - q4_pref), 2);
 
         // 4. Alpha (w=1.0): Deviation from preferred alpha (-pi/6). Increased weight to
         // keep tool orientation stable.
@@ -1563,57 +1576,64 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double alpha_rad = Math.toRadians(alphaDeg);
         double q1_min = isRightArmSelected ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
         double q1_max = isRightArmSelected ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
-        double q1 = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), Math.atan2(py, px)));
-        double c1 = Math.cos(q1), s1 = Math.sin(q1);
-
+        double q1_base = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), Math.atan2(py, px)));
+        
         double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
         double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
-        double[][] R_z = { { c1, -s1, 0 }, { s1, c1, 0 }, { 0, 0, 1 } };
-        double[][] R_target = multiplyMatrices(R_z, R_y);
 
-        // Convert current angles to radians for initial guess
-        double[] qInit = new double[NUM_JOINTS];
-        for (int i = 0; i < NUM_JOINTS; i++) {
-            qInit[i] = Math.toRadians(angles[i]);
-        }
+        // Try multiple yaw offsets for the tool orientation. This allows the tool
+        // to rotate around its own vertical axis, freeing the arm to use Joint 2 (shoulder pitch).
+        double[] yawOffsets = { -30.0, -15.0, 0.0, 15.0, 30.0 };
         
-        // 1. Try local neighborhood search
-        double[] q = solveIK(px, py, pz, R_target, qInit, isRightArmSelected);
-        if (q != null && isWithinLimits(q)) {
-            validSolutions.add(q);
-        }
+        for (double offsetDeg : yawOffsets) {
+            double yaw = q1_base + Math.toRadians(offsetDeg);
+            double cy = Math.cos(yaw), sy = Math.sin(yaw);
+            double[][] R_z = { { cy, -sy, 0 }, { sy, cy, 0 }, { 0, 0, 1 } };
+            double[][] R_target = multiplyMatrices(R_z, R_y);
 
-        // 2. Try standard home postures with multiple Joint 2 initial guesses to avoid local minima
-        double[] q2_guesses = { 1.2, 0.8, 0.4, 0.0, -0.4, -0.8, -1.2 };
-        for (double q2_val : q2_guesses) {
-            double[] qHome = new double[NUM_JOINTS];
-            qHome[0] = qInit[0];
-            qHome[1] = q2_val;
-            // Joint 3: Right Arm prefers positive (1.0), Left Arm prefers negative (-1.0)
-            qHome[2] = isRightArmSelected ? 1.0 : -1.0;
-            // Joint 4: Right Arm prefers negative (-35 deg), Left Arm prefers positive (35 deg)
-            qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
+            // Convert current angles to radians for initial guess
+            double[] qInit = new double[NUM_JOINTS];
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                qInit[i] = Math.toRadians(angles[i]);
+            }
             
-            double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
-            if (q2 != null && isWithinLimits(q2)) {
-                // Avoid duplicates
-                boolean duplicate = false;
-                for (double[] existing : validSolutions) {
-                    double diff = 0;
-                    for (int j = 0; j < NUM_JOINTS; j++) {
-                        diff += Math.abs(existing[j] - q2[j]);
-                    }
-                    if (diff < 0.1) {
-                        duplicate = true;
-                        break;
-                    }
-                }
-                if (!duplicate) {
-                    validSolutions.add(q2);
+            // 1. Try local neighborhood search
+            double[] q = solveIK(px, py, pz, R_target, qInit, isRightArmSelected);
+            if (q != null && isWithinLimits(q)) {
+                addUniqueSolution(validSolutions, q);
+            }
+
+            // 2. Try standard home postures with multiple Joint 2 initial guesses to avoid local minima
+            double[] q2_guesses = { 1.2, 0.8, 0.4, 0.0, -0.4, -0.8, -1.2 };
+            for (double q2_val : q2_guesses) {
+                double[] qHome = new double[NUM_JOINTS];
+                qHome[0] = qInit[0];
+                qHome[1] = q2_val;
+                // Joint 3: Right Arm prefers positive (0.3), Left Arm prefers negative (-0.3)
+                qHome[2] = isRightArmSelected ? 0.3 : -0.3;
+                // Joint 4: Right Arm prefers negative (-35 deg), Left Arm prefers positive (35 deg)
+                qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
+                
+                double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
+                if (q2 != null && isWithinLimits(q2)) {
+                    addUniqueSolution(validSolutions, q2);
                 }
             }
         }
         return validSolutions;
+    }
+
+    private void addUniqueSolution(List<double[]> list, double[] sol) {
+        for (double[] existing : list) {
+            double diff = 0;
+            for (int j = 0; j < NUM_JOINTS; j++) {
+                diff += Math.abs(existing[j] - sol[j]);
+            }
+            if (diff < 0.1) {
+                return;
+            }
+        }
+        list.add(sol);
     }
 
     public double[] solveIKSmart(double px, double py, double pz, double[][] R_target) {
@@ -1633,7 +1653,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             double q1_max = isRightArmSelected ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
             qHome[0] = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), Math.atan2(py, px)));
             qHome[1] = q2_val;
-            qHome[2] = isRightArmSelected ? 1.0 : -1.0;
+            qHome[2] = isRightArmSelected ? 0.3 : -0.3;
             qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
             
             q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
