@@ -23,7 +23,7 @@ public class UartManager {
     public boolean connect(String portName, int baudRate) {
         port = SerialPort.getCommPort(portName);
         port.setComPortParameters(baudRate, 8, 1, 0);
-        port.setComPortTimeouts(SerialPort.TIMEOUT_WRITE_BLOCKING, 0, 0);
+        port.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 0, 0);
 
         if (port.openPort()) {
             System.out.println("Connected to STM32 on " + portName + " at " + baudRate + " baud.");

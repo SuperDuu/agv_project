@@ -1415,6 +1415,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     public double[] solveIKSmart(double px, double py, double pz, String preferredConfig) {
+        long startTime = System.currentTimeMillis();
+        double[] result = solveIKSmartInternal(px, py, pz, preferredConfig);
+        long endTime = System.currentTimeMillis();
+        System.out.println("--- solveIKSmart total time: " + (endTime - startTime) + " ms ---");
+        return result;
+    }
+
+    private double[] solveIKSmartInternal(double px, double py, double pz, String preferredConfig) {
         if (fixedAlphaCb.isSelected()) {
             double currentAlpha = alphaSlider.getValue();
             List<double[]> candidates = tryAlpha(px, py, pz, currentAlpha, preferredConfig);
@@ -1431,14 +1439,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] bestQ = null;
         double bestAlpha = alphaSlider.getValue();
         double[] q_pref = new double[NUM_JOINTS];
-        // To bend both elbows forward naturally, both arms must have Joint 3 positive and Joint 4 negative
-        q_pref[2] = 60.0;   // Joint 3 positive (strongly bent elbow forward)
-        q_pref[3] = -35.0;  // Joint 4 negative (wrist pitch forward)
+        q_pref[2] = 60.0;
+        q_pref[3] = -35.0;
 
-        // Optimization Loop: Scan likely alpha range [-90, 30] as per Matlab phi range
-        // [-pi/2, pi/6]
-        for (double a = -90; a <= 30; a += 5.0) {
-            // Try both configurations, but prefer the one selected in the UI
+        double currentAlpha = alphaSlider.getValue();
+
+        // 1. Try local search around current alpha first (very fast, covers small movements)
+        for (double a = currentAlpha - 15; a <= currentAlpha + 15; a += 5.0) {
             String[] configs = { "+", "-" };
             String userPref = configCombo.getSelectedIndex() == 0 ? "+" : "-";
 
@@ -1450,7 +1457,45 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         continue;
                     }
                     double cost = calculateIKCost(a, q, angles, q_pref, cfg, userPref);
-                    // Keep Cartesian tracking as top priority; posture/smoothness tune after.
+                    cost += posErr * 50.0;
+                    if (cost < minCost) {
+                        minCost = cost;
+                        bestQ = q;
+                        bestAlpha = a;
+                    }
+                }
+            }
+        }
+
+        // If local search found a highly accurate solution, return it immediately
+        if (bestQ != null && computePositionError(bestQ, px, py, pz) < 0.2) {
+            final double finalAlpha = bestAlpha;
+            SwingUtilities.invokeLater(() -> {
+                if (!alphaSlider.getValueIsAdjusting()) {
+                    alphaSlider.setValue((int) Math.round(finalAlpha));
+                }
+            });
+            if (ikSelectionLogEnabled) {
+                double err = computePositionError(bestQ, px, py, pz);
+                System.out.println(String.format("IK Selected (Local) | target=[%.2f, %.2f, %.2f] alpha=%.1f err=%.4f",
+                        px, py, pz, bestAlpha, err));
+            }
+            return bestQ;
+        }
+
+        // 2. Fallback to global scan if local search fails or is inaccurate
+        for (double a = -90; a <= 30; a += 5.0) {
+            String[] configs = { "+", "-" };
+            String userPref = configCombo.getSelectedIndex() == 0 ? "+" : "-";
+
+            for (String cfg : configs) {
+                List<double[]> candidates = tryAlpha(px, py, pz, a, cfg);
+                for (double[] q : candidates) {
+                    double posErr = computePositionError(q, px, py, pz);
+                    if (posErr > MAX_IK_POSITION_ERROR) {
+                        continue;
+                    }
+                    double cost = calculateIKCost(a, q, angles, q_pref, cfg, userPref);
                     cost += posErr * 50.0;
                     if (cost < minCost) {
                         minCost = cost;
@@ -1462,7 +1507,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         if (bestQ != null) {
-            // Auto-update UI slider to reflect found optimal alpha
             final int optimalA = (int) Math.round(bestAlpha);
             SwingUtilities.invokeLater(() -> {
                 if (!alphaSlider.getValueIsAdjusting()) {
@@ -1471,7 +1515,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             });
             if (ikSelectionLogEnabled) {
                 double err = computePositionError(bestQ, px, py, pz);
-                System.out.println(String.format("IK Selected | target=[%.2f, %.2f, %.2f] alpha=%.1f err=%.4f",
+                System.out.println(String.format("IK Selected (Global) | target=[%.2f, %.2f, %.2f] alpha=%.1f err=%.4f",
                         px, py, pz, bestAlpha, err));
             }
             return bestQ;
