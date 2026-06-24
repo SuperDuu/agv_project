@@ -1541,7 +1541,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // (usually Elbow Up)
         double jConfig = cfg.equals(prefCfg) ? 0 : 0.4;
 
-        return (1.0 * jSmooth) + (0.5 * jLimit) + (1.5 * jPosture) + (1.0 * jPhi) + jConfig;
+        return (0.15 * jSmooth) + (0.5 * jLimit) + (3.0 * jPosture) + (0.5 * jPhi) + jConfig;
     }
 
     private List<double[]> tryAlpha(double px, double py, double pz, double alphaDeg, String prefCfg) {
