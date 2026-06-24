@@ -49,6 +49,13 @@ public class Kinematics {
         double tol = 1e-3;
         double alpha = 0.5; // Step size
 
+        double[] minLimRad = new double[NUM_JOINTS];
+        double[] maxLimRad = new double[NUM_JOINTS];
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            minLimRad[i] = Math.toRadians(isRight ? JOINT_MIN_RIGHT[i] : JOINT_MIN_LEFT[i]);
+            maxLimRad[i] = Math.toRadians(isRight ? JOINT_MAX_RIGHT[i] : JOINT_MAX_LEFT[i]);
+        }
+
         for (int iter = 0; iter < maxIter; iter++) {
             double[][] T_curr = computeFKMatrix(q, isRight);
             double[] e = computeTr2Delta(T_curr, T_target);
@@ -81,16 +88,10 @@ public class Kinematics {
             double[][] J = computeJacobianEE(q, isRight);
             double[] dq = solveDLS(J, e, 0.05); // lambda = 0.05
 
-            // Lock Joint 2 at its initial guess for the first 150 iterations.
-            // This forces the other 5 joints to converge around the given q2 value,
-            // ensuring multi-start guesses (q2=0.8, 0, -0.8) produce genuinely
-            // different solutions instead of all drifting back to q2=0.
-            if (iter < 150) {
-                dq[1] = 0;
-            }
-
             for (int i = 0; i < NUM_JOINTS; i++) {
                 q[i] = wrapToPi(q[i] + alpha * dq[i]);
+                // Clamp to joint limits
+                q[i] = Math.max(minLimRad[i], Math.min(maxLimRad[i], q[i]));
             }
         }
 
