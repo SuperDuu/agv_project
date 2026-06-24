@@ -170,22 +170,32 @@ public class ArmPanel extends JPanel
                 }
             }
             drawTrail(g2, cx, cy);
-        }
-
-        double[][] T_end_right = computeEndEffectorMatrixRight();
+        }        double[][] T_end_right = computeEndEffectorMatrixRight();
         double[][] T_end_left = computeEndEffectorMatrixLeft();
 
+        // Draw shadows of joint spheres on the floor first
+        if (robot.showGridCb.isSelected()) {
+            for (double[] p : pts3dRight) {
+                drawShadow(g2, p, 5.0, cx, cy);
+            }
+            for (double[] p : pts3dLeft) {
+                drawShadow(g2, p, 5.0, cx, cy);
+            }
+            drawShadow(g2, new double[]{0,0,135}, 5.0, cx, cy); // Head shadow
+        }
+
         // --- Depth Sorting and Perspective Scaling ---
-        java.util.List<Drawable> drawables = new java.util.ArrayList<>();
+        java.util.List<Renderable3D> drawables = new java.util.ArrayList<>();
 
+        // Add 3D elements
+        drawables.addAll(createPedestal(20.0, 10.0));
+        drawables.addAll(createCylinder(new double[] { 0, 0, 10 }, new double[] { 0, 0, 125 }, 5.5, new Color(55, 58, 62))); // torso
+        drawables.addAll(createCylinder(new double[] { 0, 0, 125 }, new double[] { 0, 0, 135 }, 2.5, new Color(60, 60, 60))); // neck
+        drawables.addAll(createSphere(new double[] { 0, 0, 135 }, 4.5, new Color(75, 80, 85))); // head
 
-        // Draw humanoid central vertical torso (spine) and base pedestal
-        drawables.add(new TubeSegment(new double[] { 0, 0, 10 }, new double[] { 0, 0, 125 }, 12, new Color(60, 65, 70)));
-        drawables.add(new BasePedestal());
-        
-        // Neck and Head
-        drawables.add(new TubeSegment(new double[] { 0, 0, 125 }, new double[] { 0, 0, 138 }, 8, new Color(60, 60, 60)));
-        drawables.add(new JointSphere(new double[] { 0, 0, 138 }, 12, new Color(75, 80, 85)));
+        // Clavicles (collarbone segments)
+        drawables.addAll(createCylinder(new double[] { 0, 0, 125 }, pts3dRight[1], 4.0, new Color(75, 75, 78)));
+        drawables.addAll(createCylinder(new double[] { 0, 0, 125 }, pts3dLeft[1], 4.0, new Color(70, 85, 72)));
 
         int[] tubeWidths = { 9, 8, 7, 6, 5, 4, 4 };
         Color[] tubeColorsRight = {
@@ -198,39 +208,39 @@ public class ArmPanel extends JPanel
                 new Color(140, 140, 140)
         };
         Color[] tubeColorsLeft = {
-                new Color(80, 100, 80),
-                new Color(90, 110, 90),
-                new Color(100, 120, 100),
-                new Color(110, 130, 110),
-                new Color(120, 140, 120),
-                new Color(130, 150, 130),
-                new Color(140, 160, 140)
+                new Color(75, 90, 75),
+                new Color(85, 100, 85),
+                new Color(95, 110, 95),
+                new Color(105, 120, 105),
+                new Color(115, 130, 115),
+                new Color(125, 140, 125),
+                new Color(135, 150, 135)
         };
 
-        // Right Arm segments (skip base to avoid overlapping torso)
+        // Right Arm segments and joint spheres
         for (int i = 1; i < pts3dRight.length - 1; i++) {
-            final int tw = (i < tubeWidths.length) ? tubeWidths[i] : tubeWidths[tubeWidths.length - 1];
+            final double tw = ((i < tubeWidths.length) ? tubeWidths[i] : tubeWidths[tubeWidths.length - 1]) / 2.0;
             final Color color = (i < tubeColorsRight.length) ? tubeColorsRight[i] : tubeColorsRight[tubeColorsRight.length - 1];
-            drawables.add(new JointSphere(pts3dRight[i], tw, new Color(50, 120, 200)));
-            drawables.add(new TubeSegment(pts3dRight[i], pts3dRight[i + 1], tw, color));
+            drawables.addAll(createSphere(pts3dRight[i], tw * 1.25, new Color(30, 100, 185))); // Right joints: anodized blue
+            drawables.addAll(createCylinder(pts3dRight[i], pts3dRight[i + 1], tw, color));
         }
-        drawables.add(new GripperDrawable(T_end_right, pts3dRight[7], 11.0));
+        drawables.addAll(createGripper(T_end_right, pts3dRight[7], robot.isRightArmSelected ? robot.isGripped : false));
 
-        // Left Arm segments (skip base to avoid overlapping torso)
+        // Left Arm segments and joint spheres
         for (int i = 1; i < pts3dLeft.length - 1; i++) {
-            final int tw = (i < tubeWidths.length) ? tubeWidths[i] : tubeWidths[tubeWidths.length - 1];
+            final double tw = ((i < tubeWidths.length) ? tubeWidths[i] : tubeWidths[tubeWidths.length - 1]) / 2.0;
             final Color color = (i < tubeColorsLeft.length) ? tubeColorsLeft[i] : tubeColorsLeft[tubeColorsLeft.length - 1];
-            drawables.add(new JointSphere(pts3dLeft[i], tw, new Color(200, 80, 80)));
-            drawables.add(new TubeSegment(pts3dLeft[i], pts3dLeft[i + 1], tw, color));
+            drawables.addAll(createSphere(pts3dLeft[i], tw * 1.25, new Color(185, 50, 50))); // Left joints: anodized red
+            drawables.addAll(createCylinder(pts3dLeft[i], pts3dLeft[i + 1], tw, color));
         }
-        drawables.add(new GripperDrawable(T_end_left, pts3dLeft[7], 11.0));
+        drawables.addAll(createGripper(T_end_left, pts3dLeft[7], !robot.isRightArmSelected ? robot.isGripped : false));
 
         // 3. Sort by depth (vz descending - Painter's Algorithm)
         drawables.sort((a, b) -> Double.compare(b.getDepth(), a.getDepth()));
 
         // 4. Render everything
-        for (Drawable d : drawables) {
-            d.draw(g2, cx, cy);
+        for (Renderable3D d : drawables) {
+            d.render(g2, cx, cy);
         }
 
         if (clickTarget != null) {
@@ -243,335 +253,322 @@ public class ArmPanel extends JPanel
         g2.drawString("Mô Phỏng Robot Song Arm Humanoid (6-Dof)", 10, 20);
     }
 
-    // L-elbow method removed for 6-DOF robot
-
-    // --- New Depth Sorting and Drawing Helpers ---
-    interface Drawable {
+    // --- New 3D Rendering Engine Interface and Classes ---
+    interface Renderable3D {
         double getDepth();
-
-        void draw(Graphics2D g2, int cx, int cy);
+        void render(Graphics2D g2, int cx, int cy);
     }
 
-    class TubeSegment implements Drawable {
-        double[] p1, p2;
-        int baseWidth;
-        Color color;
+    class PolygonFace implements Renderable3D {
+        double[][] vertices;
+        double[] normal;
+        Color baseColor;
         double depth;
 
-        TubeSegment(double[] p1, double[] p2, int bw, Color c) {
-            this.p1 = p1.clone();
-            this.p2 = p2.clone();
-            this.baseWidth = bw;
-            this.color = c;
-            this.depth = (getVz(p1) + getVz(p2)) / 2.0;
-        }
-
-        @Override
-        public double getDepth() {
-            return depth;
-        }
-
-        @Override
-        public void draw(Graphics2D g2, int cx, int cy) {
-            int[] s1 = project(p1, cx, cy), s2 = project(p2, cx, cy);
-            double f1 = getScaleFactor(p1);
-            double f2 = getScaleFactor(p2);
-            float tw = (float) (baseWidth * scale * (f1 + f2) / 2.0);
-            if (tw < 1)
-                tw = 1;
-
-            float dx = s2[0] - s1[0];
-            float dy = s2[1] - s1[1];
-            float len = (float) Math.sqrt(dx * dx + dy * dy);
-
-            if (len > 0.1f) {
-                float ux = dx / len;
-                float uy = dy / len;
-                float gnx = -uy;
-                float gny = ux;
-
-                float startX = s1[0] - gnx * tw / 2.0f;
-                float startY = s1[1] - gny * tw / 2.0f;
-                float endX = s1[0] + gnx * tw / 2.0f;
-                float endY = s1[1] + gny * tw / 2.0f;
-
-                LinearGradientPaint gp = new LinearGradientPaint(
-                    startX, startY, endX, endY,
-                    new float[] { 0.0f, 0.25f, 0.7f, 1.0f },
-                    new Color[] { color.darker().darker(), color.brighter(), color, color.darker() }
-                );
-                
-                // Shadow
-                g2.setColor(new Color(20, 20, 25, 45));
-                g2.setStroke(new BasicStroke(tw + 3, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g2.drawLine(s1[0], s1[1] + 2, s2[0], s2[1] + 2);
-
-                // Cylinder
-                g2.setPaint(gp);
-                g2.setStroke(new BasicStroke(tw, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g2.drawLine(s1[0], s1[1], s2[0], s2[1]);
-            } else {
-                g2.setColor(color);
-                g2.setStroke(new BasicStroke(tw, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g2.drawLine(s1[0], s1[1], s2[0], s2[1]);
+        PolygonFace(double[][] vertices, double[] normal, Color baseColor) {
+            this.vertices = vertices;
+            this.normal = normal.clone();
+            this.baseColor = baseColor;
+            
+            double sumDepth = 0;
+            for (double[] v : vertices) {
+                sumDepth += getVz(v);
             }
-        }
-    }
-
-    class JointSphere implements Drawable {
-        double[] p;
-        int baseWidth;
-        Color color;
-        double depth;
-
-        JointSphere(double[] p, int bw, Color c) {
-            this.p = p.clone();
-            this.baseWidth = bw;
-            this.color = c;
-            this.depth = getVz(p);
+            this.depth = sumDepth / vertices.length;
         }
 
+        @Override
         public double getDepth() {
             return depth;
         }
 
-        public void draw(Graphics2D g2, int cx, int cy) {
-            int[] s = project(p, cx, cy);
-            double f = getScaleFactor(p);
-            int jr = (int) ((baseWidth * 0.95) * f * scale);
-            if (jr < 3)
-                jr = 3;
-
-            float radius = jr;
-            float centerX = s[0] - jr * 0.3f;
-            float centerY = s[1] - jr * 0.3f;
-            if (radius > 1) {
-                RadialGradientPaint rgp = new RadialGradientPaint(
-                    centerX, centerY, radius * 1.6f,
-                    new float[] { 0.0f, 0.75f, 1.0f },
-                    new Color[] { Color.WHITE, color, color.darker().darker() }
-                );
-                g2.setPaint(rgp);
-            } else {
-                g2.setColor(color);
+        @Override
+        public void render(Graphics2D g2, int cx, int cy) {
+            int n = vertices.length;
+            int[][] sc = new int[n][2];
+            for (int i = 0; i < n; i++) {
+                sc[i] = project(vertices[i], cx, cy);
             }
             
-            g2.fillOval(s[0] - jr, s[1] - jr, jr * 2, jr * 2);
-            
-            g2.setColor(color.darker().darker());
-            g2.setStroke(new BasicStroke(1.0f));
-            g2.drawOval(s[0] - jr, s[1] - jr, jr * 2, jr * 2);
-        }
-    }
-
-    class BasePedestal implements Drawable {
-        double depth;
-
-        BasePedestal() {
-            this.depth = getVz(new double[] { 0, 0, 5 });
-        }
-
-        @Override
-        public double getDepth() {
-            return depth;
-        }
-
-        private class PedestalFace {
-            int[] indices;
-            double depth;
-            Color color;
-
-            PedestalFace(int[] idx, Color c, double[][] corners) {
-                this.indices = idx;
-                this.color = c;
-                double sum = 0;
-                for (int i : idx) {
-                    sum += getVz(corners[i]);
+            // Backface culling
+            double area = 0;
+            for (int i = 0; i < n; i++) {
+                int next = (i + 1) % n;
+                area += (sc[i][0] * sc[next][1] - sc[next][0] * sc[i][1]);
+            }
+            if (area <= 0) {
+                double az = Math.toRadians(camAz), el = Math.toRadians(camEl);
+                double cAz = Math.cos(az), sAz = Math.sin(az), cEl = Math.cos(el), sEl = Math.sin(el);
+                double vx = cAz * cEl;
+                double vy = sAz * cEl;
+                double vz = sEl;
+                double dotView = normal[0]*vx + normal[1]*vy + normal[2]*vz;
+                if (dotView < 0.0) {
+                    return; // Culled
                 }
-                this.depth = sum / idx.length;
             }
-        }
 
-        @Override
-        public void draw(Graphics2D g2, int cx, int cy) {
-            double halfW = 20.0;
-            double h = 10.0;
-            double[][] corners = {
-                { -halfW, -halfW, 0 },
-                {  halfW, -halfW, 0 },
-                {  halfW,  halfW, 0 },
-                { -halfW,  halfW, 0 },
-                { -halfW, -halfW, h },
-                {  halfW, -halfW, h },
-                {  halfW,  halfW, h },
-                { -halfW,  halfW, h }
+            // Light vector (from top-right-front in camera space)
+            double[] lightDir = { 0.4, -0.4, 0.8 };
+            double lightLen = Math.sqrt(lightDir[0]*lightDir[0] + lightDir[1]*lightDir[1] + lightDir[2]*lightDir[2]);
+            lightDir[0] /= lightLen; lightDir[1] /= lightLen; lightDir[2] /= lightLen;
+            
+            double dotLight = normal[0]*lightDir[0] + normal[1]*lightDir[1] + normal[2]*lightDir[2];
+            double diffuse = Math.max(0.0, dotLight);
+            
+            // Specular (Phong model)
+            double az = Math.toRadians(camAz), el = Math.toRadians(camEl);
+            double cAz = Math.cos(az), sAz = Math.sin(az), cEl = Math.cos(el), sEl = Math.sin(el);
+            double vx = cAz * cEl;
+            double vy = sAz * cEl;
+            double vz = sEl;
+            
+            double rx = 2 * dotLight * normal[0] - lightDir[0];
+            double ry = 2 * dotLight * normal[1] - lightDir[1];
+            double rz = 2 * dotLight * normal[2] - lightDir[2];
+            
+            double dotSpec = rx*vx + ry*vy + rz*vz;
+            double spec = 0.0;
+            if (dotLight > 0.0 && dotSpec > 0.0) {
+                spec = Math.pow(dotSpec, 12.0) * 0.4; // Shininess = 12, shinier specular
+            }
+            
+            double ambient = 0.35;
+            double totalLight = ambient + 0.65 * diffuse;
+            
+            int r = (int) (baseColor.getRed() * totalLight + 255 * spec);
+            int g = (int) (baseColor.getGreen() * totalLight + 255 * spec);
+            int b = (int) (baseColor.getBlue() * totalLight + 255 * spec);
+            
+            r = Math.min(255, Math.max(0, r));
+            g = Math.min(255, Math.max(0, g));
+            b = Math.min(255, Math.max(0, b));
+            
+            Polygon poly = new Polygon();
+            for (int i = 0; i < n; i++) {
+                poly.addPoint(sc[i][0], sc[i][1]);
+            }
+            
+            g2.setColor(new Color(r, g, b));
+            g2.fillPolygon(poly);
+            
+            // Subtle edge outlines for professional CAD wireframe feel
+            g2.setColor(new Color(r / 2, g / 2, b / 2, 70));
+            g2.setStroke(new BasicStroke(0.5f));
+            g2.drawPolygon(poly);
+        }
+    }
+
+    private static double[] crossProduct(double[] a, double[] b) {
+        return new double[]{
+            a[1]*b[2] - a[2]*b[1],
+            a[2]*b[0] - a[0]*b[2],
+            a[0]*b[1] - a[1]*b[0]
+        };
+    }
+    
+    private static double[] normalize(double[] a) {
+        double len = Math.sqrt(a[0]*a[0] + a[1]*a[1] + a[2]*a[2]);
+        if (len < 1e-9) return a.clone();
+        return new double[]{ a[0]/len, a[1]/len, a[2]/len };
+    }
+
+    private java.util.List<Renderable3D> createPedestal(double halfW, double h) {
+        java.util.List<Renderable3D> list = new java.util.ArrayList<>();
+        double[][] corners = {
+            { -halfW, -halfW, 0 },
+            {  halfW, -halfW, 0 },
+            {  halfW,  halfW, 0 },
+            { -halfW,  halfW, 0 },
+            { -halfW, -halfW, h },
+            {  halfW, -halfW, h },
+            {  halfW,  halfW, h },
+            { -halfW,  halfW, h }
+        };
+        
+        double[][] normals = {
+            { 0, -1, 0 },
+            { 1, 0, 0 },
+            { 0, 1, 0 },
+            { -1, 0, 0 }
+        };
+        
+        int[][] sideIndices = {
+            { 0, 1, 5, 4 },
+            { 1, 2, 6, 5 },
+            { 2, 3, 7, 6 },
+            { 3, 0, 4, 7 }
+        };
+        
+        Color sideColor = new Color(55, 58, 62);
+        for (int i = 0; i < 4; i++) {
+            double[][] verts = new double[4][3];
+            for (int j = 0; j < 4; j++) verts[j] = corners[sideIndices[i][j]];
+            list.add(new PolygonFace(verts, normals[i], sideColor));
+        }
+        
+        double[][] topVerts = new double[4][3];
+        for (int j = 0; j < 4; j++) topVerts[j] = corners[4 + j];
+        list.add(new PolygonFace(topVerts, new double[]{ 0, 0, 1 }, new Color(75, 78, 84)));
+        
+        return list;
+    }
+
+    private java.util.List<Renderable3D> createCylinder(double[] p1, double[] p2, double radius, Color color) {
+        java.util.List<Renderable3D> list = new java.util.ArrayList<>();
+        double dx = p2[0] - p1[0];
+        double dy = p2[1] - p1[1];
+        double dz = p2[2] - p1[2];
+        double len = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        if (len < 0.1) return list;
+        
+        double[] axis = { dx / len, dy / len, dz / len };
+        double[] temp = Math.abs(axis[2]) < 0.9 ? new double[]{0,0,1} : new double[]{1,0,0};
+        double[] u = crossProduct(axis, temp);
+        u = normalize(u);
+        double[] v = crossProduct(axis, u);
+        v = normalize(v);
+        
+        int segments = 8;
+        double[][] circle1 = new double[segments][3];
+        double[][] circle2 = new double[segments][3];
+        for (int i = 0; i < segments; i++) {
+            double angle = i * 2.0 * Math.PI / segments;
+            double cos = Math.cos(angle) * radius;
+            double sin = Math.sin(angle) * radius;
+            circle1[i] = new double[]{
+                p1[0] + u[0] * cos + v[0] * sin,
+                p1[1] + u[1] * cos + v[1] * sin,
+                p1[2] + u[2] * cos + v[2] * sin
             };
-
-            int[][] sc = new int[8][2];
-            for (int i = 0; i < 8; i++) {
-                sc[i] = project(corners[i], cx, cy);
-            }
-
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-            // Draw base shadow
-            g2.setColor(new Color(20, 20, 25, 60));
-            Polygon shadow = new Polygon();
-            shadow.addPoint(sc[0][0], sc[0][1] + 3);
-            shadow.addPoint(sc[1][0], sc[1][1] + 3);
-            shadow.addPoint(sc[2][0], sc[2][1] + 3);
-            shadow.addPoint(sc[3][0], sc[3][1] + 3);
-            g2.fillPolygon(shadow);
-
-            // Create faces list
-            java.util.List<PedestalFace> faces = new java.util.ArrayList<>();
-            faces.add(new PedestalFace(new int[] { 0, 1, 5, 4 }, new Color(50, 50, 55), corners));
-            faces.add(new PedestalFace(new int[] { 1, 2, 6, 5 }, new Color(55, 55, 60), corners));
-            faces.add(new PedestalFace(new int[] { 2, 3, 7, 6 }, new Color(60, 60, 65), corners));
-            faces.add(new PedestalFace(new int[] { 3, 0, 4, 7 }, new Color(45, 45, 50), corners));
-            faces.add(new PedestalFace(new int[] { 4, 5, 6, 7 }, new Color(75, 75, 80), corners));
-
-            // Sort faces by depth (furthest drawn first)
-            faces.sort((f1, f2) -> Double.compare(f2.depth, f1.depth));
-
-            // Draw the sorted faces
-            for (PedestalFace f : faces) {
-                Polygon poly = new Polygon();
-                for (int idx : f.indices) {
-                    poly.addPoint(sc[idx][0], sc[idx][1]);
-                }
-                g2.setColor(f.color);
-                g2.fillPolygon(poly);
-                g2.setColor(Color.DARK_GRAY);
-                g2.setStroke(new BasicStroke(1.0f));
-                g2.drawPolygon(poly);
-            }
+            circle2[i] = new double[]{
+                p2[0] + u[0] * cos + v[0] * sin,
+                p2[1] + u[1] * cos + v[1] * sin,
+                p2[2] + u[2] * cos + v[2] * sin
+            };
         }
+        
+        for (int i = 0; i < segments; i++) {
+            int next = (i + 1) % segments;
+            double[][] vertices = {
+                circle1[i], circle1[next], circle2[next], circle2[i]
+            };
+            double angle = (i + 0.5) * 2.0 * Math.PI / segments;
+            double cos = Math.cos(angle);
+            double sin = Math.sin(angle);
+            double[] n = {
+                u[0] * cos + v[0] * sin,
+                u[1] * cos + v[1] * sin,
+                u[2] * cos + v[2] * sin
+            };
+            n = normalize(n);
+            list.add(new PolygonFace(vertices, n, color));
+        }
+        return list;
     }
 
-    class GripperDrawable implements Drawable {
-        double[][] T;
-        double[] p3D;
-        double depth;
-        double wFingerLen;
-
-        GripperDrawable(double[][] T, double[] p, double wFingerLen) {
-            this.T = T;
-            this.p3D = p.clone();
-            double ux = T[0][2], uy = T[1][2], uz = T[2][2];
-            double[] pWrist = { p[0] - ux * L7, p[1] - uy * L7, p[2] - uz * L7 };
-            this.depth = Math.min(getVz(p), getVz(pWrist)) - 0.1;
-            this.wFingerLen = wFingerLen;
+    private java.util.List<Renderable3D> createSphere(double[] center, double radius, Color color) {
+        java.util.List<Renderable3D> list = new java.util.ArrayList<>();
+        int rings = 6;
+        int sectors = 8;
+        double[][] verts = new double[(rings + 1) * sectors][3];
+        for (int r = 0; r <= rings; r++) {
+            double phi = Math.PI * r / rings;
+            double sinPhi = Math.sin(phi);
+            double cosPhi = Math.cos(phi);
+            for (int s = 0; s < sectors; s++) {
+                double theta = 2.0 * Math.PI * s / sectors;
+                double sinTheta = Math.sin(theta);
+                double cosTheta = Math.cos(theta);
+                int idx = r * sectors + s;
+                verts[idx] = new double[]{
+                    center[0] + radius * sinPhi * cosTheta,
+                    center[1] + radius * sinPhi * sinTheta,
+                    center[2] + radius * cosPhi
+                };
+            }
         }
-
-        @Override
-        public double getDepth() {
-            return depth;
+        
+        for (int r = 0; r < rings; r++) {
+            for (int s = 0; s < sectors; s++) {
+                int nextS = (s + 1) % sectors;
+                int r0 = r * sectors;
+                int r1 = (r + 1) * sectors;
+                
+                double[][] vertices = {
+                    verts[r0 + s], verts[r0 + nextS], verts[r1 + nextS], verts[r1 + s]
+                };
+                
+                double[] n = {
+                    (vertices[0][0] + vertices[1][0] + vertices[2][0] + vertices[3][0]) / 4.0 - center[0],
+                    (vertices[0][1] + vertices[1][1] + vertices[2][1] + vertices[3][1]) / 4.0 - center[1],
+                    (vertices[0][2] + vertices[1][2] + vertices[2][2] + vertices[3][2]) / 4.0 - center[2]
+                };
+                n = normalize(n);
+                list.add(new PolygonFace(vertices, n, color));
+            }
         }
+        return list;
+    }
 
-        @Override
-        public void draw(Graphics2D g2, int cx, int cy) {
-            double ux = T[0][2], uy = T[1][2], uz = T[2][2]; // Approach vector
-            double nx = T[0][0], ny = T[1][0], nz = T[2][0]; // Normal vector
-            double f = getScaleFactor(p3D);
+    private java.util.List<Renderable3D> createGripper(double[][] T, double[] p3D, boolean isGripped) {
+        java.util.List<Renderable3D> list = new java.util.ArrayList<>();
+        double ux = T[0][2], uy = T[1][2], uz = T[2][2];
+        double nx = T[0][0], ny = T[1][0], nz = T[2][0];
+        
+        double wOpening = isGripped ? 0.8 : 2.5;
+        
+        double[] pActuatorStart = { p3D[0] - ux * 6.0, p3D[1] - uy * 6.0, p3D[2] - uz * 6.0 };
+        double[] pRailCenter = { p3D[0] - ux * 4.0, p3D[1] - uy * 4.0, p3D[2] - uz * 4.0 };
+        
+        // Actuator
+        list.addAll(createCylinder(pActuatorStart, pRailCenter, 1.8, new Color(45, 47, 50)));
+        
+        // Guide Rail
+        double[] pRailLeft = { pRailCenter[0] + nx * (wOpening + 0.8), pRailCenter[1] + ny * (wOpening + 0.8), pRailCenter[2] + nz * (wOpening + 0.8) };
+        double[] pRailRight = { pRailCenter[0] - nx * (wOpening + 0.8), pRailCenter[1] - ny * (wOpening + 0.8), pRailCenter[2] - nz * (wOpening + 0.8) };
+        list.addAll(createCylinder(pRailLeft, pRailRight, 0.8, new Color(170, 172, 178)));
+        
+        double[] pLeftBase = { pRailCenter[0] + nx * wOpening, pRailCenter[1] + ny * wOpening, pRailCenter[2] + nz * wOpening };
+        double[] pRightBase = { pRailCenter[0] - nx * wOpening, pRailCenter[1] - ny * wOpening, pRailCenter[2] - nz * wOpening };
+        
+        double[] l1 = pLeftBase;
+        double[] l2 = { pLeftBase[0] + ux * 2.8 + nx * 0.6, pLeftBase[1] + uy * 2.8 + ny * 0.6, pLeftBase[2] + uz * 2.8 + nz * 0.6 };
+        double[] l3 = { p3D[0] + ux * 0.8 + nx * 0.2, p3D[1] + uy * 0.8 + ny * 0.2, p3D[2] + uz * 0.8 + nz * 0.2 };
+        
+        double[] r1 = pRightBase;
+        double[] r2 = { pRightBase[0] + ux * 2.8 - nx * 0.6, pRightBase[1] + uy * 2.8 - ny * 0.6, pRightBase[2] + uz * 2.8 - nz * 0.6 };
+        double[] r3 = { p3D[0] + ux * 0.8 - nx * 0.2, p3D[1] + uy * 0.8 - ny * 0.2, p3D[2] + uz * 0.8 - nz * 0.2 };
+        
+        Color fingerColor = new Color(245, 125, 20);
+        list.addAll(createCylinder(l1, l2, 0.8, fingerColor));
+        list.addAll(createCylinder(l2, l3, 0.8, fingerColor));
+        list.addAll(createCylinder(r1, r2, 0.8, fingerColor));
+        list.addAll(createCylinder(r2, r3, 0.8, fingerColor));
+        
+        double[] lPadStart = l3;
+        double[] lPadEnd = { l3[0] - ux * 2.2, l3[1] - uy * 2.2, l3[2] - uz * 2.2 };
+        double[] rPadStart = r3;
+        double[] rPadEnd = { r3[0] - ux * 2.2, r3[1] - uy * 2.2, r3[2] - uz * 2.2 };
+        
+        Color padColor = new Color(30, 30, 32);
+        list.addAll(createCylinder(lPadStart, lPadEnd, 0.6, padColor));
+        list.addAll(createCylinder(rPadStart, rPadEnd, 0.6, padColor));
+        
+        // Add actual TCP red dot as a tiny sphere
+        list.addAll(createSphere(p3D, 0.5, new Color(230, 40, 40)));
+        
+        return list;
+    }
 
-            double wOpening = robot.isGripped ? 1.0 : 3.5;
-            
-            // Calculate key points along the approach axis
-            double[] pActuatorStart = { p3D[0] - ux * 8.0, p3D[1] - uy * 8.0, p3D[2] - uz * 8.0 };
-            double[] pRailCenter = { p3D[0] - ux * 5.0, p3D[1] - uy * 5.0, p3D[2] - uz * 5.0 };
-            
-            int[] sActuatorStart = project(pActuatorStart, cx, cy);
-            int[] sRailCenter = project(pRailCenter, cx, cy);
-            
-            // 1. Actuator body (cylinder) - sleek and dark metal
-            int actuatorThickness = (int) (5.0 * f * scale);
-            if (actuatorThickness < 1) actuatorThickness = 1;
-            g2.setColor(new Color(40, 42, 46));
-            g2.setStroke(new BasicStroke(actuatorThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sActuatorStart[0], sActuatorStart[1], sRailCenter[0], sRailCenter[1]);
-            
-            // Actuator highlight
-            g2.setColor(new Color(75, 78, 84));
-            g2.setStroke(new BasicStroke((float)(actuatorThickness * 0.3), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sActuatorStart[0], sActuatorStart[1], sRailCenter[0], sRailCenter[1]);
-
-            // 2. Guide Rail Crossbar - thin silver rail
-            double[] pRailLeft = { pRailCenter[0] + nx * (wOpening + 1.5), pRailCenter[1] + ny * (wOpening + 1.5), pRailCenter[2] + nz * (wOpening + 1.5) };
-            double[] pRailRight = { pRailCenter[0] - nx * (wOpening + 1.5), pRailCenter[1] - ny * (wOpening + 1.5), pRailCenter[2] - nz * (wOpening + 1.5) };
-            int[] sRailLeft = project(pRailLeft, cx, cy);
-            int[] sRailRight = project(pRailRight, cx, cy);
-            
-            int railThickness = (int) (2.5 * f * scale);
-            if (railThickness < 1) railThickness = 1;
-            g2.setColor(new Color(170, 172, 178));
-            g2.setStroke(new BasicStroke(railThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sRailLeft[0], sRailLeft[1], sRailRight[0], sRailRight[1]);
-            
-            // 3. Fingers (CNC Orange, sleek, L-shaped/Curved)
-            double[] pLeftBase = { pRailCenter[0] + nx * wOpening, pRailCenter[1] + ny * wOpening, pRailCenter[2] + nz * wOpening };
-            double[] pRightBase = { pRailCenter[0] - nx * wOpening, pRailCenter[1] - ny * wOpening, pRailCenter[2] - nz * wOpening };
-            
-            double[] l1 = pLeftBase;
-            double[] l2 = { pLeftBase[0] + ux * 3.5 + nx * 0.8, pLeftBase[1] + uy * 3.5 + ny * 0.8, pLeftBase[2] + uz * 3.5 + nz * 0.8 };
-            double[] l3 = { p3D[0] + ux * 1.0 + nx * 0.3, p3D[1] + uy * 1.0 + ny * 0.3, p3D[2] + uz * 1.0 + nz * 0.3 };
-            
-            double[] r1 = pRightBase;
-            double[] r2 = { pRightBase[0] + ux * 3.5 - nx * 0.8, pRightBase[1] + uy * 3.5 - ny * 0.8, pRightBase[2] + uz * 3.5 - nz * 0.8 };
-            double[] r3 = { p3D[0] + ux * 1.0 - nx * 0.3, p3D[1] + uy * 1.0 - ny * 0.3, p3D[2] + uz * 1.0 - nz * 0.3 };
-            
-            int[] sL1 = project(l1, cx, cy);
-            int[] sL2 = project(l2, cx, cy);
-            int[] sL3 = project(l3, cx, cy);
-            
-            int[] sR1 = project(r1, cx, cy);
-            int[] sR2 = project(r2, cx, cy);
-            int[] sR3 = project(r3, cx, cy);
-            
-            int fingerThickness = (int) (2.5 * f * scale);
-            if (fingerThickness < 1) fingerThickness = 1;
-            g2.setColor(new Color(245, 125, 20));
-            g2.setStroke(new BasicStroke(fingerThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            
-            // Left Finger
-            g2.drawLine(sL1[0], sL1[1], sL2[0], sL2[1]);
-            g2.drawLine(sL2[0], sL2[1], sL3[0], sL3[1]);
-            
-            // Right Finger
-            g2.drawLine(sR1[0], sR1[1], sR2[0], sR2[1]);
-            g2.drawLine(sR2[0], sR2[1], sR3[0], sR3[1]);
-            
-            // Highlight
-            g2.setColor(new Color(255, 185, 120));
-            g2.setStroke(new BasicStroke((float)(fingerThickness * 0.35), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sL1[0], sL1[1], sL2[0], sL2[1]);
-            g2.drawLine(sL2[0], sL2[1], sL3[0], sL3[1]);
-            g2.drawLine(sR1[0], sR1[1], sR2[0], sR2[1]);
-            g2.drawLine(sR2[0], sR2[1], sR3[0], sR3[1]);
-            
-            // 4. Rubber Gripping Pads
-            double[] lPadStart = l3;
-            double[] lPadEnd = { l3[0] - ux * 3.0, l3[1] - uy * 3.0, l3[2] - uz * 3.0 };
-            double[] rPadStart = r3;
-            double[] rPadEnd = { r3[0] - ux * 3.0, r3[1] - uy * 3.0, r3[2] - uz * 3.0 };
-            
-            int[] sLpadStart = project(lPadStart, cx, cy);
-            int[] sLpadEnd = project(lPadEnd, cx, cy);
-            int[] sRpadStart = project(rPadStart, cx, cy);
-            int[] sRpadEnd = project(rPadEnd, cx, cy);
-            
-            int padThickness = (int) (1.8 * f * scale);
-            if (padThickness < 1) padThickness = 1;
-            g2.setColor(new Color(30, 30, 32));
-            g2.setStroke(new BasicStroke(padThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sLpadStart[0], sLpadStart[1], sLpadEnd[0], sLpadEnd[1]);
-            g2.drawLine(sRpadStart[0], sRpadStart[1], sRpadEnd[0], sRpadEnd[1]);
-            
-            // 5. Tool Center Point
-            int[] sTip = project(p3D, cx, cy);
-            g2.setColor(new Color(230, 40, 40));
-            g2.fillOval(sTip[0] - 2, sTip[1] - 2, 4, 4);
-        }
+    private void drawShadow(Graphics2D g2, double[] p, double radius, int cx, int cy) {
+        int[] sc = project(new double[]{ p[0], p[1], 0 }, cx, cy);
+        double f = getScaleFactor(new double[]{ p[0], p[1], 0 });
+        int r = (int) (radius * scale * f);
+        if (r < 1) return;
+        
+        g2.setColor(new Color(20, 20, 25, 40));
+        g2.fillOval(sc[0] - r, sc[1] - r / 2, 2 * r, r);
     }
 
     private double getVz(double[] p) {
