@@ -458,7 +458,9 @@ public class ArmPanel extends JPanel
         GripperDrawable(double[][] T, double[] p, double wFingerLen) {
             this.T = T;
             this.p3D = p.clone();
-            this.depth = getVz(p);
+            double ux = T[0][2], uy = T[1][2], uz = T[2][2];
+            double[] pWrist = { p[0] - ux * L7, p[1] - uy * L7, p[2] - uz * L7 };
+            this.depth = Math.min(getVz(p), getVz(pWrist)) - 0.1;
             this.wFingerLen = wFingerLen;
         }
 
