@@ -1421,13 +1421,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] bestQ = null;
         double bestAlpha = alphaSlider.getValue();
         double[] q_pref = new double[NUM_JOINTS];
-        if (isRightArmSelected) {
-            q_pref[2] = 60.0;   // Right arm: Joint 3 positive (strongly bent elbow)
-            q_pref[3] = -35.0;  // Right arm: Joint 4 negative (wrist pitch)
-        } else {
-            q_pref[2] = -60.0;  // Left arm: Joint 3 negative (strongly bent elbow)
-            q_pref[3] = 35.0;   // Left arm: Joint 4 positive (wrist pitch)
-        }
+        // To bend both elbows forward naturally, both arms must have Joint 3 positive and Joint 4 negative
+        q_pref[2] = 60.0;   // Joint 3 positive (strongly bent elbow forward)
+        q_pref[3] = -35.0;  // Joint 4 negative (wrist pitch forward)
 
         // Optimization Loop: Scan likely alpha range [-90, 30] as per Matlab phi range
         // [-pi/2, pi/6]
@@ -1572,13 +1568,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             double[] qHome = new double[NUM_JOINTS];
             qHome[0] = qInit[0];
             qHome[1] = 0.5;
-            if (isRightArmSelected) {
-                qHome[2] = 1.0;                     // Right Arm: Joint 3 positive bias
-                qHome[3] = Math.toRadians(-35.0);   // Right Arm: Joint 4 negative bias
-            } else {
-                qHome[2] = -1.0;                    // Left Arm: Joint 3 negative bias
-                qHome[3] = Math.toRadians(35.0);    // Left Arm: Joint 4 positive bias
-            }
+            qHome[2] = 1.0;                     // Joint 3 positive bias (elbow forward)
+            qHome[3] = Math.toRadians(-35.0);   // Joint 4 negative bias (wrist forward)
             double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
             if (q2 != null && isWithinLimits(q2)) {
                 validSolutions.add(q2);
@@ -1600,13 +1591,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] qHome = new double[NUM_JOINTS];
         qHome[0] = Math.atan2(py, px);
         qHome[1] = 0.5;
-        if (isRightArmSelected) {
-            qHome[2] = 1.0;                     // Right Arm: Joint 3 positive bias
-            qHome[3] = Math.toRadians(-35.0);   // Right Arm: Joint 4 negative bias
-        } else {
-            qHome[2] = -1.0;                    // Left Arm: Joint 3 negative bias
-            qHome[3] = Math.toRadians(35.0);    // Left Arm: Joint 4 positive bias
-        }
+        qHome[2] = 1.0;                     // Joint 3 positive bias (elbow forward)
+        qHome[3] = Math.toRadians(-35.0);   // Joint 4 negative bias (wrist forward)
         q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
         if (q != null && isWithinLimits(q)) {
             return q;
