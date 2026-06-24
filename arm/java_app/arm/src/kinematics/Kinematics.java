@@ -22,6 +22,10 @@ public class Kinematics {
      * Solve inverse kinematics using Damped Least Squares (DLS) numerical loop.
      */
     public static double[] solveIK(double px, double py, double pz, double[][] R_target, double[] qInitRad) {
+        return solveIK(px, py, pz, R_target, qInitRad, true); // default to Right arm
+    }
+
+    public static double[] solveIK(double px, double py, double pz, double[][] R_target, double[] qInitRad, boolean isRight) {
         double[] q = qInitRad.clone();
         
         // Target matrix
@@ -37,7 +41,7 @@ public class Kinematics {
         double alpha = 0.5; // Step size
         
         for (int iter = 0; iter < maxIter; iter++) {
-            double[][] T_curr = computeFKMatrix(q);
+            double[][] T_curr = computeFKMatrix(q, isRight);
             double[] e = computeTr2Delta(T_curr, T_target);
             
             double errNorm = 0;
@@ -58,7 +62,7 @@ public class Kinematics {
                 return q_deg;
             }
             
-            double[][] J = computeJacobianEE(q);
+            double[][] J = computeJacobianEE(q, isRight);
             double[] dq = solveDLS(J, e, 0.05); // lambda = 0.05
             
             for (int i = 0; i < NUM_JOINTS; i++) {
@@ -92,10 +96,15 @@ public class Kinematics {
     }
 
     public static double[][] computeFKMatrix(double[] q) {
+        return computeFKMatrix(q, true);
+    }
+
+    public static double[][] computeFKMatrix(double[] q, boolean isRight) {
         double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
+        double d2 = isRight ? (L2 + L3) : -(L2 + L3);
         double[][] params = {
                 { 0, L1 + L0, 0, -Math.PI / 2, q[0] },
-                { -Math.PI / 2, L2 + L3, 0, -Math.PI / 2, q[1] },
+                { -Math.PI / 2, d2, 0, -Math.PI / 2, q[1] },
                 { -Math.PI / 2, 0, 0, -Math.PI, q[2] },
                 { 0, 0, L4, -Math.PI / 2, q[3] },
                 { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, q[4] },
@@ -109,10 +118,15 @@ public class Kinematics {
     }
 
     public static double[][] computeJacobianEE(double[] q) {
+        return computeJacobianEE(q, true);
+    }
+
+    public static double[][] computeJacobianEE(double[] q, boolean isRight) {
         double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
+        double d2 = isRight ? (L2 + L3) : -(L2 + L3);
         double[][] params = {
                 { 0, L1 + L0, 0, -Math.PI / 2, q[0] },
-                { -Math.PI / 2, L2 + L3, 0, -Math.PI / 2, q[1] },
+                { -Math.PI / 2, d2, 0, -Math.PI / 2, q[1] },
                 { -Math.PI / 2, 0, 0, -Math.PI, q[2] },
                 { 0, 0, L4, -Math.PI / 2, q[3] },
                 { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, q[4] },
