@@ -148,17 +148,26 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 targetAngles = targetAnglesRight;
                 lastSentAngles = lastSentAnglesRight;
                 isRightArmSelected = true;
+                // Left arm (inactive) returns to home smoothly
+                for (int j = 1; j < NUM_JOINTS; j++) {
+                    targetAnglesLeft[j] = 0;
+                }
             } else {
                 angles = anglesLeft;
                 targetAngles = targetAnglesLeft;
                 lastSentAngles = lastSentAnglesLeft;
                 isRightArmSelected = false;
+                // Right arm (inactive) returns to home smoothly
+                for (int j = 1; j < NUM_JOINTS; j++) {
+                    targetAnglesRight[j] = 0;
+                }
             }
             // Sync sliders and labels to the newly selected arm's angles
             for (int j = 0; j < NUM_JOINTS; j++) {
                 sliders[j].setValue((int) angles[j]);
                 angleLbls[j].setText((int) angles[j] + "°");
             }
+            startMotionTimer();
             updateArm();
         });
         manualPanel.add(armCombo);
@@ -620,8 +629,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double effectiveSpeed = Math.max(1.0, speedSlider.getValue());
         double maxStep = effectiveSpeed * (MOTION_DT_MS / 1000.0);
         boolean moving = false;
+
+        // 1. Interpolate Right Arm
         for (int i = 0; i < NUM_JOINTS; i++) {
-            double diff = targetAngles[i] - angles[i];
+            double diff = targetAnglesRight[i] - anglesRight[i];
 
             // Shortest path interpolation (Angle Wrapping)
             while (diff > 180)
@@ -630,35 +641,68 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 diff += 360;
 
             if (Math.abs(diff) < 0.05) {
-                if (angles[i] != targetAngles[i]) {
-                    angles[i] = targetAngles[i];
+                if (anglesRight[i] != targetAnglesRight[i]) {
+                    anglesRight[i] = targetAnglesRight[i];
                     moving = true;
                 }
             } else {
-                angles[i] += Math.signum(diff) * Math.min(Math.abs(diff), maxStep);
+                anglesRight[i] += Math.signum(diff) * Math.min(Math.abs(diff), maxStep);
                 moving = true;
             }
 
-            // Keep current angles in [-180, 180] for stability
-            while (angles[i] > 180)
-                angles[i] -= 360;
-            while (angles[i] < -180)
-                angles[i] += 360;
-
-            // Sync slider without triggering stateChanged feedback loop
-            sliders[i].removeChangeListener(this);
-            sliders[i].setValue((int) Math.round(angles[i]));
-            sliders[i].addChangeListener(this);
-            angleLbls[i].setText((int) Math.round(angles[i]) + "°");
+            while (anglesRight[i] > 180)
+                anglesRight[i] -= 360;
+            while (anglesRight[i] < -180)
+                anglesRight[i] += 360;
         }
+
+        // 2. Interpolate Left Arm
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            double diff = targetAnglesLeft[i] - anglesLeft[i];
+
+            // Shortest path interpolation (Angle Wrapping)
+            while (diff > 180)
+                diff -= 360;
+            while (diff < -180)
+                diff += 360;
+
+            if (Math.abs(diff) < 0.05) {
+                if (anglesLeft[i] != targetAnglesLeft[i]) {
+                    anglesLeft[i] = targetAnglesLeft[i];
+                    moving = true;
+                }
+            } else {
+                anglesLeft[i] += Math.signum(diff) * Math.min(Math.abs(diff), maxStep);
+                moving = true;
+            }
+
+            while (anglesLeft[i] > 180)
+                anglesLeft[i] -= 360;
+            while (anglesLeft[i] < -180)
+                anglesLeft[i] += 360;
+        }
+
         // Synchronize Joint 1 (Waist/Hip) for both arms
         anglesRight[0] = angles[0];
         anglesLeft[0] = angles[0];
         targetAnglesRight[0] = targetAngles[0];
         targetAnglesLeft[0] = targetAngles[0];
 
+        // 3. Sync sliders and labels of the ACTIVE arm without triggering listener
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            sliders[i].removeChangeListener(this);
+            sliders[i].setValue((int) Math.round(angles[i]));
+            sliders[i].addChangeListener(this);
+            angleLbls[i].setText((int) Math.round(angles[i]) + "°");
+        }
+
         updateArm();
         sendJointsToUart();
+
+        // Stop timer if nothing is moving
+        if (!moving) {
+            motionTimer.stop();
+        }
     }
 
     /**
