@@ -536,7 +536,7 @@ public class ArmPanel extends JPanel
             drawThickLink(g2, 1.5, -1.2, 5.5, -1.2, 0.5, new Color(200, 205, 210), new Color(120, 125, 130), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
 
             // 4. Fingers opening logic
-            double w = robot.isGripped ? 0.6 : 2.5; 
+            double w = robot.isGripped ? 2.5 : 5.0; 
 
             // Left Finger Link 1 (CNC Anodized Orange)
             drawThickLink(g2, 5.5, 1.5, 9.0, 1.5 + w, 1.0, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
