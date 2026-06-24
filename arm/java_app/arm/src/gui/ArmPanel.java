@@ -189,7 +189,7 @@ public class ArmPanel extends JPanel
 
         // Add 3D elements
         drawables.addAll(createPedestal(20.0, 10.0));
-        drawables.addAll(createCylinder(new double[] { 0, 0, 10 }, new double[] { 0, 0, 125 }, 5.5, new Color(55, 58, 62))); // torso
+        drawables.addAll(createCylinder(new double[] { 0, 0, 10 }, new double[] { 0, 0, 125 }, 4.5, new Color(45, 48, 52))); // torso (thinner)
         drawables.addAll(createCylinder(new double[] { 0, 0, 125 }, new double[] { 0, 0, 135 }, 2.5, new Color(60, 60, 60))); // neck
         drawables.addAll(createSphere(new double[] { 0, 0, 135 }, 4.5, new Color(75, 80, 85))); // head
 
@@ -352,9 +352,8 @@ public class ArmPanel extends JPanel
             g2.setColor(new Color(r, g, b));
             g2.fillPolygon(poly);
             
-            // Subtle edge outlines for professional CAD wireframe feel
-            g2.setColor(new Color(r / 2, g / 2, b / 2, 70));
-            g2.setStroke(new BasicStroke(0.5f));
+            // Draw polygon edge with the same color to prevent anti-aliasing gaps and create a smooth solid surface
+            g2.setStroke(new BasicStroke(0.6f));
             g2.drawPolygon(poly);
         }
     }
@@ -429,7 +428,7 @@ public class ArmPanel extends JPanel
         double[] v = crossProduct(axis, u);
         v = normalize(v);
         
-        int segments = 8;
+        int segments = 24;
         double[][] circle1 = new double[segments][3];
         double[][] circle2 = new double[segments][3];
         for (int i = 0; i < segments; i++) {
@@ -469,8 +468,8 @@ public class ArmPanel extends JPanel
 
     private java.util.List<Renderable3D> createSphere(double[] center, double radius, Color color) {
         java.util.List<Renderable3D> list = new java.util.ArrayList<>();
-        int rings = 6;
-        int sectors = 8;
+        int rings = 12;
+        int sectors = 20;
         double[][] verts = new double[(rings + 1) * sectors][3];
         for (int r = 0; r <= rings; r++) {
             double phi = Math.PI * r / rings;
