@@ -14,12 +14,12 @@ import static kinematics.Kinematics.*;
 public final class MainFrame extends JFrame implements ActionListener, ChangeListener {
     private static final double MAX_IK_POSITION_ERROR = 1.5; // General IK threshold (allow a bit of error)
     private static final double TRAJ_RELAXED_ERROR = 2.50; // Trajectory fallback threshold
-    double[] anglesRight = { 0, 0, 0, -30, 0, 0 };
-    double[] targetAnglesRight = { 0, 0, 0, -30, 0, 0 };
+    double[] anglesRight = { 0, 0, 10, -30, 0, 0 };
+    double[] targetAnglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
 
-    double[] anglesLeft = { 0, 0, 0, 30, 0, 0 };
-    double[] targetAnglesLeft = { 0, 0, 0, 30, 0, 0 };
+    double[] anglesLeft = { 0, 0, 10, 30, 0, 0 };
+    double[] targetAnglesLeft = { 0, 0, 10, 30, 0, 0 };
     double[] lastSentAnglesLeft = { -999, -999, -999, -999, -999, -999 };
 
     public double[] angles = anglesRight;
@@ -150,7 +150,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 isRightArmSelected = true;
                 // Left arm (inactive) returns to home smoothly
                 for (int j = 1; j < NUM_JOINTS; j++) {
-                    targetAnglesLeft[j] = (j == 3) ? 30.0 : 0;
+                    targetAnglesLeft[j] = (j == 3) ? 30.0 : ((j == 2) ? 10.0 : 0);
                 }
             } else {
                 angles = anglesLeft;
@@ -159,7 +159,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 isRightArmSelected = false;
                 // Right arm (inactive) returns to home smoothly
                 for (int j = 1; j < NUM_JOINTS; j++) {
-                    targetAnglesRight[j] = (j == 3) ? -30.0 : 0;
+                    targetAnglesRight[j] = (j == 3) ? -30.0 : ((j == 2) ? 10.0 : 0);
                 }
             }
             // Sync sliders and labels to the newly selected arm's angles and limits
@@ -908,7 +908,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     void resetAngles() {
         armPanel.trail.clear();
-        double[] defaultPose = isRightArmSelected ? new double[] { 0, 0, 0, -30.0, 0, 0 } : new double[] { 0, 0, 0, 30.0, 0, 0 };
+        double[] defaultPose = isRightArmSelected ? new double[] { 0, 0, 10.0, -30.0, 0, 0 } : new double[] { 0, 0, 10.0, 30.0, 0, 0 };
         setTargetAngles(defaultPose);
     }
 
