@@ -15,8 +15,8 @@ public class Kinematics {
     public static final double L7 = 10.0;
 
     public static final String[] JOINT_NAMES = { "Khớp 1", "Khớp 2", "Khớp 3", "Khớp 4", "Khớp 5", "Khớp 6" };
-    public static final double[] JOINT_MIN = { -90, -90, -90, -50, -90, -90 };
-    public static final double[] JOINT_MAX = { 90, 90, 90, 50, 90, 90 };
+    public static final double[] JOINT_MIN = { -90, -90, -90, -140, -90, -90 };
+    public static final double[] JOINT_MAX = { 90, 90, 90, -30, 90, 90 };
 
     /**
      * Solve inverse kinematics using Damped Least Squares (DLS) numerical loop.

@@ -180,7 +180,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             JLabel nameLabel = new JLabel(JOINT_NAMES[i]);
             jointPanel.add(nameLabel, BorderLayout.NORTH);
 
-            sliders[i] = new JSlider((int) JOINT_MIN[i], (int) JOINT_MAX[i], (int) angles[i]);
+            int minVal = (int) Math.min(JOINT_MIN[i], JOINT_MAX[i]);
+            int maxVal = (int) Math.max(JOINT_MIN[i], JOINT_MAX[i]);
+            sliders[i] = new JSlider(minVal, maxVal, (int) angles[i]);
             sliders[i].setMajorTickSpacing(30);
             sliders[i].setPaintTicks(true);
             sliders[i].addChangeListener(this);
