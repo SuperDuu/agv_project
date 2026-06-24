@@ -376,6 +376,22 @@ public class ArmPanel extends JPanel
             return depth;
         }
 
+        private class PedestalFace {
+            int[] indices;
+            double depth;
+            Color color;
+
+            PedestalFace(int[] idx, Color c, double[][] corners) {
+                this.indices = idx;
+                this.color = c;
+                double sum = 0;
+                for (int i : idx) {
+                    sum += getVz(corners[i]);
+                }
+                this.depth = sum / idx.length;
+            }
+        }
+
         @Override
         public void draw(Graphics2D g2, int cx, int cy) {
             double halfW = 20.0;
@@ -407,39 +423,29 @@ public class ArmPanel extends JPanel
             shadow.addPoint(sc[3][0], sc[3][1] + 3);
             g2.fillPolygon(shadow);
 
-            // Side faces
-            int[][] sideIndices = {
-                { 0, 1, 5, 4 },
-                { 1, 2, 6, 5 },
-                { 2, 3, 7, 6 },
-                { 3, 0, 4, 7 }
-            };
+            // Create faces list
+            java.util.List<PedestalFace> faces = new java.util.ArrayList<>();
+            faces.add(new PedestalFace(new int[] { 0, 1, 5, 4 }, new Color(50, 50, 55), corners));
+            faces.add(new PedestalFace(new int[] { 1, 2, 6, 5 }, new Color(55, 55, 60), corners));
+            faces.add(new PedestalFace(new int[] { 2, 3, 7, 6 }, new Color(60, 60, 65), corners));
+            faces.add(new PedestalFace(new int[] { 3, 0, 4, 7 }, new Color(45, 45, 50), corners));
+            faces.add(new PedestalFace(new int[] { 4, 5, 6, 7 }, new Color(75, 75, 80), corners));
 
-            for (int i = 0; i < 4; i++) {
-                Polygon side = new Polygon();
-                side.addPoint(sc[sideIndices[i][0]][0], sc[sideIndices[i][0]][1]);
-                side.addPoint(sc[sideIndices[i][1]][0], sc[sideIndices[i][1]][1]);
-                side.addPoint(sc[sideIndices[i][2]][0], sc[sideIndices[i][2]][1]);
-                side.addPoint(sc[sideIndices[i][3]][0], sc[sideIndices[i][3]][1]);
-                
-                g2.setColor(new Color(40 + i * 5, 40 + i * 5, 45 + i * 5));
-                g2.fillPolygon(side);
+            // Sort faces by depth (furthest drawn first)
+            faces.sort((f1, f2) -> Double.compare(f2.depth, f1.depth));
+
+            // Draw the sorted faces
+            for (PedestalFace f : faces) {
+                Polygon poly = new Polygon();
+                for (int idx : f.indices) {
+                    poly.addPoint(sc[idx][0], sc[idx][1]);
+                }
+                g2.setColor(f.color);
+                g2.fillPolygon(poly);
                 g2.setColor(Color.DARK_GRAY);
                 g2.setStroke(new BasicStroke(1.0f));
-                g2.drawPolygon(side);
+                g2.drawPolygon(poly);
             }
-
-            // Top face
-            Polygon top = new Polygon();
-            top.addPoint(sc[4][0], sc[4][1]);
-            top.addPoint(sc[5][0], sc[5][1]);
-            top.addPoint(sc[6][0], sc[6][1]);
-            top.addPoint(sc[7][0], sc[7][1]);
-
-            g2.setColor(new Color(75, 75, 80));
-            g2.fillPolygon(top);
-            g2.setColor(Color.DARK_GRAY);
-            g2.drawPolygon(top);
         }
     }
 
@@ -467,78 +473,97 @@ public class ArmPanel extends JPanel
             double nx = T[0][0], ny = T[1][0], nz = T[2][0]; // Normal vector
             double f = getScaleFactor(p3D);
 
-            // Gripper dimensions (proportional and thick)
-            double wOpening = robot.isGripped ? 1.2 : 5.0;
-            double wThick = 2.5;
+            double wOpening = robot.isGripped ? 1.5 : 5.0;
+            
+            // Calculate key points along the approach axis
+            double[] pActuatorStart = { p3D[0] - ux * 13.0, p3D[1] - uy * 13.0, p3D[2] - uz * 13.0 };
+            double[] pRailCenter = { p3D[0] - ux * 8.0, p3D[1] - uy * 8.0, p3D[2] - uz * 8.0 };
+            
+            int[] sActuatorStart = project(pActuatorStart, cx, cy);
+            int[] sRailCenter = project(pRailCenter, cx, cy);
+            
+            // 1. Actuator body (cylinder)
+            int actuatorThickness = (int) (11.0 * f * scale);
+            g2.setColor(new Color(40, 42, 46)); // Matte dark steel
+            g2.setStroke(new BasicStroke(actuatorThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(sActuatorStart[0], sActuatorStart[1], sRailCenter[0], sRailCenter[1]);
+            
+            // Actuator highlight
+            g2.setColor(new Color(70, 74, 80));
+            g2.setStroke(new BasicStroke((float)(actuatorThickness * 0.3), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(sActuatorStart[0] - (int)(1*f), sActuatorStart[1] - (int)(1*f), sRailCenter[0] - (int)(1*f), sRailCenter[1] - (int)(1*f));
 
-            // Project 3D points for thick fingers
-            double[] lfbi = { p3D[0] + nx * wOpening, p3D[1] + ny * wOpening, p3D[2] + nz * wOpening };
-            double[] lfbo = { p3D[0] + nx * (wOpening + wThick), p3D[1] + ny * (wOpening + wThick), p3D[2] + nz * (wOpening + wThick) };
-            double[] lfti = { lfbi[0] + ux * wFingerLen, lfbi[1] + uy * wFingerLen, lfbi[2] + uz * wFingerLen };
-            double[] lfto = { lfbo[0] + ux * wFingerLen, lfbo[1] + uy * wFingerLen, lfbo[2] + uz * wFingerLen };
-
-            double[] rfbi = { p3D[0] - nx * wOpening, p3D[1] - ny * wOpening, p3D[2] - nz * wOpening };
-            double[] rfbo = { p3D[0] - nx * (wOpening + wThick), p3D[1] - ny * (wOpening + wThick), p3D[2] - nz * (wOpening + wThick) };
-            double[] rfti = { rfbi[0] + ux * wFingerLen, rfbi[1] + uy * wFingerLen, rfbi[2] + uz * wFingerLen };
-            double[] rfto = { rfbo[0] + ux * wFingerLen, rfbo[1] + uy * wFingerLen, rfbo[2] + uz * wFingerLen };
-
-            int[] sLfbi = project(lfbi, cx, cy);
-            int[] sLfbo = project(lfbo, cx, cy);
-            int[] sLfti = project(lfti, cx, cy);
-            int[] sLfto = project(lfto, cx, cy);
-
-            int[] sRfbi = project(rfbi, cx, cy);
-            int[] sRfbo = project(rfbo, cx, cy);
-            int[] sRfti = project(rfti, cx, cy);
-            int[] sRfto = project(rfto, cx, cy);
-
-            Polygon polyLeft = new Polygon();
-            polyLeft.addPoint(sLfbi[0], sLfbi[1]);
-            polyLeft.addPoint(sLfbo[0], sLfbo[1]);
-            polyLeft.addPoint(sLfto[0], sLfto[1]);
-            polyLeft.addPoint(sLfti[0], sLfti[1]);
-
-            Polygon polyRight = new Polygon();
-            polyRight.addPoint(sRfbi[0], sRfbi[1]);
-            polyRight.addPoint(sRfbo[0], sRfbo[1]);
-            polyRight.addPoint(sRfto[0], sRfto[1]);
-            polyRight.addPoint(sRfti[0], sRfti[1]);
-
-            // Draw shadow for fingers
-            g2.setColor(new Color(20, 20, 25, 40));
-            g2.translate(0, 2);
-            g2.fillPolygon(polyLeft);
-            g2.fillPolygon(polyRight);
-            g2.translate(0, -2);
-
-            // Shaded fingers (CNC orange aluminum)
-            g2.setColor(new Color(240, 130, 20));
-            g2.fillPolygon(polyLeft);
-            g2.fillPolygon(polyRight);
-
-            // Draw outlines
-            g2.setColor(Color.DARK_GRAY);
-            g2.setStroke(new BasicStroke(1.5f));
-            g2.drawPolygon(polyLeft);
-            g2.drawPolygon(polyRight);
-
-            // Draw rubber pads on the inside tip of the fingers
-            double[] lpad_end = { lfti[0] - ux * 4.0, lfti[1] - uy * 4.0, lfti[2] - uz * 4.0 };
-            double[] rpad_end = { rfti[0] - ux * 4.0, rfti[1] - uy * 4.0, rfti[2] - uz * 4.0 };
-
-            int[] sLpadStart = project(lfti, cx, cy);
-            int[] sLpadEnd = project(lpad_end, cx, cy);
-            int[] sRpadStart = project(rfti, cx, cy);
-            int[] sRpadEnd = project(rpad_end, cx, cy);
-
-            g2.setColor(new Color(40, 40, 45)); // Black rubber pads
-            g2.setStroke(new BasicStroke(Math.max(1, (float) (2.5 * f * scale)), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            // 2. Guide Rail Crossbar
+            double[] pRailLeft = { pRailCenter[0] + nx * (wOpening + 3.0), pRailCenter[1] + ny * (wOpening + 3.0), pRailCenter[2] + nz * (wOpening + 3.0) };
+            double[] pRailRight = { pRailCenter[0] - nx * (wOpening + 3.0), pRailCenter[1] - ny * (wOpening + 3.0), pRailCenter[2] - nz * (wOpening + 3.0) };
+            int[] sRailLeft = project(pRailLeft, cx, cy);
+            int[] sRailRight = project(pRailRight, cx, cy);
+            
+            int railThickness = (int) (6.0 * f * scale);
+            g2.setColor(new Color(160, 162, 168)); // Silver guide rail
+            g2.setStroke(new BasicStroke(railThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(sRailLeft[0], sRailLeft[1], sRailRight[0], sRailRight[1]);
+            
+            // 3. Fingers (CNC Orange, L-shaped/Curved)
+            double[] pLeftBase = { pRailCenter[0] + nx * wOpening, pRailCenter[1] + ny * wOpening, pRailCenter[2] + nz * wOpening };
+            double[] pRightBase = { pRailCenter[0] - nx * wOpening, pRailCenter[1] - ny * wOpening, pRailCenter[2] - nz * wOpening };
+            
+            double[] l1 = pLeftBase;
+            double[] l2 = { pLeftBase[0] + ux * 5.0 + nx * 1.2, pLeftBase[1] + uy * 5.0 + ny * 1.2, pLeftBase[2] + uz * 5.0 + nz * 1.2 };
+            double[] l3 = { p3D[0] + ux * 1.5 + nx * 0.5, p3D[1] + uy * 1.5 + ny * 0.5, p3D[2] + uz * 1.5 + nz * 0.5 };
+            
+            double[] r1 = pRightBase;
+            double[] r2 = { pRightBase[0] + ux * 5.0 - nx * 1.2, pRightBase[1] + uy * 5.0 - ny * 1.2, pRightBase[2] + uz * 5.0 - nz * 1.2 };
+            double[] r3 = { p3D[0] + ux * 1.5 - nx * 0.5, p3D[1] + uy * 1.5 - ny * 0.5, p3D[2] + uz * 1.5 - nz * 0.5 };
+            
+            int[] sL1 = project(l1, cx, cy);
+            int[] sL2 = project(l2, cx, cy);
+            int[] sL3 = project(l3, cx, cy);
+            
+            int[] sR1 = project(r1, cx, cy);
+            int[] sR2 = project(r2, cx, cy);
+            int[] sR3 = project(r3, cx, cy);
+            
+            int fingerThickness = (int) (5.0 * f * scale);
+            g2.setColor(new Color(245, 125, 20)); // CNC Metallic Orange
+            g2.setStroke(new BasicStroke(fingerThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            
+            // Left Finger
+            g2.drawLine(sL1[0], sL1[1], sL2[0], sL2[1]);
+            g2.drawLine(sL2[0], sL2[1], sL3[0], sL3[1]);
+            
+            // Right Finger
+            g2.drawLine(sR1[0], sR1[1], sR2[0], sR2[1]);
+            g2.drawLine(sR2[0], sR2[1], sR3[0], sR3[1]);
+            
+            // Lighter highlight line
+            g2.setColor(new Color(255, 185, 110));
+            g2.setStroke(new BasicStroke((float)(fingerThickness * 0.35), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(sL1[0], sL1[1], sL2[0], sL2[1]);
+            g2.drawLine(sL2[0], sL2[1], sL3[0], sL3[1]);
+            g2.drawLine(sR1[0], sR1[1], sR2[0], sR2[1]);
+            g2.drawLine(sR2[0], sR2[1], sR3[0], sR3[1]);
+            
+            // 4. Rubber Gripping Pads
+            double[] lPadStart = l3;
+            double[] lPadEnd = { l3[0] - ux * 4.5, l3[1] - uy * 4.5, l3[2] - uz * 4.5 };
+            double[] rPadStart = r3;
+            double[] rPadEnd = { r3[0] - ux * 4.5, r3[1] - uy * 4.5, r3[2] - uz * 4.5 };
+            
+            int[] sLpadStart = project(lPadStart, cx, cy);
+            int[] sLpadEnd = project(lPadEnd, cx, cy);
+            int[] sRpadStart = project(rPadStart, cx, cy);
+            int[] sRpadEnd = project(rPadEnd, cx, cy);
+            
+            int padThickness = (int) (3.5 * f * scale);
+            g2.setColor(new Color(30, 30, 32)); // Dark rubber black
+            g2.setStroke(new BasicStroke(padThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             g2.drawLine(sLpadStart[0], sLpadStart[1], sLpadEnd[0], sLpadEnd[1]);
             g2.drawLine(sRpadStart[0], sRpadStart[1], sRpadEnd[0], sRpadEnd[1]);
-
-            // Draw tool Center tip point
+            
+            // 5. Tool Center Point (Red Dot at the actual tool tip)
             int[] sTip = project(p3D, cx, cy);
-            g2.setColor(Color.RED);
+            g2.setColor(new Color(230, 40, 40));
             g2.fillOval(sTip[0] - 3, sTip[1] - 3, 6, 6);
         }
     }
