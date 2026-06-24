@@ -75,7 +75,7 @@ public class ArmPanel extends JPanel
     // --- MouseWheelListener ---
     @Override
     public void mouseWheelMoved(MouseWheelEvent e) {
-        scale = Math.max(2.0, Math.min(8.0, scale - e.getWheelRotation() * 0.5));
+        scale = Math.max(1.0, Math.min(30.0, scale - e.getWheelRotation() * 0.8));
         repaint();
     }
 
@@ -178,12 +178,19 @@ public class ArmPanel extends JPanel
         // --- Depth Sorting and Perspective Scaling ---
         java.util.List<Drawable> drawables = new java.util.ArrayList<>();
 
-        // Draw humanoid central vertical torso
-        drawables.add(new TubeSegment(new double[] { 0, 0, 0 }, new double[] { 0, 0, 120 }, 12, new Color(50, 55, 60)));
-        drawables.add(new JointSphere(new double[] { 0, 0, 0 }, 12, new Color(40, 40, 40)));
-        drawables.add(new JointSphere(new double[] { 0, 0, 120 }, 10, new Color(40, 40, 40)));
 
-        int[] tubeWidths = { 7, 6, 5, 4, 3, 2, 2 };
+        // Draw humanoid central vertical torso (spine) and base pedestal
+        drawables.add(new TubeSegment(new double[] { 0, 0, 0 }, new double[] { 0, 0, 125 }, 12, new Color(60, 65, 70)));
+        drawables.add(new JointSphere(new double[] { 0, 0, 0 }, 16, new Color(30, 30, 30)));
+        
+        // Clavicle (shoulder crossbar)
+        drawables.add(new TubeSegment(new double[] { 0, -20, 125 }, new double[] { 0, 20, 125 }, 10, new Color(80, 85, 90)));
+        
+        // Neck and Head
+        drawables.add(new TubeSegment(new double[] { 0, 0, 125 }, new double[] { 0, 0, 138 }, 8, new Color(60, 60, 60)));
+        drawables.add(new JointSphere(new double[] { 0, 0, 138 }, 12, new Color(75, 80, 85)));
+
+        int[] tubeWidths = { 9, 8, 7, 6, 5, 4, 4 };
         Color[] tubeColorsRight = {
                 new Color(80, 80, 80),
                 new Color(90, 90, 90),
@@ -203,25 +210,23 @@ public class ArmPanel extends JPanel
                 new Color(140, 160, 140)
         };
 
-        // Right Arm segments
-        for (int i = 0; i < pts3dRight.length - 1; i++) {
+        // Right Arm segments (skip base to avoid overlapping torso)
+        for (int i = 1; i < pts3dRight.length - 1; i++) {
             final int tw = (i < tubeWidths.length) ? tubeWidths[i] : tubeWidths[tubeWidths.length - 1];
             final Color color = (i < tubeColorsRight.length) ? tubeColorsRight[i] : tubeColorsRight[tubeColorsRight.length - 1];
             drawables.add(new JointSphere(pts3dRight[i], tw, new Color(50, 120, 200)));
             drawables.add(new TubeSegment(pts3dRight[i], pts3dRight[i + 1], tw, color));
         }
-        drawables.add(new JointSphere(pts3dRight[6], 2, new Color(170, 170, 180)));
-        drawables.add(new GripperDrawable(T_end_right, pts3dRight[7], 3.5));
+        drawables.add(new GripperDrawable(T_end_right, pts3dRight[7], 11.0));
 
-        // Left Arm segments
-        for (int i = 0; i < pts3dLeft.length - 1; i++) {
+        // Left Arm segments (skip base to avoid overlapping torso)
+        for (int i = 1; i < pts3dLeft.length - 1; i++) {
             final int tw = (i < tubeWidths.length) ? tubeWidths[i] : tubeWidths[tubeWidths.length - 1];
             final Color color = (i < tubeColorsLeft.length) ? tubeColorsLeft[i] : tubeColorsLeft[tubeColorsLeft.length - 1];
             drawables.add(new JointSphere(pts3dLeft[i], tw, new Color(200, 80, 80)));
             drawables.add(new TubeSegment(pts3dLeft[i], pts3dLeft[i + 1], tw, color));
         }
-        drawables.add(new JointSphere(pts3dLeft[6], 2, new Color(180, 170, 170)));
-        drawables.add(new GripperDrawable(T_end_left, pts3dLeft[7], 3.5));
+        drawables.add(new GripperDrawable(T_end_left, pts3dLeft[7], 11.0));
 
         // 3. Sort by depth (vz descending - Painter's Algorithm)
         drawables.sort((a, b) -> Double.compare(b.getDepth(), a.getDepth()));
@@ -272,22 +277,47 @@ public class ArmPanel extends JPanel
         @Override
         public void draw(Graphics2D g2, int cx, int cy) {
             int[] s1 = project(p1, cx, cy), s2 = project(p2, cx, cy);
-            // Better scale: use the average of scale factors at p1 and p2 and apply camera
-            // zoom (scale)
             double f1 = getScaleFactor(p1);
             double f2 = getScaleFactor(p2);
             float tw = (float) (baseWidth * scale * (f1 + f2) / 2.0);
             if (tw < 1)
-                tw = 1; // Minimum width
+                tw = 1;
 
-            // Shadow
-            g2.setColor(new Color(30, 30, 30, 80));
-            g2.setStroke(new BasicStroke(tw + 2, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(s1[0], s1[1], s2[0], s2[1]);
-            // Body
-            g2.setColor(color.darker());
-            g2.setStroke(new BasicStroke(tw, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(s1[0], s1[1], s2[0], s2[1]);
+            float dx = s2[0] - s1[0];
+            float dy = s2[1] - s1[1];
+            float len = (float) Math.sqrt(dx * dx + dy * dy);
+
+            if (len > 0.1f) {
+                float ux = dx / len;
+                float uy = dy / len;
+                float gnx = -uy;
+                float gny = ux;
+
+                float startX = s1[0] - gnx * tw / 2.0f;
+                float startY = s1[1] - gny * tw / 2.0f;
+                float endX = s1[0] + gnx * tw / 2.0f;
+                float endY = s1[1] + gny * tw / 2.0f;
+
+                LinearGradientPaint gp = new LinearGradientPaint(
+                    startX, startY, endX, endY,
+                    new float[] { 0.0f, 0.25f, 0.7f, 1.0f },
+                    new Color[] { color.darker().darker(), color.brighter(), color, color.darker() }
+                );
+                
+                // Shadow
+                g2.setColor(new Color(20, 20, 25, 45));
+                g2.setStroke(new BasicStroke(tw + 3, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.drawLine(s1[0], s1[1] + 2, s2[0], s2[1] + 2);
+
+                // Cylinder
+                g2.setPaint(gp);
+                g2.setStroke(new BasicStroke(tw, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.drawLine(s1[0], s1[1], s2[0], s2[1]);
+            } else {
+                g2.setColor(color);
+                g2.setStroke(new BasicStroke(tw, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.drawLine(s1[0], s1[1], s2[0], s2[1]);
+            }
         }
     }
 
@@ -311,15 +341,27 @@ public class ArmPanel extends JPanel
         public void draw(Graphics2D g2, int cx, int cy) {
             int[] s = project(p, cx, cy);
             double f = getScaleFactor(p);
-            // Use camera zoom explicitly, reduce size of joints by additional 40% (multiply
-            // by 0.6)
-            int jr = (int) (((baseWidth / 2.0 + 2) * 0.6) * f * scale);//0.6 scale
-            if (jr < 2)
-                jr = 2; // Keep at least 2 pixels so it remains visible
+            int jr = (int) ((baseWidth * 0.95) * f * scale);
+            if (jr < 3)
+                jr = 3;
 
-            g2.setColor(color);
+            float radius = jr;
+            float centerX = s[0] - jr * 0.3f;
+            float centerY = s[1] - jr * 0.3f;
+            if (radius > 1) {
+                RadialGradientPaint rgp = new RadialGradientPaint(
+                    centerX, centerY, radius * 1.6f,
+                    new float[] { 0.0f, 0.75f, 1.0f },
+                    new Color[] { Color.WHITE, color, color.darker().darker() }
+                );
+                g2.setPaint(rgp);
+            } else {
+                g2.setColor(color);
+            }
+            
             g2.fillOval(s[0] - jr, s[1] - jr, jr * 2, jr * 2);
-            g2.setColor(color.WHITE);
+            
+            g2.setColor(color.darker().darker());
             g2.setStroke(new BasicStroke(1.0f));
             g2.drawOval(s[0] - jr, s[1] - jr, jr * 2, jr * 2);
         }
@@ -345,45 +387,83 @@ public class ArmPanel extends JPanel
 
         @Override
         public void draw(Graphics2D g2, int cx, int cy) {
-            double ux = T[0][2], uy = T[1][2], uz = T[2][2];
-            double nx = T[0][0], ny = T[1][0], nz = T[2][0];
+            double ux = T[0][2], uy = T[1][2], uz = T[2][2]; // Approach vector
+            double nx = T[0][0], ny = T[1][0], nz = T[2][0]; // Normal vector
             double f = getScaleFactor(p3D);
 
-            // Gripper dimensions (Wider and shorter for better visibility)
-            double wOpening = (robot.isGripped ? 0.5 : 2.0);
+            // Gripper dimensions (proportional and thick)
+            double wOpening = robot.isGripped ? 1.2 : 5.0;
+            double wThick = 2.5;
 
-            // p3D is now treated as the base of the gripper (the end of L6)
-            double[] baseL = { p3D[0] + nx * wOpening, p3D[1] + ny * wOpening, p3D[2] + nz * wOpening };
-            double[] baseR = { p3D[0] - nx * wOpening, p3D[1] - ny * wOpening, p3D[2] - nz * wOpening };
+            // Project 3D points for thick fingers
+            double[] lfbi = { p3D[0] + nx * wOpening, p3D[1] + ny * wOpening, p3D[2] + nz * wOpening };
+            double[] lfbo = { p3D[0] + nx * (wOpening + wThick), p3D[1] + ny * (wOpening + wThick), p3D[2] + nz * (wOpening + wThick) };
+            double[] lfti = { lfbi[0] + ux * wFingerLen, lfbi[1] + uy * wFingerLen, lfbi[2] + uz * wFingerLen };
+            double[] lfto = { lfbo[0] + ux * wFingerLen, lfbo[1] + uy * wFingerLen, lfbo[2] + uz * wFingerLen };
 
-            // Tip is shifted forward along approach vector
-            double[] tipL = { baseL[0] + ux * wFingerLen, baseL[1] + uy * wFingerLen, baseL[2] + uz * wFingerLen };
-            double[] tipR = { baseR[0] + ux * wFingerLen, baseR[1] + uy * wFingerLen, baseR[2] + uz * wFingerLen };
+            double[] rfbi = { p3D[0] - nx * wOpening, p3D[1] - ny * wOpening, p3D[2] - nz * wOpening };
+            double[] rfbo = { p3D[0] - nx * (wOpening + wThick), p3D[1] - ny * (wOpening + wThick), p3D[2] - nz * (wOpening + wThick) };
+            double[] rfti = { rfbi[0] + ux * wFingerLen, rfbi[1] + uy * wFingerLen, rfbi[2] + uz * wFingerLen };
+            double[] rfto = { rfbo[0] + ux * wFingerLen, rfbo[1] + uy * wFingerLen, rfbo[2] + uz * wFingerLen };
 
-            // Project 3D coordinates to screen
-            int[] sBaseL = project(baseL, cx, cy);
-            int[] sBaseR = project(baseR, cx, cy);
-            int[] sTipL = project(tipL, cx, cy);
-            int[] sTipR = project(tipR, cx, cy);
+            int[] sLfbi = project(lfbi, cx, cy);
+            int[] sLfbo = project(lfbo, cx, cy);
+            int[] sLfti = project(lfti, cx, cy);
+            int[] sLfto = project(lfto, cx, cy);
 
-            // Strokes and Colors (Thinner for small scale)
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            int[] sRfbi = project(rfbi, cx, cy);
+            int[] sRfbo = project(rfbo, cx, cy);
+            int[] sRfti = project(rfti, cx, cy);
+            int[] sRfto = project(rfto, cx, cy);
 
-            // Base Crossbar
+            Polygon polyLeft = new Polygon();
+            polyLeft.addPoint(sLfbi[0], sLfbi[1]);
+            polyLeft.addPoint(sLfbo[0], sLfbo[1]);
+            polyLeft.addPoint(sLfto[0], sLfto[1]);
+            polyLeft.addPoint(sLfti[0], sLfti[1]);
+
+            Polygon polyRight = new Polygon();
+            polyRight.addPoint(sRfbi[0], sRfbi[1]);
+            polyRight.addPoint(sRfbo[0], sRfbo[1]);
+            polyRight.addPoint(sRfto[0], sRfto[1]);
+            polyRight.addPoint(sRfti[0], sRfti[1]);
+
+            // Draw shadow for fingers
+            g2.setColor(new Color(20, 20, 25, 40));
+            g2.translate(0, 2);
+            g2.fillPolygon(polyLeft);
+            g2.fillPolygon(polyRight);
+            g2.translate(0, -2);
+
+            // Shaded fingers (CNC orange aluminum)
+            g2.setColor(new Color(240, 130, 20));
+            g2.fillPolygon(polyLeft);
+            g2.fillPolygon(polyRight);
+
+            // Draw outlines
             g2.setColor(Color.DARK_GRAY);
-            g2.setStroke(new BasicStroke(Math.max(1, (float) (0.4 * f * scale))));
-            g2.drawLine(sBaseL[0], sBaseL[1], sBaseR[0], sBaseR[1]);
+            g2.setStroke(new BasicStroke(1.5f));
+            g2.drawPolygon(polyLeft);
+            g2.drawPolygon(polyRight);
 
-            // Fingers
-            g2.setColor(Color.ORANGE);
-            g2.setStroke(new BasicStroke(Math.max(1, (float) (0.3 * f * scale))));
-            g2.drawLine(sBaseL[0], sBaseL[1], sTipL[0], sTipL[1]);
-            g2.drawLine(sBaseR[0], sBaseR[1], sTipR[0], sTipR[1]);
+            // Draw rubber pads on the inside tip of the fingers
+            double[] lpad_end = { lfti[0] - ux * 4.0, lfti[1] - uy * 4.0, lfti[2] - uz * 4.0 };
+            double[] rpad_end = { rfti[0] - ux * 4.0, rfti[1] - uy * 4.0, rfti[2] - uz * 4.0 };
 
-            // Highlight Tip contact point
-            g2.setColor(Color.RED);
+            int[] sLpadStart = project(lfti, cx, cy);
+            int[] sLpadEnd = project(lpad_end, cx, cy);
+            int[] sRpadStart = project(rfti, cx, cy);
+            int[] sRpadEnd = project(rpad_end, cx, cy);
+
+            g2.setColor(new Color(40, 40, 45)); // Black rubber pads
+            g2.setStroke(new BasicStroke(Math.max(1, (float) (2.5 * f * scale)), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(sLpadStart[0], sLpadStart[1], sLpadEnd[0], sLpadEnd[1]);
+            g2.drawLine(sRpadStart[0], sRpadStart[1], sRpadEnd[0], sRpadEnd[1]);
+
+            // Draw tool Center tip point
             int[] sTip = project(p3D, cx, cy);
-            g2.fillOval(sTip[0] - 2, sTip[1] - 2, 4, 4);
+            g2.setColor(Color.RED);
+            g2.fillOval(sTip[0] - 3, sTip[1] - 3, 6, 6);
         }
     }
 
@@ -399,7 +479,7 @@ public class ArmPanel extends JPanel
     }
 
     void drawGrid(Graphics2D g2, int cx, int cy) {
-        int size = 50, step = 4;
+        int size = 150, step = 15;
 
         // Draw floor (darker semi-transparent rectangle)
         int[] f1 = project(new double[] { -size, -size, 0 }, cx, cy);
@@ -412,11 +492,10 @@ public class ArmPanel extends JPanel
         floor.addPoint(f3[0], f3[1]);
         floor.addPoint(f4[0], f4[1]);
         
-        g2.setColor(new Color(220, 220, 225)); //floor
-//        new Color(205, 164, 52)
+        g2.setColor(new Color(230, 230, 235)); //floor
         g2.fillPolygon(floor);
 
-        g2.setColor(new Color(180, 180, 190)); //grid
+        g2.setColor(new Color(195, 195, 205)); //grid lines
         for (int i = -size; i <= size; i += step) {
             int[] p1 = project(new double[] { i, -size, 0 }, cx, cy),
                     p2 = project(new double[] { i, size, 0 }, cx, cy);
@@ -425,6 +504,28 @@ public class ArmPanel extends JPanel
                     p4 = project(new double[] { size, i, 0 }, cx, cy);
             g2.drawLine(p3[0], p3[1], p4[0], p4[1]);
         }
+
+        // Draw coordinate axes at origin
+        int[] origin = project(new double[] { 0, 0, 0 }, cx, cy);
+        int[] xAxis = project(new double[] { 35, 0, 0 }, cx, cy);
+        int[] yAxis = project(new double[] { 0, 35, 0 }, cx, cy);
+        int[] zAxis = project(new double[] { 0, 0, 35 }, cx, cy);
+
+        g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        // X-axis: Red
+        g2.setColor(new Color(220, 50, 50));
+        g2.drawLine(origin[0], origin[1], xAxis[0], xAxis[1]);
+        g2.drawString("X", xAxis[0] + 5, xAxis[1] + 2);
+
+        // Y-axis: Green
+        g2.setColor(new Color(50, 160, 50));
+        g2.drawLine(origin[0], origin[1], yAxis[0], yAxis[1]);
+        g2.drawString("Y", yAxis[0] + 5, yAxis[1] + 2);
+
+        // Z-axis: Blue
+        g2.setColor(new Color(50, 50, 220));
+        g2.drawLine(origin[0], origin[1], zAxis[0], zAxis[1]);
+        g2.drawString("Z", zAxis[0] - 2, zAxis[1] - 5);
     }
 
     void drawTrail(Graphics2D g2, int cx, int cy) {
