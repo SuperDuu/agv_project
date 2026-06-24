@@ -1437,7 +1437,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // Optimization Loop: Scan likely alpha range [-90, 30] as per Matlab phi range
         // [-pi/2, pi/6]
-        for (double a = -90; a <= 30; a += 1.5) {
+        for (double a = -90; a <= 30; a += 5.0) {
             // Try both configurations, but prefer the one selected in the UI
             String[] configs = { "+", "-" };
             String userPref = configCombo.getSelectedIndex() == 0 ? "+" : "-";
@@ -1599,24 +1599,31 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             
             // 1. Try local neighborhood search
             double[] q = solveIK(px, py, pz, R_target, qInit, isRightArmSelected);
+            boolean localSearchOk = false;
             if (q != null && isWithinLimits(q)) {
                 addUniqueSolution(validSolutions, q);
+                double err = computePositionError(q, px, py, pz);
+                if (err < 0.1) {
+                    localSearchOk = true;
+                }
             }
 
             // 2. Try standard home postures with multiple Joint 2 initial guesses to avoid local minima
-            double[] q2_guesses = { 1.2, 0.8, 0.4, 0.0, -0.4, -0.8, -1.2 };
-            for (double q2_val : q2_guesses) {
-                double[] qHome = new double[NUM_JOINTS];
-                qHome[0] = qInit[0];
-                qHome[1] = q2_val;
-                // Joint 3: Right Arm prefers positive (0.3), Left Arm prefers negative (-0.3)
-                qHome[2] = isRightArmSelected ? 0.3 : -0.3;
-                // Joint 4: Right Arm prefers negative (-35 deg), Left Arm prefers positive (35 deg)
-                qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
-                
-                double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
-                if (q2 != null && isWithinLimits(q2)) {
-                    addUniqueSolution(validSolutions, q2);
+            if (!localSearchOk) {
+                double[] q2_guesses = { 1.2, 0.6, 0.0, -0.6, -1.2 };
+                for (double q2_val : q2_guesses) {
+                    double[] qHome = new double[NUM_JOINTS];
+                    qHome[0] = qInit[0];
+                    qHome[1] = q2_val;
+                    // Joint 3: Right Arm prefers positive (0.3), Left Arm prefers negative (-0.3)
+                    qHome[2] = isRightArmSelected ? 0.3 : -0.3;
+                    // Joint 4: Right Arm prefers negative (-35 deg), Left Arm prefers positive (35 deg)
+                    qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
+                    
+                    double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
+                    if (q2 != null && isWithinLimits(q2)) {
+                        addUniqueSolution(validSolutions, q2);
+                    }
                 }
             }
         }
