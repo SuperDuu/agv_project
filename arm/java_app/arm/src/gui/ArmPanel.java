@@ -208,23 +208,25 @@ public class ArmPanel extends JPanel
         };
 
         // Right Arm segments (skip base to avoid overlapping torso)
-        for (int i = 1; i < pts3dRight.length - 1; i++) {
+        for (int i = 1; i < pts3dRight.length - 2; i++) {
             final int tw = (i < tubeWidths.length) ? tubeWidths[i] : tubeWidths[tubeWidths.length - 1];
             final Color color = (i < tubeColorsRight.length) ? tubeColorsRight[i] : tubeColorsRight[tubeColorsRight.length - 1];
             drawables.add(new JointSphere(pts3dRight[i], tw, new Color(50, 120, 200)));
             drawables.add(new TubeSegment(pts3dRight[i], pts3dRight[i + 1], tw, color));
         }
-        drawables.add(new JointSphere(pts3dRight[7], tubeWidths[tubeWidths.length - 1], new Color(50, 120, 200)));
+        // Draw the last wrist Joint 6 sphere manually
+        drawables.add(new JointSphere(pts3dRight[6], tubeWidths[5], new Color(50, 120, 200)));
         drawables.add(new GripperDrawable(T_end_right, pts3dRight[7]));
 
         // Left Arm segments (skip base to avoid overlapping torso)
-        for (int i = 1; i < pts3dLeft.length - 1; i++) {
+        for (int i = 1; i < pts3dLeft.length - 2; i++) {
             final int tw = (i < tubeWidths.length) ? tubeWidths[i] : tubeWidths[tubeWidths.length - 1];
             final Color color = (i < tubeColorsLeft.length) ? tubeColorsLeft[i] : tubeColorsLeft[tubeColorsLeft.length - 1];
             drawables.add(new JointSphere(pts3dLeft[i], tw, new Color(200, 80, 80)));
             drawables.add(new TubeSegment(pts3dLeft[i], pts3dLeft[i + 1], tw, color));
         }
-        drawables.add(new JointSphere(pts3dLeft[7], tubeWidths[tubeWidths.length - 1], new Color(200, 80, 80)));
+        // Draw the last wrist Joint 6 sphere manually
+        drawables.add(new JointSphere(pts3dLeft[6], tubeWidths[5], new Color(200, 80, 80)));
         drawables.add(new GripperDrawable(T_end_left, pts3dLeft[7]));
 
         // 3. Sort by depth (vz descending - Painter's Algorithm)
@@ -454,13 +456,17 @@ public class ArmPanel extends JPanel
     class GripperDrawable implements Drawable {
         double[][] T;
         double[] p3D;
+        double[] pWrist;
         double depth;
 
         GripperDrawable(double[][] T, double[] p) {
             this.T = T;
             this.p3D = p.clone();
-            // Force gripper to always draw ON TOP of the wrist by artificially lowering depth
-            this.depth = getVz(p) - 50.0;
+            double ux = T[0][2], uy = T[1][2], uz = T[2][2];
+            // L7 is the length of the gripper. So pWrist is joint 6.
+            this.pWrist = new double[] { p[0] - ux * L7, p[1] - uy * L7, p[2] - uz * L7 };
+            // Set the depth to be slightly in front of the wrist center to ensure correct sorting
+            this.depth = getVz(pWrist) - 0.5;
         }
 
         @Override
@@ -468,58 +474,104 @@ public class ArmPanel extends JPanel
             return depth;
         }
 
+        private int[] projectRel(double du, double dn, double db, double ux, double uy, double uz, double nx, double ny, double nz, double bx, double by, double bz, int cx, int cy) {
+            double[] pt = {
+                pWrist[0] + ux * du + nx * dn + bx * db,
+                pWrist[1] + uy * du + ny * dn + by * db,
+                pWrist[2] + uz * du + nz * dn + bz * db
+            };
+            return project(pt, cx, cy);
+        }
+
+        private void drawThickLink(Graphics2D g2, double du1, double dn1, double du2, double dn2, double t, Color c, Color border,
+                                   double ux, double uy, double uz, double nx, double ny, double nz, double bx, double by, double bz,
+                                   double f, int cx, int cy) {
+            double du = du2 - du1;
+            double dn = dn2 - dn1;
+            double len = Math.sqrt(du*du + dn*dn);
+            if (len < 0.01) return;
+            double pu = -dn / len * t * f;
+            double pn = du / len * t * f;
+            
+            int[] p1 = projectRel(du1 + pu, dn1 + pn, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
+            int[] p2 = projectRel(du1 - pu, dn1 - pn, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
+            int[] p3 = projectRel(du2 - pu, dn2 - pn, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
+            int[] p4 = projectRel(du2 + pu, dn2 + pn, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
+            
+            Polygon poly = new Polygon();
+            poly.addPoint(p1[0], p1[1]);
+            poly.addPoint(p2[0], p2[1]);
+            poly.addPoint(p3[0], p3[1]);
+            poly.addPoint(p4[0], p4[1]);
+            
+            g2.setColor(c);
+            g2.fillPolygon(poly);
+            g2.setColor(border);
+            g2.setStroke(new BasicStroke(1.0f));
+            g2.drawPolygon(poly);
+        }
+
         @Override
         public void draw(Graphics2D g2, int cx, int cy) {
-            double ux = T[0][2], uy = T[1][2], uz = T[2][2]; // Approach vector
-            double nx = T[0][0], ny = T[1][0], nz = T[2][0]; // Normal vector
+            double ux = T[0][2], uy = T[1][2], uz = T[2][2]; 
+            double nx = T[0][0], ny = T[1][0], nz = T[2][0]; 
             double f = getScaleFactor(p3D);
 
-            // Sleek Vacuum Suction Cup Design
-            double[] pActuatorStart = { p3D[0] - ux * 6.0, p3D[1] - uy * 6.0, p3D[2] - uz * 6.0 };
-            double[] pActuatorEnd = { p3D[0] - ux * 2.0, p3D[1] - uy * 2.0, p3D[2] - uz * 2.0 };
-            
-            int[] sActuatorStart = project(pActuatorStart, cx, cy);
-            int[] sActuatorEnd = project(pActuatorEnd, cx, cy);
-            
-            // 1. Actuator body (sleek silver cylinder)
-            int actuatorThickness = (int) (6.0 * f * scale);
-            if (actuatorThickness < 1) actuatorThickness = 1;
-            
-            g2.setColor(new Color(20, 20, 25, 60)); // Shadow
-            g2.setStroke(new BasicStroke(actuatorThickness + 2, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sActuatorStart[0], sActuatorStart[1] + 2, sActuatorEnd[0], sActuatorEnd[1] + 2);
-            
-            LinearGradientPaint gp = new LinearGradientPaint(
-                sActuatorStart[0], sActuatorStart[1] - actuatorThickness/2.0f, 
-                sActuatorStart[0], sActuatorStart[1] + actuatorThickness/2.0f,
-                new float[] { 0.0f, 0.4f, 1.0f },
-                new Color[] { new Color(180, 185, 190), new Color(240, 245, 255), new Color(120, 125, 130) }
-            );
-            g2.setPaint(gp);
-            g2.setStroke(new BasicStroke(actuatorThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine(sActuatorStart[0], sActuatorStart[1], sActuatorEnd[0], sActuatorEnd[1]);
+            double bx = uy * nz - uz * ny;
+            double by = uz * nx - ux * nz;
+            double bz = ux * ny - uy * nx;
+            double blen = Math.sqrt(bx*bx + by*by + bz*bz);
+            if (blen > 1e-6) {
+                bx /= blen; by /= blen; bz /= blen;
+            }
 
-            // 2. Rubber Suction Cup (Flaring out)
-            double cupRadius = robot.isGripped ? 2.5 : 4.0;
-            double[] pCupLeft = { p3D[0] + nx * cupRadius, p3D[1] + ny * cupRadius, p3D[2] + nz * cupRadius };
-            double[] pCupRight = { p3D[0] - nx * cupRadius, p3D[1] - ny * cupRadius, p3D[2] - nz * cupRadius };
+            // 1. Base Flange (silver disc)
+            drawThickLink(g2, 0.0, 0.0, 1.5, 0.0, 4.0, new Color(130, 135, 140), new Color(70, 75, 80), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+
+            // 2. Chassis body (dark industrial graphite)
+            drawThickLink(g2, 1.5, 0.0, 5.5, 0.0, 2.8, new Color(55, 57, 61), new Color(30, 32, 35), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
             
-            int[] sCupLeft = project(pCupLeft, cx, cy);
-            int[] sCupRight = project(pCupRight, cx, cy);
+            // 3. Guide rods (silver)
+            drawThickLink(g2, 1.5, 1.2, 5.5, 1.2, 0.5, new Color(200, 205, 210), new Color(120, 125, 130), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+            drawThickLink(g2, 1.5, -1.2, 5.5, -1.2, 0.5, new Color(200, 205, 210), new Color(120, 125, 130), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+
+            // 4. Fingers opening logic
+            double w = robot.isGripped ? 0.6 : 2.5; 
+
+            // Left Finger Link 1 (CNC Anodized Orange)
+            drawThickLink(g2, 5.5, 1.5, 9.0, 1.5 + w, 1.0, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+            // Left Finger Link 2 (CNC Anodized Orange)
+            drawThickLink(g2, 9.0, 1.5 + w, L7, 0.3 + w * 0.2, 0.8, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+            // Left Pad (black rubber)
+            drawThickLink(g2, L7 - 2.5, 0.3 + w * 0.2 - 0.2, L7, 0.3 + w * 0.2 - 0.2, 0.35, new Color(30, 30, 30), Color.BLACK, ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+
+            // Right Finger Link 1 (CNC Anodized Orange)
+            drawThickLink(g2, 5.5, -1.5, 9.0, -1.5 - w, 1.0, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+            // Right Finger Link 2 (CNC Anodized Orange)
+            drawThickLink(g2, 9.0, -1.5 - w, L7, -0.3 - w * 0.2, 0.8, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+            // Right Pad (black rubber)
+            drawThickLink(g2, L7 - 2.5, -0.3 - w * 0.2 + 0.2, L7, -0.3 - w * 0.2 + 0.2, 0.35, new Color(30, 30, 30), Color.BLACK, ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
+
+            // Pins (rivets)
+            int[] pinL1 = projectRel(5.5, 1.5, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
+            int[] pinL2 = projectRel(9.0, 1.5 + w, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
+            int[] pinR1 = projectRel(5.5, -1.5, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
+            int[] pinR2 = projectRel(9.0, -1.5 - w, 0, ux, uy, uz, nx, ny, nz, bx, by, bz, cx, cy);
             
-            Polygon cup = new Polygon();
-            cup.addPoint(sActuatorEnd[0] - (int)(nx*actuatorThickness/2.0), sActuatorEnd[1] - (int)(ny*actuatorThickness/2.0));
-            cup.addPoint(sActuatorEnd[0] + (int)(nx*actuatorThickness/2.0), sActuatorEnd[1] + (int)(ny*actuatorThickness/2.0));
-            cup.addPoint(sCupLeft[0], sCupLeft[1]);
-            cup.addPoint(sCupRight[0], sCupRight[1]);
-            
-            g2.setColor(new Color(30, 32, 35)); // Dark industrial rubber
-            g2.fillPolygon(cup);
-            g2.setColor(new Color(15, 15, 18));
-            g2.setStroke(new BasicStroke(1.5f));
-            g2.drawPolygon(cup);
-            
-            // 3. Tool Center Point (Red Dot)
+            int pinRad = (int)(0.9 * f * scale);
+            if (pinRad < 1) pinRad = 1;
+            g2.setColor(new Color(220, 220, 220));
+            g2.fillOval(pinL1[0] - pinRad, pinL1[1] - pinRad, pinRad*2, pinRad*2);
+            g2.fillOval(pinL2[0] - pinRad, pinL2[1] - pinRad, pinRad*2, pinRad*2);
+            g2.fillOval(pinR1[0] - pinRad, pinR1[1] - pinRad, pinRad*2, pinRad*2);
+            g2.fillOval(pinR2[0] - pinRad, pinR2[1] - pinRad, pinRad*2, pinRad*2);
+            g2.setColor(Color.DARK_GRAY);
+            g2.drawOval(pinL1[0] - pinRad, pinL1[1] - pinRad, pinRad*2, pinRad*2);
+            g2.drawOval(pinL2[0] - pinRad, pinL2[1] - pinRad, pinRad*2, pinRad*2);
+            g2.drawOval(pinR1[0] - pinRad, pinR1[1] - pinRad, pinRad*2, pinRad*2);
+            g2.drawOval(pinR2[0] - pinRad, pinR2[1] - pinRad, pinRad*2, pinRad*2);
+
+            // TCP Red Dot
             int[] sTip = project(p3D, cx, cy);
             g2.setColor(new Color(255, 30, 30));
             g2.fillOval(sTip[0] - 2, sTip[1] - 2, 4, 4);
