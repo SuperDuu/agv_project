@@ -14,12 +14,12 @@ import static kinematics.Kinematics.*;
 public final class MainFrame extends JFrame implements ActionListener, ChangeListener {
     private static final double MAX_IK_POSITION_ERROR = 0.35; // General IK strict threshold
     private static final double TRAJ_RELAXED_ERROR = 2.50; // Trajectory fallback threshold
-    double[] anglesRight = { 0, 0, 0, -90, 0, 0 };
-    double[] targetAnglesRight = { 0, 0, 0, -90, 0, 0 };
+    double[] anglesRight = { 0, 0, 0, -30, 0, 0 };
+    double[] targetAnglesRight = { 0, 0, 0, -30, 0, 0 };
     double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
 
-    double[] anglesLeft = { 0, 0, 0, -90, 0, 0 };
-    double[] targetAnglesLeft = { 0, 0, 0, -90, 0, 0 };
+    double[] anglesLeft = { 0, 0, 0, 30, 0, 0 };
+    double[] targetAnglesLeft = { 0, 0, 0, 30, 0, 0 };
     double[] lastSentAnglesLeft = { -999, -999, -999, -999, -999, -999 };
 
     public double[] angles = anglesRight;
@@ -150,7 +150,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 isRightArmSelected = true;
                 // Left arm (inactive) returns to home smoothly
                 for (int j = 1; j < NUM_JOINTS; j++) {
-                    targetAnglesLeft[j] = (j == 3) ? -90.0 : 0;
+                    targetAnglesLeft[j] = (j == 3) ? 30.0 : 0;
                 }
             } else {
                 angles = anglesLeft;
@@ -159,13 +159,21 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 isRightArmSelected = false;
                 // Right arm (inactive) returns to home smoothly
                 for (int j = 1; j < NUM_JOINTS; j++) {
-                    targetAnglesRight[j] = (j == 3) ? -90.0 : 0;
+                    targetAnglesRight[j] = (j == 3) ? -30.0 : 0;
                 }
             }
-            // Sync sliders and labels to the newly selected arm's angles
+            // Sync sliders and labels to the newly selected arm's angles and limits
+            double[] minLimits = isRightArmSelected ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
+            double[] maxLimits = isRightArmSelected ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
             for (int j = 0; j < NUM_JOINTS; j++) {
-                sliders[j].setValue((int) angles[j]);
-                angleLbls[j].setText((int) angles[j] + "°");
+                sliders[j].removeChangeListener(this);
+                int minVal = (int) Math.min(minLimits[j], maxLimits[j]);
+                int maxVal = (int) Math.max(minLimits[j], maxLimits[j]);
+                sliders[j].setMinimum(minVal);
+                sliders[j].setMaximum(maxVal);
+                sliders[j].setValue((int) Math.round(angles[j]));
+                sliders[j].addChangeListener(this);
+                angleLbls[j].setText((int) Math.round(angles[j]) + "°");
             }
             startMotionTimer();
             updateArm();
@@ -180,8 +188,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             JLabel nameLabel = new JLabel(JOINT_NAMES[i]);
             jointPanel.add(nameLabel, BorderLayout.NORTH);
 
-            int minVal = (int) Math.min(JOINT_MIN[i], JOINT_MAX[i]);
-            int maxVal = (int) Math.max(JOINT_MIN[i], JOINT_MAX[i]);
+            int minVal = (int) Math.min(JOINT_MIN_RIGHT[i], JOINT_MAX_RIGHT[i]);
+            int maxVal = (int) Math.max(JOINT_MIN_RIGHT[i], JOINT_MAX_RIGHT[i]);
             sliders[i] = new JSlider(minVal, maxVal, (int) angles[i]);
             sliders[i].setMajorTickSpacing(30);
             sliders[i].setPaintTicks(true);
@@ -900,7 +908,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     void resetAngles() {
         armPanel.trail.clear();
-        double[] defaultPose = { 0, 0, 0, -90.0, 0, 0 };
+        double[] defaultPose = isRightArmSelected ? new double[] { 0, 0, 0, -30.0, 0, 0 } : new double[] { 0, 0, 0, 30.0, 0, 0 };
         setTargetAngles(defaultPose);
     }
 
@@ -1513,15 +1521,17 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         // 2. Limits (w=0.5): Penalty for being near limits (10% margin, in Radians^2)
+        double[] minLim = isRightArmSelected ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
+        double[] maxLim = isRightArmSelected ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
         double jLimit = 0;
         for (int i = 0; i < NUM_JOINTS; i++) {
             double range = 360;
-            if (JOINT_MAX[i] - JOINT_MIN[i] < 5000) {
-                range = JOINT_MAX[i] - JOINT_MIN[i];
+            if (maxLim[i] - minLim[i] < 5000) {
+                range = maxLim[i] - minLim[i];
             }
             double margin = range * 0.10;
-            double tooLow = Math.max(0, (JOINT_MIN[i] + margin) - q[i]);
-            double tooHigh = Math.max(0, q[i] - (JOINT_MAX[i] - margin));
+            double tooLow = Math.max(0, (minLim[i] + margin) - q[i]);
+            double tooHigh = Math.max(0, q[i] - (maxLim[i] - margin));
             jLimit += Math.pow(Math.toRadians(tooLow), 2) + Math.pow(Math.toRadians(tooHigh), 2);
         }
 
@@ -1573,8 +1583,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] qHome = new double[NUM_JOINTS];
         qHome[0] = qInit[0];
         qHome[1] = 0.5;
-        qHome[2] = 1.0;                     // Joint 3 positive bias (elbow forward)
-        qHome[3] = Math.toRadians(-35.0);   // Joint 4 negative bias (wrist forward)
+        // Joint 3: Right Arm prefers positive (1.0), Left Arm prefers negative (-1.0)
+        qHome[2] = isRightArmSelected ? 1.0 : -1.0;
+        // Joint 4: Right Arm prefers negative (-35 deg), Left Arm prefers positive (35 deg)
+        qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
+        
         double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
         if (q2 != null && isWithinLimits(q2)) {
             // Avoid duplicates
@@ -1609,8 +1622,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] qHome = new double[NUM_JOINTS];
         qHome[0] = Math.atan2(py, px);
         qHome[1] = 0.5;
-        qHome[2] = 1.0;                     // Joint 3 positive bias (elbow forward)
-        qHome[3] = Math.toRadians(-35.0);   // Joint 4 negative bias (wrist forward)
+        qHome[2] = isRightArmSelected ? 1.0 : -1.0;
+        qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
+        
         q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
         if (q != null && isWithinLimits(q)) {
             return q;
@@ -1634,6 +1648,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return null;
         double minScore = Double.MAX_VALUE;
         double[] best = null;
+        double[] minLim = isRightArmSelected ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
+        double[] maxLim = isRightArmSelected ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
         for (double[] q : solutions) {
             double score = 0;
             for (int i = 0; i < NUM_JOINTS; i++) {
@@ -1642,7 +1658,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 if (diffCurrent > 180)
                     diffCurrent = 360 - diffCurrent;
                 score += diffCurrent * 2.0;
-                double center = (JOINT_MIN[i] + JOINT_MAX[i]) / 2.0;
+                double center = (minLim[i] + maxLim[i]) / 2.0;
                 score += Math.abs(qDeg - center) * 0.5;
                 if (i == 2)
                     score += Math.abs(qDeg) * 1.5;
@@ -1656,9 +1672,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private boolean isWithinLimits(double[] q) {
+        double[] minLim = isRightArmSelected ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
+        double[] maxLim = isRightArmSelected ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
         for (int i = 0; i < q.length; i++) {
-            // q is in Degrees, JOINT_MIN/MAX are in Degrees
-            if (q[i] < (JOINT_MIN[i] - 0.1) || q[i] > (JOINT_MAX[i] + 0.1))
+            // q is in Degrees, limits are in Degrees
+            if (q[i] < (minLim[i] - 0.1) || q[i] > (maxLim[i] + 0.1))
                 return false;
         }
         return true;
