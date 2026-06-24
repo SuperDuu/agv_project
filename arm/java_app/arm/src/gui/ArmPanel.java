@@ -557,6 +557,14 @@ public class ArmPanel extends JPanel
         // Add actual TCP red dot as a tiny sphere
         list.addAll(createSphere(p3D, 0.5, new Color(230, 40, 40)));
         
+        // Fix gripper sinking: artificially pull all gripper faces closer to the camera 
+        // so they are drawn after the wrist link.
+        for (Renderable3D r : list) {
+            if (r instanceof PolygonFace) {
+                ((PolygonFace)r).depth -= 50.0;
+            }
+        }
+        
         return list;
     }
 
