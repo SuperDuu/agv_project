@@ -651,6 +651,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             sliders[i].addChangeListener(this);
             angleLbls[i].setText((int) Math.round(angles[i]) + "°");
         }
+        // Synchronize Joint 1 (Waist/Hip) for both arms
+        anglesRight[0] = angles[0];
+        anglesLeft[0] = angles[0];
+        targetAnglesRight[0] = targetAngles[0];
+        targetAnglesLeft[0] = targetAngles[0];
+
         updateArm();
         sendJointsToUart();
     }
@@ -698,6 +704,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
      */
     void setTargetAngles(double[] q_deg) {
         System.arraycopy(q_deg, 0, targetAngles, 0, NUM_JOINTS); // q_deg is already in degrees from solveIK
+        // Synchronize Joint 1 (Waist/Hip) targets immediately
+        targetAnglesRight[0] = targetAngles[0];
+        targetAnglesLeft[0] = targetAngles[0];
+        anglesRight[0] = angles[0];
+        anglesLeft[0] = angles[0];
         startMotionTimer();
     }
 
@@ -772,6 +783,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 }
 
                 targetAngles[i] = angles[i]; // Prevent motion timer from snapping back
+                
+                if (i == 0) {
+                    anglesRight[0] = angles[0];
+                    anglesLeft[0] = angles[0];
+                    targetAnglesRight[0] = angles[0];
+                    targetAnglesLeft[0] = angles[0];
+                }
+
                 angleLbls[i].setText((int) angles[i] + "°");
                 updateArm();
                 break;
