@@ -1561,17 +1561,33 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             qInit[i] = Math.toRadians(angles[i]);
         }
         
+        // 1. Try local neighborhood search
         double[] q = solveIK(px, py, pz, R_target, qInit, isRightArmSelected);
         if (q != null && isWithinLimits(q)) {
             validSolutions.add(q);
-        } else {
-            double[] qHome = new double[NUM_JOINTS];
-            qHome[0] = qInit[0];
-            qHome[1] = 0.5;
-            qHome[2] = 1.0;                     // Joint 3 positive bias (elbow forward)
-            qHome[3] = Math.toRadians(-35.0);   // Joint 4 negative bias (wrist forward)
-            double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
-            if (q2 != null && isWithinLimits(q2)) {
+        }
+
+        // 2. Always try standard home posture to find the preferred configuration
+        double[] qHome = new double[NUM_JOINTS];
+        qHome[0] = qInit[0];
+        qHome[1] = 0.5;
+        qHome[2] = 1.0;                     // Joint 3 positive bias (elbow forward)
+        qHome[3] = Math.toRadians(-35.0);   // Joint 4 negative bias (wrist forward)
+        double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
+        if (q2 != null && isWithinLimits(q2)) {
+            // Avoid duplicates
+            boolean duplicate = false;
+            for (double[] existing : validSolutions) {
+                double diff = 0;
+                for (int j = 0; j < NUM_JOINTS; j++) {
+                    diff += Math.abs(existing[j] - q2[j]);
+                }
+                if (diff < 0.1) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
                 validSolutions.add(q2);
             }
         }
