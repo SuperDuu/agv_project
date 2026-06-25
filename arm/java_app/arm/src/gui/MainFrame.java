@@ -149,6 +149,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         
         // Start PS5 Controller Receiver & Timer
         controllerReceiver = new ControllerReceiver(5005);
+        controllerReceiver.setMainFrame(this);
         controllerReceiver.start();
         startControllerTimer();
 
@@ -2385,4 +2386,142 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
     }
 
+    private boolean isArmAtTarget(boolean isRight) {
+        double[] current = isRight ? anglesRight : anglesLeft;
+        double[] target = isRight ? targetAnglesRight : targetAnglesLeft;
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            if (Math.abs(current[i] - target[i]) > 0.5) { // Within 0.5 degrees
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void triggerPickAndPlace(double px, double py, double pz) {
+        new Thread(() -> {
+            try {
+                boolean isRight = isRightArmSelected;
+                String armLabel = isRight ? "RIGHT" : "LEFT";
+                System.out.printf("[PICK-AND-PLACE] Starting sequence for %s arm to target (%.1f, %.1f, %.1f)\n", armLabel, px, py, pz);
+                
+                // Solve IK for pre-grasp hover (z + 40.0)
+                double hoverZ = pz + 40.0;
+                double[] hoverQ = solveIKSmart(px, py, hoverZ, (String) null);
+                if (hoverQ == null) {
+                    System.err.println("[PICK-AND-PLACE] Pre-grasp hover position is out of reach!");
+                    setGotoStatus("Vượt giới hạn!", Color.RED);
+                    return;
+                }
+                
+                // Solve IK for grasp (z)
+                double[] graspQ = solveIKSmart(px, py, pz, (String) null);
+                if (graspQ == null) {
+                    System.err.println("[PICK-AND-PLACE] Grasp position is out of reach!");
+                    setGotoStatus("Vượt giới hạn!", Color.RED);
+                    return;
+                }
+                
+                setGotoStatus("Gắp: Bắt đầu...", Color.BLUE);
+                
+                // Step 1: Open Gripper
+                setGotoStatus("Gắp: Mở kẹp...", Color.BLUE);
+                if (isRight) {
+                    isGrippedRight = false;
+                    if (uartManager != null && uartManager.isConnected()) {
+                        uartManager.sendData("R:RELEASE\n");
+                    }
+                } else {
+                    isGrippedLeft = false;
+                    if (uartManager != null && uartManager.isConnected()) {
+                        uartManager.sendData("L:RELEASE\n");
+                    }
+                }
+                armPanel.repaint();
+                Thread.sleep(800);
+                
+                // Step 2: Move to hover
+                setGotoStatus("Gắp: Di chuyển tới vị trí trên vật...", Color.BLUE);
+                setTargetAngles(hoverQ);
+                while (!isArmAtTarget(isRight)) {
+                    Thread.sleep(50);
+                }
+                Thread.sleep(300);
+                
+                // Step 3: Descend to grasp
+                setGotoStatus("Gắp: Hạ xuống vật...", Color.BLUE);
+                setTargetAngles(graspQ);
+                while (!isArmAtTarget(isRight)) {
+                    Thread.sleep(50);
+                }
+                Thread.sleep(500);
+                
+                // Step 4: Close Gripper
+                setGotoStatus("Gắp: Đóng kẹp...", Color.BLUE);
+                if (isRight) {
+                    isGrippedRight = true;
+                    if (uartManager != null && uartManager.isConnected()) {
+                        uartManager.sendData("R:GRIP\n");
+                    }
+                } else {
+                    isGrippedLeft = true;
+                    if (uartManager != null && uartManager.isConnected()) {
+                        uartManager.sendData("L:GRIP\n");
+                    }
+                }
+                armPanel.repaint();
+                Thread.sleep(1000);
+                
+                // Step 5: Ascend back to hover
+                setGotoStatus("Gắp: Nhấc vật lên...", Color.BLUE);
+                setTargetAngles(hoverQ);
+                while (!isArmAtTarget(isRight)) {
+                    Thread.sleep(50);
+                }
+                Thread.sleep(300);
+                
+                // Step 6: Move to drop deposit position
+                double dropX = isRight ? 120.0 : -120.0;
+                double dropY = 0.0;
+                double dropZ = 80.0;
+                double[] dropQ = solveIKSmart(dropX, dropY, dropZ, (String) null);
+                if (dropQ != null) {
+                    setGotoStatus("Gắp: Di chuyển tới chỗ thả...", Color.BLUE);
+                    setTargetAngles(dropQ);
+                    while (!isArmAtTarget(isRight)) {
+                        Thread.sleep(50);
+                    }
+                    Thread.sleep(500);
+                    
+                    // Step 7: Open Gripper
+                    setGotoStatus("Gắp: Thả vật...", Color.BLUE);
+                    if (isRight) {
+                        isGrippedRight = false;
+                        if (uartManager != null && uartManager.isConnected()) {
+                            uartManager.sendData("R:RELEASE\n");
+                        }
+                    } else {
+                        isGrippedLeft = false;
+                        if (uartManager != null && uartManager.isConnected()) {
+                            uartManager.sendData("L:RELEASE\n");
+                        }
+                    }
+                    armPanel.repaint();
+                    Thread.sleep(800);
+                }
+                
+                // Step 8: Return to Home
+                setGotoStatus("Gắp: Trở về vị trí nghỉ...", Color.BLUE);
+                double[] homeQ = isRight ? new double[]{ 0, 0, 10, -30, 0, 0 } : new double[]{ 0, 0, 10, 30, 0, 0 };
+                setTargetAngles(homeQ);
+                while (!isArmAtTarget(isRight)) {
+                    Thread.sleep(50);
+                }
+                
+                setGotoStatus("Hoàn thành!", new Color(0, 140, 0));
+                System.out.println("[PICK-AND-PLACE] Sequence completed successfully.");
+            } catch (InterruptedException e) {
+                System.err.println("[PICK-AND-PLACE] Sequence interrupted.");
+            }
+        }, "PickAndPlaceThread").start();
+    }
 }
