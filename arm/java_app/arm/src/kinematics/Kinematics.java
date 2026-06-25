@@ -45,7 +45,7 @@ public class Kinematics {
                 { 0, 0, 0, 1 }
         };
 
-        int maxIter = 250;
+        int maxIter = 100;
         double tol = 1e-3;
         double alpha = 0.5; // Step size
 
