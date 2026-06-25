@@ -34,33 +34,54 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JPanel controlPanel = new JPanel();
     JPanel topPanel = new JPanel();
 
-    JSlider[] sliders = new JSlider[NUM_JOINTS];
-    JLabel[] angleLbls = new JLabel[NUM_JOINTS];
+    JSlider[] slidersRight = new JSlider[NUM_JOINTS];
+    JLabel[] angleLblsRight = new JLabel[NUM_JOINTS];
+    JSlider[] slidersLeft = new JSlider[NUM_JOINTS];
+    JLabel[] angleLblsLeft = new JLabel[NUM_JOINTS];
 
     ArmPanel armPanel;
-    JLabel endEffectorLabel = new JLabel("Tọa độ kẹp (X, Y, Z): 0, 0, 0");
+    JLabel endEffectorLabelRight = new JLabel("Tọa độ kẹp (R): 0, 0, 0");
+    JLabel endEffectorLabelLeft = new JLabel("Tọa độ kẹp (L): 0, 0, 0");
 
     JCheckBox showGridCb = new JCheckBox("Hiện Lưới", true);
     JCheckBox showTrailCb = new JCheckBox("Hiện Vết Quỹ Đạo", false);
 
-    JComboBox<String> configCombo = new JComboBox<>(new String[] { "Right / Elbow Up (+)", "Left / Elbow Down (-)" });
-    JSlider alphaSlider = new JSlider(0, 360, 180);
-    JCheckBox fixedAlphaCb = new JCheckBox("Alpha cố định", false);
+    JComboBox<String> configComboRight = new JComboBox<>(new String[] { "Up (+)", "Down (-)" });
+    JComboBox<String> configComboLeft = new JComboBox<>(new String[] { "Up (+)", "Down (-)" });
+    JSlider alphaSliderRight = new JSlider(-90, 30, -30);
+    JSlider alphaSliderLeft = new JSlider(-90, 30, -30);
+    JCheckBox fixedAlphaCbRight = new JCheckBox("Alpha cố định", false);
+    JCheckBox fixedAlphaCbLeft = new JCheckBox("Alpha cố định", false);
 
     JButton btnReset = new JButton("Reset");
     JButton btnDemo = new JButton("Quỹ đạo Xoắn ốc");
     JButton btnTopView = new JButton("Hệ Trục (Top)");
     JButton btnPersp = new JButton("3D Perspective");
 
-    JTextField txX = new JTextField("0", 5);
-    JTextField txY = new JTextField("0", 5);
-    JTextField txZ = new JTextField("0", 5);
-    JSlider slX = new JSlider(-50, 50, 0);
-    JSlider slY = new JSlider(-50, 50, 0);
-    JSlider slZ = new JSlider(-20, 80, 0);
-    JButton btnGoto = new JButton("Đến tọa độ");
-    JButton btnSyncCoords = new JButton("Lấy tọa độ hiện tại");
-    JLabel gotoStatus = new JLabel(" ");
+    JTextField txXRight = new JTextField("0", 5);
+    JTextField txYRight = new JTextField("0", 5);
+    JTextField txZRight = new JTextField("0", 5);
+    JSlider slXRight = new JSlider(-50, 50, 0);
+    JSlider slYRight = new JSlider(-50, 50, 0);
+    JSlider slZRight = new JSlider(-20, 80, 0);
+    JButton btnGotoRight = new JButton("Đến");
+    JButton btnSyncCoordsRight = new JButton("Lấy");
+    JLabel gotoStatusRight = new JLabel(" ");
+
+    JTextField txXLeft = new JTextField("0", 5);
+    JTextField txYLeft = new JTextField("0", 5);
+    JTextField txZLeft = new JTextField("0", 5);
+    JSlider slXLeft = new JSlider(-50, 50, 0);
+    JSlider slYLeft = new JSlider(-50, 50, 0);
+    JSlider slZLeft = new JSlider(-20, 80, 0);
+    JButton btnGotoLeft = new JButton("Đến");
+    JButton btnSyncCoordsLeft = new JButton("Lấy");
+    JLabel gotoStatusLeft = new JLabel(" ");
+
+    JComboBox<String> trajArmCombo = new JComboBox<>(new String[] { "Cánh Tay Phải (Right)", "Cánh Tay Trái (Left)" });
+    boolean isGrippedRight = false;
+    boolean isGrippedLeft = false;
+
     boolean manualMode = false;
     boolean isUpdatingFromFK = false;
 
@@ -79,9 +100,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JTextField txtSK = new JTextField("3", 4);
     JTabbedPane mainTabs;
 
-    JCheckBox fixedHeightCb = new JCheckBox("Chế độ Click (chiều cao cố định)", false);
-    JSpinner fixedHeightSpinner = new JSpinner(new SpinnerNumberModel(0.0, -200.0, 500.0, 1.0));
+    JCheckBox fixedHeightCb = new JCheckBox("Click cố định Z", false);
+    JSpinner fixedHeightSpinner = new JSpinner(new SpinnerNumberModel(20.0, -200.0, 500.0, 1.0));
     boolean fixedHeightMode = false;
+    JCheckBoxMenuItem clickModeItem;
     JSlider speedSlider = new JSlider(0, 120, 60);
     JLabel speedLabel = new JLabel("60 °/s");
     private static final int MOTION_DT_MS = 30;
@@ -114,7 +136,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         buildTopPanel();
         buildMenuBar();
 
-        setSize(1100, 750);
+        setSize(1400, 780);
         setTitle("Mô Phỏng cánh tay Robot 6-DOF");
         setLocationRelativeTo(null);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -130,173 +152,168 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private void buildControlPanel() {
         add(BorderLayout.EAST, controlPanel);
         controlPanel.setLayout(new BorderLayout());
-        controlPanel.setPreferredSize(new Dimension(340, 0));
+        controlPanel.setPreferredSize(new Dimension(680, 0));
 
         mainTabs = new JTabbedPane();
 
-        JPanel manualPanel = new JPanel();
-        manualPanel.setLayout(new BoxLayout(manualPanel, BoxLayout.Y_AXIS));
+        JPanel manualPanel = new JPanel(new GridLayout(1, 2, 8, 0));
         manualPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
-        JComboBox<String> armCombo = new JComboBox<>(new String[] { "Cánh Tay Phải (Right Arm)", "Cánh Tay Trái (Left Arm)" });
-        armCombo.setMaximumSize(new Dimension(320, 30));
-        armCombo.setAlignmentX(Component.LEFT_ALIGNMENT);
-        armCombo.addActionListener(e -> {
-            boolean rightSelected = armCombo.getSelectedIndex() == 0;
-            if (rightSelected) {
-                angles = anglesRight;
-                targetAngles = targetAnglesRight;
-                lastSentAngles = lastSentAnglesRight;
-                isRightArmSelected = true;
-                 // Left arm (inactive) returns to home smoothly
-                for (int j = 1; j < NUM_JOINTS; j++) {
-                    targetAnglesLeft[j] = (j == 3) ? 30.0 : ((j == 2) ? -10.0 : 0);
-                }
-            } else {
-                angles = anglesLeft;
-                targetAngles = targetAnglesLeft;
-                lastSentAngles = lastSentAnglesLeft;
-                isRightArmSelected = false;
-                // Right arm (inactive) returns to home smoothly
-                for (int j = 1; j < NUM_JOINTS; j++) {
-                    targetAnglesRight[j] = (j == 3) ? -30.0 : ((j == 2) ? 10.0 : 0);
-                }
-            }
-            // Sync sliders and labels to the newly selected arm's angles and limits
-            double[] minLimits = isRightArmSelected ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
-            double[] maxLimits = isRightArmSelected ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
-            for (int j = 0; j < NUM_JOINTS; j++) {
-                sliders[j].removeChangeListener(this);
-                int minVal = (int) Math.min(minLimits[j], maxLimits[j]);
-                int maxVal = (int) Math.max(minLimits[j], maxLimits[j]);
-                sliders[j].setMinimum(minVal);
-                sliders[j].setMaximum(maxVal);
-                sliders[j].setValue((int) Math.round(angles[j]));
-                sliders[j].addChangeListener(this);
-                angleLbls[j].setText((int) Math.round(angles[j]) + "°");
-            }
-            startMotionTimer();
-            updateArm();
-        });
-        manualPanel.add(armCombo);
-        manualPanel.add(Box.createVerticalStrut(10));
+        JPanel leftCol = buildArmControlPanel(false);
+        leftCol.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(new Color(200, 80, 80), 2), "Cánh Tay TRÁI (Left Arm)"));
+
+        JPanel rightCol = buildArmControlPanel(true);
+        rightCol.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(new Color(50, 120, 200), 2), "Cánh Tay PHẢI (Right Arm)"));
+
+        manualPanel.add(leftCol);
+        manualPanel.add(rightCol);
+
+        JScrollPane scrollManual = new JScrollPane(manualPanel);
+        scrollManual.setBorder(null);
+        scrollManual.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollManual.getHorizontalScrollBar().setUnitIncrement(16);
+        scrollManual.getVerticalScrollBar().setUnitIncrement(16);
+        mainTabs.addTab("Điều khiển song song", scrollManual);
+
+        mainTabs.addTab("Quỹ đạo", buildTrajectoryPanel());
+
+        controlPanel.add(mainTabs, BorderLayout.CENTER);
+    }
+
+    private JPanel buildArmControlPanel(final boolean isRight) {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+
+        // 1. Joint Sliders
+        JPanel jointContainer = new JPanel();
+        jointContainer.setLayout(new BoxLayout(jointContainer, BoxLayout.Y_AXIS));
+        jointContainer.setBorder(BorderFactory.createTitledBorder("Góc các khớp (Degrees)"));
+
+        JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
+        JLabel[] armLbls = isRight ? angleLblsRight : angleLblsLeft;
+        double[] armAngles = isRight ? anglesRight : anglesLeft;
+        double[] minLimits = isRight ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
+        double[] maxLimits = isRight ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
 
         for (int i = 0; i < NUM_JOINTS; i++) {
-            JPanel jointPanel = new JPanel(new BorderLayout());
-            jointPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+            JPanel jointRow = new JPanel(new BorderLayout());
+            jointRow.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
 
             JLabel nameLabel = new JLabel(JOINT_NAMES[i]);
-            jointPanel.add(nameLabel, BorderLayout.NORTH);
+            jointRow.add(nameLabel, BorderLayout.NORTH);
 
-            int minVal = (int) Math.min(JOINT_MIN_RIGHT[i], JOINT_MAX_RIGHT[i]);
-            int maxVal = (int) Math.max(JOINT_MIN_RIGHT[i], JOINT_MAX_RIGHT[i]);
-            sliders[i] = new JSlider(minVal, maxVal, (int) angles[i]);
-            sliders[i].setMajorTickSpacing(30);
-            sliders[i].setPaintTicks(true);
-            sliders[i].addChangeListener(this);
+            int minVal = (int) Math.min(minLimits[i], maxLimits[i]);
+            int maxVal = (int) Math.max(minLimits[i], maxLimits[i]);
+            armSliders[i] = new JSlider(minVal, maxVal, (int) Math.round(armAngles[i]));
+            armSliders[i].setMajorTickSpacing(60);
+            armSliders[i].setPaintTicks(true);
+            armSliders[i].setPreferredSize(new Dimension(120, 25));
+            armSliders[i].addChangeListener(this);
 
-            angleLbls[i] = new JLabel(sliders[i].getValue() + "°");
-            angleLbls[i].setPreferredSize(new Dimension(50, 20));
-            angleLbls[i].setHorizontalAlignment(SwingConstants.RIGHT);
+            armLbls[i] = new JLabel(armSliders[i].getValue() + "°");
+            armLbls[i].setPreferredSize(new Dimension(45, 20));
+            armLbls[i].setHorizontalAlignment(SwingConstants.RIGHT);
 
-            jointPanel.add(sliders[i], BorderLayout.CENTER);
-            jointPanel.add(angleLbls[i], BorderLayout.EAST);
-            manualPanel.add(jointPanel);
+            jointRow.add(armSliders[i], BorderLayout.CENTER);
+            jointRow.add(armLbls[i], BorderLayout.EAST);
+            jointContainer.add(jointRow);
         }
+        panel.add(jointContainer);
 
-        endEffectorLabel.setFont(new Font("Arial", Font.BOLD, 12));
-        endEffectorLabel.setBorder(BorderFactory.createEmptyBorder(10, 10, 5, 10));
-        manualPanel.add(endEffectorLabel);
-
+        // 2. Cartesian Coordinates Panel
         JPanel gotoPanel = new JPanel();
         gotoPanel.setLayout(new BoxLayout(gotoPanel, BoxLayout.Y_AXIS));
-        gotoPanel.setBorder(BorderFactory.createTitledBorder("Nhập tọa độ (X, Y, Z)"));
+        gotoPanel.setBorder(BorderFactory.createTitledBorder("Tọa độ kẹp (X, Y, Z)"));
+
+        JLabel eeLabel = isRight ? endEffectorLabelRight : endEffectorLabelLeft;
+        eeLabel.setFont(new Font("Arial", Font.BOLD, 12));
+        eeLabel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        gotoPanel.add(eeLabel);
 
         JPanel coordRow = new JPanel(new GridLayout(3, 1, 4, 2));
 
+        JSlider sX = isRight ? slXRight : slXLeft;
+        JSlider sY = isRight ? slYRight : slYLeft;
+        JSlider sZ = isRight ? slZRight : slZLeft;
+        JTextField tX = isRight ? txXRight : txXLeft;
+        JTextField tY = isRight ? txYRight : txYLeft;
+        JTextField tZ = isRight ? txZRight : txZLeft;
+
+        sX.setPreferredSize(new Dimension(120, 22));
+        sY.setPreferredSize(new Dimension(120, 22));
+        sZ.setPreferredSize(new Dimension(120, 22));
+
         JPanel rowX = new JPanel(new BorderLayout(5, 0));
         rowX.add(new JLabel("X:"), BorderLayout.WEST);
-        rowX.add(slX, BorderLayout.CENTER);
-        txX.setPreferredSize(new Dimension(50, 20));
-        rowX.add(txX, BorderLayout.EAST);
+        rowX.add(sX, BorderLayout.CENTER);
+        tX.setPreferredSize(new Dimension(50, 20));
+        rowX.add(tX, BorderLayout.EAST);
 
         JPanel rowY = new JPanel(new BorderLayout(5, 0));
         rowY.add(new JLabel("Y:"), BorderLayout.WEST);
-        rowY.add(slY, BorderLayout.CENTER);
-        txY.setPreferredSize(new Dimension(50, 20));
-        rowY.add(txY, BorderLayout.EAST);
+        rowY.add(sY, BorderLayout.CENTER);
+        tY.setPreferredSize(new Dimension(50, 20));
+        rowY.add(tY, BorderLayout.EAST);
 
         JPanel rowZ = new JPanel(new BorderLayout(5, 0));
         rowZ.add(new JLabel("Z:"), BorderLayout.WEST);
-        rowZ.add(slZ, BorderLayout.CENTER);
-        txZ.setPreferredSize(new Dimension(50, 20));
-        rowZ.add(txZ, BorderLayout.EAST);
+        rowZ.add(sZ, BorderLayout.CENTER);
+        tZ.setPreferredSize(new Dimension(50, 20));
+        rowZ.add(tZ, BorderLayout.EAST);
 
         coordRow.add(rowX);
         coordRow.add(rowY);
         coordRow.add(rowZ);
         gotoPanel.add(coordRow);
 
-        slX.addChangeListener(this);
-        slY.addChangeListener(this);
-        slZ.addChangeListener(this);
+        sX.addChangeListener(this);
+        sY.addChangeListener(this);
+        sZ.addChangeListener(this);
+
+        JButton btnG = isRight ? btnGotoRight : btnGotoLeft;
+        JButton btnS = isRight ? btnSyncCoordsRight : btnSyncCoordsLeft;
+        JLabel lblStatus = isRight ? gotoStatusRight : gotoStatusLeft;
 
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        btnRow.add(btnGoto);
-        btnRow.add(btnSyncCoords);
-        btnRow.add(gotoStatus);
+        btnRow.add(btnG);
+        btnRow.add(btnS);
+        btnRow.add(lblStatus);
         gotoPanel.add(btnRow);
-        manualPanel.add(gotoPanel);
 
-        btnGoto.addActionListener(this);
-        btnSyncCoords.addActionListener(this);
-        ActionListener gotoAction = e -> gotoCoordinate();
-        txX.addActionListener(gotoAction);
-        txY.addActionListener(gotoAction);
-        txZ.addActionListener(gotoAction);
+        btnG.addActionListener(this);
+        btnS.addActionListener(this);
+        ActionListener gotoAction = e -> gotoCoordinate(isRight);
+        tX.addActionListener(gotoAction);
+        tY.addActionListener(gotoAction);
+        tZ.addActionListener(gotoAction);
 
-        JPanel fixedPanel = new JPanel();
-        fixedPanel.setLayout(new BoxLayout(fixedPanel, BoxLayout.Y_AXIS));
-        fixedPanel.setBorder(BorderFactory.createTitledBorder("Chế độ Click (IK tại Z cố định)"));
+        panel.add(gotoPanel);
 
-        JPanel fhRow1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        fhRow1.add(fixedHeightCb);
-        fixedPanel.add(fhRow1);
+        // 3. Config (IK Pose) & Alpha Orientation
+        JPanel configPanel = new JPanel();
+        configPanel.setLayout(new BoxLayout(configPanel, BoxLayout.Y_AXIS));
+        configPanel.setBorder(BorderFactory.createTitledBorder("Cấu hình & Hướng kẹp"));
 
-        JPanel fhRow2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        fhRow2.add(new JLabel("Chiều cao Z cố định:"));
-        fixedHeightSpinner.setPreferredSize(new Dimension(80, 25));
-        fhRow2.add(fixedHeightSpinner);
-        fixedPanel.add(fhRow2);
+        JComboBox<String> comb = isRight ? configComboRight : configComboLeft;
+        configPanel.add(comb);
 
-        JLabel fhHint = new JLabel(
-                "<html><i>Nhấp chuột phải trên màn hình<br>để di chuyển cánh tay đến vị trí đó</i></html>");
-        fhHint.setBorder(BorderFactory.createEmptyBorder(2, 8, 4, 4));
-        fhHint.setForeground(new Color(100, 100, 100));
-        fixedPanel.add(fhHint);
-        manualPanel.add(fixedPanel);
-        fixedHeightCb.addActionListener(this);
+        JSlider aSlider = isRight ? alphaSliderRight : alphaSliderLeft;
+        aSlider.setMajorTickSpacing(30);
+        aSlider.setPaintTicks(true);
+        aSlider.setPaintLabels(true);
+        aSlider.setPreferredSize(new Dimension(150, 45));
+        JCheckBox fAlphaCb = isRight ? fixedAlphaCbRight : fixedAlphaCbLeft;
 
-        JPanel configPanel = new JPanel(new BorderLayout());
-        configPanel.setBorder(BorderFactory.createTitledBorder("Cấu hình (IK Pose)"));
-        configPanel.add(configCombo);
-        manualPanel.add(configPanel);
-        JPanel alphaPanel = new JPanel(new BorderLayout());
-        alphaPanel.setBorder(BorderFactory.createTitledBorder("Bending Alpha (Target orientation)"));
-        alphaSlider.setMajorTickSpacing(90);
-        alphaSlider.setPaintTicks(true);
-        alphaSlider.setPaintLabels(true);
-        alphaPanel.add(alphaSlider, BorderLayout.CENTER);
-        alphaPanel.add(fixedAlphaCb, BorderLayout.SOUTH);
-        manualPanel.add(alphaPanel);
+        JPanel alphaRow = new JPanel(new BorderLayout());
+        alphaRow.add(new JLabel("Alpha Bending:"), BorderLayout.NORTH);
+        alphaRow.add(aSlider, BorderLayout.CENTER);
+        alphaRow.add(fAlphaCb, BorderLayout.SOUTH);
+        configPanel.add(alphaRow);
 
-        JScrollPane scrollManual = new JScrollPane(manualPanel);
-        scrollManual.setBorder(null);
-        mainTabs.addTab("Điều khiển", scrollManual);
+        panel.add(configPanel);
 
-        mainTabs.addTab("Quỹ đạo", buildTrajectoryPanel());
-
-        controlPanel.add(mainTabs, BorderLayout.CENTER);
+        return panel;
     }
 
     private JPanel buildTrajectoryPanel() {
@@ -305,7 +322,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         trajPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         JPanel topP = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        topP.add(new JLabel("Loại quỹ đạo: "));
+        topP.add(new JLabel("Cánh tay: "));
+        topP.add(trajArmCombo);
+        topP.add(new JLabel("  Loại quỹ đạo: "));
         topP.add(trajTypeCombo);
         trajPanel.add(topP);
         JPanel cards = new JPanel(new CardLayout());
@@ -369,13 +388,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         btnStopTraj.addActionListener(e -> {
             if (trajectoryTimer != null)
                 trajectoryTimer.stop();
-            setTitle("Mô Phỏng cánh tay Robot 6-DOF");
+            setTitle("Mô Phỏng robot song song");
         });
 
         btnStartTraj.addActionListener(e -> {
             trajDebug("START_CLICK", "Start trajectory button clicked");
             if (trajectoryTimer != null)
                 trajectoryTimer.stop();
+            isRightArmSelected = (trajArmCombo.getSelectedIndex() == 0);
             boolean isLine = trajTypeCombo.getSelectedIndex() == 0;
             try {
                 if (isLine) {
@@ -407,6 +427,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         btnCheckLine.addActionListener(e -> {
             try {
+                isRightArmSelected = (trajArmCombo.getSelectedIndex() == 0);
                 double sx = Double.parseDouble(txtLStartX.getText());
                 double sy = Double.parseDouble(txtLStartY.getText());
                 double sz = Double.parseDouble(txtLStartZ.getText());
@@ -414,10 +435,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 double ey = Double.parseDouble(txtLEndY.getText());
                 double ez = Double.parseDouble(txtLEndZ.getText());
 
-                String cfg = configCombo.getSelectedIndex() == 0 ? "+" : "-";
+                String cfg = isRightArmSelected ? (configComboRight.getSelectedIndex() == 0 ? "+" : "-")
+                                                : (configComboLeft.getSelectedIndex() == 0 ? "+" : "-");
                 trajectoryLockedCfg = cfg;
                 trajectoryLastQ = null;
-                trajectoryLastAlpha = alphaSlider.getValue();
+                trajectoryLastAlpha = isRightArmSelected ? alphaSliderRight.getValue() : alphaSliderLeft.getValue();
 
                 String report = buildLineFeasibilityReport(sx, sy, sz, ex, ey, ez);
                 trajDebug("LINE_CHECK", report.replace('\n', ' '));
@@ -438,14 +460,28 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return trajPanel;
     }
 
+
     private void buildTopPanel() {
         add(BorderLayout.NORTH, topPanel);
 
         JButton btnGripper = new JButton("Đóng / Mở Kẹp");
         btnGripper.addActionListener(e -> {
-            isGripped = !isGripped;
+            if (isRightArmSelected) {
+                isGrippedRight = !isGrippedRight;
+                setGotoStatusRight(isGrippedRight ? "Đã ĐÓNG kẹp (R)" : "Đã MỞ kẹp (R)", Color.BLUE);
+                if (uartManager != null && uartManager.isConnected()) {
+                    String cmd = isGrippedRight ? "R:GRIP\n" : "R:RELEASE\n";
+                    uartManager.sendData(cmd);
+                }
+            } else {
+                isGrippedLeft = !isGrippedLeft;
+                setGotoStatusLeft(isGrippedLeft ? "Đã ĐÓNG kẹp (L)" : "Đã MỞ kẹp (L)", Color.BLUE);
+                if (uartManager != null && uartManager.isConnected()) {
+                    String cmd = isGrippedLeft ? "L:GRIP\n" : "L:RELEASE\n";
+                    uartManager.sendData(cmd);
+                }
+            }
             armPanel.repaint();
-            setGotoStatus(isGripped ? "Đã ĐÓNG kẹp" : "Đã MỞ kẹp", Color.BLUE);
         });
         topPanel.add(btnGripper);
 
@@ -456,6 +492,20 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         speedSlider.addChangeListener(ev -> speedLabel.setText(speedSlider.getValue() + " °/s"));
         topPanel.add(speedSlider);
         topPanel.add(speedLabel);
+
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        topPanel.add(fixedHeightCb);
+        topPanel.add(new JLabel("Z:"));
+        fixedHeightSpinner.setPreferredSize(new Dimension(55, 22));
+        topPanel.add(fixedHeightSpinner);
+        
+        fixedHeightCb.addActionListener(ev -> {
+            fixedHeightMode = fixedHeightCb.isSelected();
+            if (clickModeItem != null) {
+                clickModeItem.setSelected(fixedHeightMode);
+            }
+            armPanel.repaint();
+        });
 
         topPanel.add(new JSeparator(SwingConstants.VERTICAL));
         topPanel.add(new JLabel(" COM:"));
@@ -574,13 +624,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // ---- Menu: Chế độ ----
         JMenu chedoMenu = new JMenu("Chế độ");
 
-        JCheckBoxMenuItem clickModeItem = new JCheckBoxMenuItem("Click tới tọa độ (Z cố định)", fixedHeightMode);
+        clickModeItem = new JCheckBoxMenuItem("Click tới tọa độ (Z cố định)", fixedHeightMode);
         clickModeItem.addItemListener(e -> {
             fixedHeightMode = clickModeItem.isSelected();
             fixedHeightCb.setSelected(fixedHeightMode);
             armPanel.repaint();
         });
-        fixedHeightCb.addActionListener(ev -> clickModeItem.setSelected(fixedHeightCb.isSelected()));
 
         JCheckBoxMenuItem manualModeItem = new JCheckBoxMenuItem("Chế độ thủ công (FK)", manualMode);
         manualModeItem.addItemListener(e -> {
@@ -693,17 +742,31 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         // Synchronize Joint 1 (Waist/Hip) for both arms
-        anglesRight[0] = angles[0];
-        anglesLeft[0] = angles[0];
-        targetAnglesRight[0] = targetAngles[0];
-        targetAnglesLeft[0] = targetAngles[0];
+        anglesLeft[0] = anglesRight[0];
+        targetAnglesLeft[0] = targetAnglesRight[0];
 
-        // 3. Sync sliders and labels of the ACTIVE arm without triggering listener
+        // 3. Sync sliders and labels of Right arm without triggering listener
         for (int i = 0; i < NUM_JOINTS; i++) {
-            sliders[i].removeChangeListener(this);
-            sliders[i].setValue((int) Math.round(angles[i]));
-            sliders[i].addChangeListener(this);
-            angleLbls[i].setText((int) Math.round(angles[i]) + "°");
+            if (slidersRight[i] != null) {
+                slidersRight[i].removeChangeListener(this);
+                slidersRight[i].setValue((int) Math.round(anglesRight[i]));
+                slidersRight[i].addChangeListener(this);
+            }
+            if (angleLblsRight[i] != null) {
+                angleLblsRight[i].setText((int) Math.round(anglesRight[i]) + "°");
+            }
+        }
+
+        // 4. Sync sliders and labels of Left arm without triggering listener
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            if (slidersLeft[i] != null) {
+                slidersLeft[i].removeChangeListener(this);
+                slidersLeft[i].setValue((int) Math.round(anglesLeft[i]));
+                slidersLeft[i].addChangeListener(this);
+            }
+            if (angleLblsLeft[i] != null) {
+                angleLblsLeft[i].setText((int) Math.round(anglesLeft[i]) + "°");
+            }
         }
 
         updateArm();
@@ -717,37 +780,60 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     /**
      * Formats current joint angles and sends them to STM32 via UART.
-     * Format: S:q1,q2,q3,q4,q5\n
+     * Format: R:q1,q2,... and L:q1,q2,...
      */
     private void sendJointsToUart() {
         if (uartManager != null) {
-            // Check if angles have changed significantly since last send
-            boolean changed = false;
+            // Check Right Arm
+            boolean changedRight = false;
             for (int i = 0; i < NUM_JOINTS; i++) {
-                if (Math.abs(angles[i] - lastSentAngles[i]) > 0.01) {
-                    changed = true;
+                if (Math.abs(anglesRight[i] - lastSentAnglesRight[i]) > 0.01) {
+                    changedRight = true;
                     break;
                 }
             }
 
-            if (!changed)
-                return;
-
-            StringBuilder sb = new StringBuilder(isRightArmSelected ? "R:" : "L:");
-            for (int i = 0; i < NUM_JOINTS; i++) {
-                // Send as integers to reduce packet size and STM32 CPU load
-                sb.append(String.format("%d", (int) Math.round(angles[i])));
-                if (i < NUM_JOINTS - 1) {
-                    sb.append(",");
+            if (changedRight) {
+                StringBuilder sb = new StringBuilder("R:");
+                for (int i = 0; i < NUM_JOINTS; i++) {
+                    sb.append(String.format("%d", (int) Math.round(anglesRight[i])));
+                    if (i < NUM_JOINTS - 1) {
+                        sb.append(",");
+                    }
+                    lastSentAnglesRight[i] = anglesRight[i];
                 }
-                lastSentAngles[i] = angles[i];
+                sb.append("\n");
+                String data = sb.toString();
+                uartManager.sendData(data);
+                if (uartManager.isConnected()) {
+                    System.out.print("Sent UART: " + data);
+                }
             }
-            sb.append("\n");
 
-            String data = sb.toString();
-            uartManager.sendData(data);
-            if (uartManager.isConnected()) {
-                System.out.print("Sent UART: " + data);
+            // Check Left Arm
+            boolean changedLeft = false;
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                if (Math.abs(anglesLeft[i] - lastSentAnglesLeft[i]) > 0.01) {
+                    changedLeft = true;
+                    break;
+                }
+            }
+
+            if (changedLeft) {
+                StringBuilder sb = new StringBuilder("L:");
+                for (int i = 0; i < NUM_JOINTS; i++) {
+                    sb.append(String.format("%d", (int) Math.round(anglesLeft[i])));
+                    if (i < NUM_JOINTS - 1) {
+                        sb.append(",");
+                    }
+                    lastSentAnglesLeft[i] = anglesLeft[i];
+                }
+                sb.append("\n");
+                String data = sb.toString();
+                uartManager.sendData(data);
+                if (uartManager.isConnected()) {
+                    System.out.print("Sent UART: " + data);
+                }
             }
         }
     }
@@ -757,41 +843,84 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
      * The motion timer will interpolate from the current position.
      */
     void setTargetAngles(double[] q_deg) {
-        System.arraycopy(q_deg, 0, targetAngles, 0, NUM_JOINTS); // q_deg is already in degrees from solveIK
+        if (isRightArmSelected) {
+            setTargetAnglesRight(q_deg);
+        } else {
+            setTargetAnglesLeft(q_deg);
+        }
+    }
+
+    void setTargetAnglesRight(double[] q_deg) {
+        System.arraycopy(q_deg, 0, targetAnglesRight, 0, NUM_JOINTS);
         // Synchronize Joint 1 (Waist/Hip) targets immediately
-        targetAnglesRight[0] = targetAngles[0];
-        targetAnglesLeft[0] = targetAngles[0];
-        anglesRight[0] = angles[0];
-        anglesLeft[0] = angles[0];
+        targetAnglesLeft[0] = targetAnglesRight[0];
+        anglesLeft[0] = anglesRight[0];
+        startMotionTimer();
+    }
+
+    void setTargetAnglesLeft(double[] q_deg) {
+        System.arraycopy(q_deg, 0, targetAnglesLeft, 0, NUM_JOINTS);
+        // Synchronize Joint 1 (Waist/Hip) targets immediately
+        targetAnglesRight[0] = targetAnglesLeft[0];
+        anglesRight[0] = anglesLeft[0];
         startMotionTimer();
     }
 
     public void setGotoStatus(String text, Color color) {
-        gotoStatus.setForeground(color);
-        gotoStatus.setText(text);
+        if (isRightArmSelected) {
+            setGotoStatusRight(text, color);
+        } else {
+            setGotoStatusLeft(text, color);
+        }
+    }
+
+    public void setGotoStatusRight(String text, Color color) {
+        gotoStatusRight.setForeground(color);
+        gotoStatusRight.setText(text);
+    }
+
+    public void setGotoStatusLeft(String text, Color color) {
+        gotoStatusLeft.setForeground(color);
+        gotoStatusLeft.setText(text);
     }
 
     private void gotoCoordinate() {
+        gotoCoordinate(isRightArmSelected);
+    }
+
+    private void gotoCoordinate(boolean isRight) {
         try {
-            double px = Double.parseDouble(txX.getText().trim());
-            double py = Double.parseDouble(txY.getText().trim());
-            double pz = Double.parseDouble(txZ.getText().trim());
+            JTextField tX = isRight ? txXRight : txXLeft;
+            JTextField tY = isRight ? txYRight : txYLeft;
+            JTextField tZ = isRight ? txZRight : txZLeft;
+
+            double px = Double.parseDouble(tX.getText().trim());
+            double py = Double.parseDouble(tY.getText().trim());
+            double pz = Double.parseDouble(tZ.getText().trim());
 
             if (pz < 0) {
-                setGotoStatus("Z không được âm!", Color.RED);
+                if (isRight) setGotoStatusRight("Z không âm!", Color.RED);
+                else setGotoStatusLeft("Z không âm!", Color.RED);
                 return;
             }
 
-            String prefCfg = configCombo.getSelectedIndex() == 0 ? "+" : "-";
-            double[] result = solveIKSmart(px, py, pz, prefCfg);
+            String prefCfg = (isRight ? configComboRight : configComboLeft).getSelectedIndex() == 0 ? "+" : "-";
+            double[] result = isRight ? solveIKSmartRight(px, py, pz, prefCfg) : solveIKSmartLeft(px, py, pz, prefCfg);
             if (result != null) {
-                setTargetAngles(result); // smooth motion
-                setGotoStatus("OK", new Color(0, 140, 0));
+                if (isRight) {
+                    setTargetAnglesRight(result);
+                    setGotoStatusRight("OK", new Color(0, 140, 0));
+                } else {
+                    setTargetAnglesLeft(result);
+                    setGotoStatusLeft("OK", new Color(0, 140, 0));
+                }
             } else {
-                setGotoStatus("Ngoài tầm/Giới hạn góc!", Color.RED);
+                if (isRight) setGotoStatusRight("Ngoài tầm/Góc!", Color.RED);
+                else setGotoStatusLeft("Ngoài tầm/Góc!", Color.RED);
             }
         } catch (NumberFormatException ex) {
-            gotoStatus.setText("Sai định dạng");
+            if (isRight) gotoStatusRight.setText("Sai định dạng");
+            else gotoStatusLeft.setText("Sai định dạng");
         }
     }
 
@@ -809,13 +938,20 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             armPanel.camAz = -30;
             armPanel.camEl = 25;
             armPanel.repaint();
-        } else if (e.getSource() == btnGoto) {
-            gotoCoordinate();
-        } else if (e.getSource() == btnSyncCoords) {
-            double[] ee = armPanel.getEndEffectorPosition();
-            txX.setText(String.format("%.1f", ee[0]));
-            txY.setText(String.format("%.1f", ee[1]));
-            txZ.setText(String.format("%.1f", ee[2]));
+        } else if (e.getSource() == btnGotoRight) {
+            gotoCoordinate(true);
+        } else if (e.getSource() == btnGotoLeft) {
+            gotoCoordinate(false);
+        } else if (e.getSource() == btnSyncCoordsRight) {
+            double[] ee = armPanel.getRightEndEffectorPosition();
+            txXRight.setText(String.format("%.1f", ee[0]));
+            txYRight.setText(String.format("%.1f", ee[1]));
+            txZRight.setText(String.format("%.1f", ee[2]));
+        } else if (e.getSource() == btnSyncCoordsLeft) {
+            double[] ee = armPanel.getLeftEndEffectorPosition();
+            txXLeft.setText(String.format("%.1f", ee[0]));
+            txYLeft.setText(String.format("%.1f", ee[1]));
+            txZLeft.setText(String.format("%.1f", ee[2]));
         } else if (e.getSource() == fixedHeightCb) {
             fixedHeightMode = fixedHeightCb.isSelected();
             armPanel.repaint();
@@ -824,82 +960,167 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     @Override
     public void stateChanged(ChangeEvent e) {
+        // 1. Right joint sliders
         for (int i = 0; i < NUM_JOINTS; i++) {
-            if (e.getSource() == sliders[i]) {
-                double oldVal = angles[i];
-                angles[i] = sliders[i].getValue();
+            if (e.getSource() == slidersRight[i]) {
+                double oldVal = anglesRight[i];
+                anglesRight[i] = slidersRight[i].getValue();
 
                 // Prevent gripper from going under floor
-                double[] ee = armPanel.getEndEffectorPosition();
+                double[][] pts3d = armPanel.computeAllJoints3DRight();
+                double[] ee = pts3d[NUM_JOINTS + 1];
                 if (ee[2] < 0) {
-                    angles[i] = oldVal; // Revert
-                    sliders[i].setValue((int) oldVal);
+                    anglesRight[i] = oldVal;
+                    slidersRight[i].setValue((int) Math.round(oldVal));
                 }
 
-                targetAngles[i] = angles[i]; // Prevent motion timer from snapping back
+                targetAnglesRight[i] = anglesRight[i];
                 
                 if (i == 0) {
-                    anglesRight[0] = angles[0];
-                    anglesLeft[0] = angles[0];
-                    targetAnglesRight[0] = angles[0];
-                    targetAnglesLeft[0] = angles[0];
+                    // Synchronize shared waist joint 1
+                    anglesLeft[0] = anglesRight[0];
+                    targetAnglesLeft[0] = anglesRight[0];
+                    if (slidersLeft[0] != null && slidersLeft[0].getValue() != (int)Math.round(anglesRight[0])) {
+                        slidersLeft[0].setValue((int)Math.round(anglesRight[0]));
+                    }
+                    if (angleLblsLeft[0] != null) {
+                        angleLblsLeft[0].setText((int)Math.round(anglesRight[0]) + "°");
+                    }
                 }
 
-                angleLbls[i].setText((int) angles[i] + "°");
+                angleLblsRight[i].setText((int) anglesRight[i] + "°");
                 updateArm();
-                break;
+                return;
             }
         }
+
+        // 2. Left joint sliders
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            if (e.getSource() == slidersLeft[i]) {
+                double oldVal = anglesLeft[i];
+                anglesLeft[i] = slidersLeft[i].getValue();
+
+                // Prevent gripper from going under floor
+                double[][] pts3d = armPanel.computeAllJoints3DLeft();
+                double[] ee = pts3d[NUM_JOINTS + 1];
+                if (ee[2] < 0) {
+                    anglesLeft[i] = oldVal;
+                    slidersLeft[i].setValue((int) Math.round(oldVal));
+                }
+
+                targetAnglesLeft[i] = anglesLeft[i];
+                
+                if (i == 0) {
+                    // Synchronize shared waist joint 1
+                    anglesRight[0] = anglesLeft[0];
+                    targetAnglesRight[0] = anglesLeft[0];
+                    if (slidersRight[0] != null && slidersRight[0].getValue() != (int)Math.round(anglesLeft[0])) {
+                        slidersRight[0].setValue((int)Math.round(anglesLeft[0]));
+                    }
+                    if (angleLblsRight[0] != null) {
+                        angleLblsRight[0].setText((int)Math.round(anglesLeft[0]) + "°");
+                    }
+                }
+
+                angleLblsLeft[i].setText((int) anglesLeft[i] + "°");
+                updateArm();
+                return;
+            }
+        }
+
+        // 3. Right Coordinate Slider drag
         for (int i = 0; i < 3; i++) {
-            JSlider s = (i == 0) ? slX : (i == 1) ? slY : slZ;
+            JSlider s = (i == 0) ? slXRight : (i == 1) ? slYRight : slZRight;
             if (e.getSource() == s && !isUpdatingFromFK) {
-                // UI -> IK
-                // Only run IK if we are NOT updating these sliders from FK
                 try {
-                    double px = slX.getValue();
-                    double py = slY.getValue();
-                    double pz = slZ.getValue();
-                    String prefCfg = configCombo.getSelectedIndex() == 0 ? "+" : "-";
-                    double[] res = solveIKSmart(px, py, pz, prefCfg);
+                    double px = slXRight.getValue();
+                    double py = slYRight.getValue();
+                    double pz = slZRight.getValue();
+                    String prefCfg = configComboRight.getSelectedIndex() == 0 ? "+" : "-";
+                    double[] res = solveIKSmartRight(px, py, pz, prefCfg);
                     if (res != null) {
-                        setTargetAngles(res);
-                        txX.setText(String.valueOf((int) px));
-                        txY.setText(String.valueOf((int) py));
-                        txZ.setText(String.valueOf((int) pz));
-                        setGotoStatus("OK", new Color(0, 140, 0));
+                        setTargetAnglesRight(res);
+                        txXRight.setText(String.valueOf((int) px));
+                        txYRight.setText(String.valueOf((int) py));
+                        txZRight.setText(String.valueOf((int) pz));
+                        setGotoStatusRight("OK", new Color(0, 140, 0));
                     }
                 } catch (Exception ex) {
                 }
-                break;
+                return;
+            }
+        }
+
+        // 4. Left Coordinate Slider drag
+        for (int i = 0; i < 3; i++) {
+            JSlider s = (i == 0) ? slXLeft : (i == 1) ? slYLeft : slZLeft;
+            if (e.getSource() == s && !isUpdatingFromFK) {
+                try {
+                    double px = slXLeft.getValue();
+                    double py = slYLeft.getValue();
+                    double pz = slZLeft.getValue();
+                    String prefCfg = configComboLeft.getSelectedIndex() == 0 ? "+" : "-";
+                    double[] res = solveIKSmartLeft(px, py, pz, prefCfg);
+                    if (res != null) {
+                        setTargetAnglesLeft(res);
+                        txXLeft.setText(String.valueOf((int) px));
+                        txYLeft.setText(String.valueOf((int) py));
+                        txZLeft.setText(String.valueOf((int) pz));
+                        setGotoStatusLeft("OK", new Color(0, 140, 0));
+                    }
+                } catch (Exception ex) {
+                }
+                return;
             }
         }
     }
 
     void updateArm() {
-        double[][] pts = armPanel.computeAllJoints3D();
-        // Index 5 (NUM_JOINTS) is the wrist. Index 6 (NUM_JOINTS + 1) is the distal
-        // Tool Tip.
-        double[] ee = pts[NUM_JOINTS + 1];
-        endEffectorLabel.setText(String.format("Tọa độ kẹp: (%.1f,  %.1f,  %.1f)", ee[0], ee[1], ee[2]));
+        double[][] ptsRight = armPanel.computeAllJoints3DRight();
+        double[] eeRight = ptsRight[NUM_JOINTS + 1];
+        endEffectorLabelRight.setText(String.format("Tọa độ kẹp (R): (%.1f,  %.1f,  %.1f)", eeRight[0], eeRight[1], eeRight[2]));
+
+        double[][] ptsLeft = armPanel.computeAllJoints3DLeft();
+        double[] eeLeft = ptsLeft[NUM_JOINTS + 1];
+        endEffectorLabelLeft.setText(String.format("Tọa độ kẹp (L): (%.1f,  %.1f,  %.1f)", eeLeft[0], eeLeft[1], eeLeft[2]));
 
         if (manualMode) {
             isUpdatingFromFK = true; // Lock IK
-            // FK -> UI
-            slX.removeChangeListener(this);
-            slY.removeChangeListener(this);
-            slZ.removeChangeListener(this);
 
-            slX.setValue((int) Math.round(ee[0]));
-            slY.setValue((int) Math.round(ee[1]));
-            slZ.setValue((int) Math.round(ee[2]));
+            // FK -> UI Right
+            slXRight.removeChangeListener(this);
+            slYRight.removeChangeListener(this);
+            slZRight.removeChangeListener(this);
 
-            txX.setText(String.format("%.1f", ee[0]));
-            txY.setText(String.format("%.1f", ee[1]));
-            txZ.setText(String.format("%.1f", ee[2]));
+            slXRight.setValue((int) Math.round(eeRight[0]));
+            slYRight.setValue((int) Math.round(eeRight[1]));
+            slZRight.setValue((int) Math.round(eeRight[2]));
 
-            slX.addChangeListener(this);
-            slY.addChangeListener(this);
-            slZ.addChangeListener(this);
+            txXRight.setText(String.format("%.1f", eeRight[0]));
+            txYRight.setText(String.format("%.1f", eeRight[1]));
+            txZRight.setText(String.format("%.1f", eeRight[2]));
+
+            slXRight.addChangeListener(this);
+            slYRight.addChangeListener(this);
+            slZRight.addChangeListener(this);
+
+            // FK -> UI Left
+            slXLeft.removeChangeListener(this);
+            slYLeft.removeChangeListener(this);
+            slZLeft.removeChangeListener(this);
+
+            slXLeft.setValue((int) Math.round(eeLeft[0]));
+            slYLeft.setValue((int) Math.round(eeLeft[1]));
+            slZLeft.setValue((int) Math.round(eeLeft[2]));
+
+            txXLeft.setText(String.format("%.1f", eeLeft[0]));
+            txYLeft.setText(String.format("%.1f", eeLeft[1]));
+            txZLeft.setText(String.format("%.1f", eeLeft[2]));
+
+            slXLeft.addChangeListener(this);
+            slYLeft.addChangeListener(this);
+            slZLeft.addChangeListener(this);
+
             isUpdatingFromFK = false; // Unlock IK
         }
 
@@ -908,8 +1129,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     void resetAngles() {
         armPanel.trail.clear();
-        double[] defaultPose = isRightArmSelected ? new double[] { 0, 0, 10.0, -30.0, 0, 0 } : new double[] { 0, 0, -10.0, 30.0, 0, 0 };
-        setTargetAngles(defaultPose);
+        double[] defaultPoseRight = { 0, 0, 10.0, -30.0, 0, 0 };
+        double[] defaultPoseLeft = { 0, 0, -10.0, 30.0, 0, 0 };
+        setTargetAnglesRight(defaultPoseRight);
+        setTargetAnglesLeft(defaultPoseLeft);
     }
 
     // Trajectory logic methods follow ...
@@ -929,17 +1152,29 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         showTrailCb.setSelected(false);
         armPanel.trail.clear();
 
-        String cfg = configCombo.getSelectedIndex() == 0 ? "+" : "-";
+        final boolean isRight = isRightArmSelected;
+        final double[] armAngles = isRight ? anglesRight : anglesLeft;
+        final double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
+        final JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
+        final JLabel[] armAngleLbls = isRight ? angleLblsRight : angleLblsLeft;
+        final JSlider armAlphaSlider = isRight ? alphaSliderRight : alphaSliderLeft;
+        final JComboBox<String> armConfigCombo = isRight ? configComboRight : configComboLeft;
+
+        String cfg = armConfigCombo.getSelectedIndex() == 0 ? "+" : "-";
         trajectoryLockedCfg = cfg;
         trajectoryLastQ = null;
-        trajectoryLastAlpha = alphaSlider.getValue();
+        trajectoryLastAlpha = armAlphaSlider.getValue();
 
         // Nhảy đến điểm xuất phát
         double[] startResult = solveIKForTrajectoryPoint(sx, sy, sz);
         if (startResult != null) {
             trajDebug("LINE_START_IK_OK", String.format("q=[%.1f, %.1f, %.1f, %.1f, %.1f]",
                     startResult[0], startResult[1], startResult[2], startResult[3], startResult[4]));
-            setTargetAngles(startResult);
+            if (isRight) {
+                setTargetAnglesRight(startResult);
+            } else {
+                setTargetAnglesLeft(startResult);
+            }
             trajectoryLastQ = startResult.clone();
             updateArm();
         } else {
@@ -990,7 +1225,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             waitMs[0] += 50;
             boolean arrived = true;
             for (int i = 0; i < NUM_JOINTS; i++) {
-                if (Math.abs(angles[i] - targetAngles[i]) > 0.5)
+                if (Math.abs(armAngles[i] - armTargetAngles[i]) > 0.5)
                     arrived = false;
             }
             if (arrived || waitMs[0] >= 5000) {
@@ -1032,18 +1267,22 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         if (result != null) {
                             trajectoryLastQ = result.clone();
                             for (int i = 0; i < NUM_JOINTS; i++) {
-                                targetAngles[i] = angles[i] = result[i];
-                                sliders[i].removeChangeListener(this);
-                                sliders[i].setValue((int) Math.round(angles[i]));
-                                sliders[i].addChangeListener(this);
-                                angleLbls[i].setText((int) Math.round(angles[i]) + "°");
+                                armTargetAngles[i] = armAngles[i] = result[i];
+                                armSliders[i].removeChangeListener(this);
+                                armSliders[i].setValue((int) Math.round(armAngles[i]));
+                                armSliders[i].addChangeListener(this);
+                                armAngleLbls[i].setText((int) Math.round(armAngles[i]) + "°");
                             }
                             updateArm();
                         } else {
                             trajDebug("LINE_TRACK_HOLD",
                                     String.format("No IK at p=(%.2f, %.2f, %.2f), hold last pose", tx, ty, tz));
                             if (trajectoryLastQ != null) {
-                                setTargetAngles(trajectoryLastQ);
+                                if (isRight) {
+                                    setTargetAnglesRight(trajectoryLastQ);
+                                } else {
+                                    setTargetAnglesLeft(trajectoryLastQ);
+                                }
                             }
                             setGotoStatus("~ Điểm khó đạt, đang giữ pose gần nhất", new Color(180, 110, 0));
                         }
@@ -1072,10 +1311,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         showTrailCb.setSelected(false);
         armPanel.trail.clear();
 
-        String cfg = configCombo.getSelectedIndex() == 0 ? "+" : "-";
+        final boolean isRight = isRightArmSelected;
+        final double[] armAngles = isRight ? anglesRight : anglesLeft;
+        final double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
+        final JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
+        final JLabel[] armAngleLbls = isRight ? angleLblsRight : angleLblsLeft;
+        final JSlider armAlphaSlider = isRight ? alphaSliderRight : alphaSliderLeft;
+        final JComboBox<String> armConfigCombo = isRight ? configComboRight : configComboLeft;
+
+        String cfg = armConfigCombo.getSelectedIndex() == 0 ? "+" : "-";
         trajectoryLockedCfg = cfg;
         trajectoryLastQ = null;
-        trajectoryLastAlpha = alphaSlider.getValue();
+        trajectoryLastAlpha = armAlphaSlider.getValue();
 
         // Tính toán điểm xuất phát của Xoắn ốc tại thời điểm t = 0
         double startX = cx + R * Math.cos(0);
@@ -1086,7 +1333,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (startResult != null) {
             trajDebug("SPIRAL_START_IK_OK", String.format("q=[%.1f, %.1f, %.1f, %.1f, %.1f]",
                     startResult[0], startResult[1], startResult[2], startResult[3], startResult[4]));
-            setTargetAngles(startResult);
+            if (isRight) {
+                setTargetAnglesRight(startResult);
+            } else {
+                setTargetAnglesLeft(startResult);
+            }
             trajectoryLastQ = startResult.clone();
             updateArm();
         } else {
@@ -1103,7 +1354,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             waitMs[0] += 50;
             boolean arrived = true;
             for (int i = 0; i < NUM_JOINTS; i++) {
-                if (Math.abs(angles[i] - targetAngles[i]) > 0.5)
+                if (Math.abs(armAngles[i] - armTargetAngles[i]) > 0.5)
                     arrived = false;
             }
             if (arrived || waitMs[0] >= 5000) {
@@ -1143,18 +1394,22 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         if (result != null) {
                             trajectoryLastQ = result.clone();
                             for (int i = 0; i < NUM_JOINTS; i++) {
-                                targetAngles[i] = angles[i] = result[i];
-                                sliders[i].removeChangeListener(this);
-                                sliders[i].setValue((int) Math.round(angles[i]));
-                                sliders[i].addChangeListener(this);
-                                angleLbls[i].setText((int) Math.round(angles[i]) + "°");
+                                armTargetAngles[i] = armAngles[i] = result[i];
+                                armSliders[i].removeChangeListener(this);
+                                armSliders[i].setValue((int) Math.round(armAngles[i]));
+                                armSliders[i].addChangeListener(this);
+                                armAngleLbls[i].setText((int) Math.round(armAngles[i]) + "°");
                             }
                             updateArm();
                         } else {
                             trajDebug("SPIRAL_TRACK_HOLD",
                                     String.format("No IK at p=(%.2f, %.2f, %.2f), hold last pose", tx, ty, tz));
                             if (trajectoryLastQ != null) {
-                                setTargetAngles(trajectoryLastQ);
+                                if (isRight) {
+                                    setTargetAnglesRight(trajectoryLastQ);
+                                } else {
+                                    setTargetAnglesLeft(trajectoryLastQ);
+                                }
                             }
                             setGotoStatus("~ Điểm khó đạt, đang giữ pose gần nhất", new Color(180, 110, 0));
                         }
@@ -1188,8 +1443,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private double[] solveIKForTrajectoryPoint(double px, double py, double pz) {
         boolean isFirstWaypoint = (trajectoryLastQ == null);
-        // First point anchors to current pose; next points anchor to previous trajectory IK.
-        double[] qRef = isFirstWaypoint ? angles : trajectoryLastQ;
+        double[] currentAngles = isRightArmSelected ? anglesRight : anglesLeft;
+        double[] qRef = isFirstWaypoint ? currentAngles : trajectoryLastQ;
         String altCfg = trajectoryLockedCfg.equals("+") ? "-" : "+";
         String[] cfgCandidates = isFirstWaypoint ? new String[] { trajectoryLockedCfg, altCfg }
                 : new String[] { trajectoryLockedCfg };
@@ -1205,11 +1460,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         String bestRelaxedCfg = trajectoryLockedCfg;
 
         // 1) Search near previous alpha to avoid branch jumping
-        for (String cfgTry : cfgCandidates) {
-            for (double a = trajectoryLastAlpha - 12; a <= trajectoryLastAlpha + 12; a += 1.0) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, cfgTry);
-                for (double[] q : candidates) {
-                    double posErr = computePositionError(q, px, py, pz);
+        for (double a = trajectoryLastAlpha - 12; a <= trajectoryLastAlpha + 12; a += 1.0) {
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected);
+            for (double[] q : candidates) {
+                double posErr = computePositionError(q, px, py, pz);
+                for (String cfgTry : cfgCandidates) {
+                    String actualCfg = getActualConfig(q, isRightArmSelected);
+                    if (!actualCfg.equals(cfgTry)) continue;
                     double c = posErr * 220.0 + continuityCost(q, qRef) * 0.04;
                     if (posErr <= MAX_IK_POSITION_ERROR && c < bestStrictCost) {
                         bestStrictCost = c;
@@ -1227,14 +1484,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         }
 
-        // 2) Fallback to global scan if local search fails
+        // 2) Fallback to global scan if local search fails or is inaccurate
         if (bestStrictQ == null && bestRelaxedQ == null) {
             String[] cfgFallback = isFirstWaypoint ? cfgCandidates : new String[] { trajectoryLockedCfg, altCfg };
-            for (String cfgTry : cfgFallback) {
-                for (double a = -90; a <= 30; a += 1.5) {
-                    List<double[]> candidates = tryAlpha(px, py, pz, a, cfgTry);
-                    for (double[] q : candidates) {
-                        double posErr = computePositionError(q, px, py, pz);
+            for (double a = -90; a <= 30; a += 1.5) {
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected);
+                for (double[] q : candidates) {
+                    double posErr = computePositionError(q, px, py, pz);
+                    for (String cfgTry : cfgFallback) {
+                        String actualCfg = getActualConfig(q, isRightArmSelected);
+                        if (!actualCfg.equals(cfgTry)) continue;
                         double c = posErr * 220.0 + continuityCost(q, qRef) * 0.04;
                         if (posErr <= MAX_IK_POSITION_ERROR && c < bestStrictCost) {
                             bestStrictCost = c;
@@ -1415,17 +1674,34 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     public double[] solveIKSmart(double px, double py, double pz, String preferredConfig) {
+        return solveIKSmartInternal(px, py, pz, preferredConfig, isRightArmSelected);
+    }
+
+    public double[] solveIKSmartRight(double px, double py, double pz, String preferredConfig) {
         long startTime = System.currentTimeMillis();
-        double[] result = solveIKSmartInternal(px, py, pz, preferredConfig);
+        double[] result = solveIKSmartInternal(px, py, pz, preferredConfig, true);
         long endTime = System.currentTimeMillis();
-        System.out.println("--- solveIKSmart total time: " + (endTime - startTime) + " ms ---");
+        System.out.println("--- solveIKSmartRight total time: " + (endTime - startTime) + " ms ---");
         return result;
     }
 
-    private double[] solveIKSmartInternal(double px, double py, double pz, String preferredConfig) {
-        if (fixedAlphaCb.isSelected()) {
-            double currentAlpha = alphaSlider.getValue();
-            List<double[]> candidates = tryAlpha(px, py, pz, currentAlpha, preferredConfig);
+    public double[] solveIKSmartLeft(double px, double py, double pz, String preferredConfig) {
+        long startTime = System.currentTimeMillis();
+        double[] result = solveIKSmartInternal(px, py, pz, preferredConfig, false);
+        long endTime = System.currentTimeMillis();
+        System.out.println("--- solveIKSmartLeft total time: " + (endTime - startTime) + " ms ---");
+        return result;
+    }
+
+    private double[] solveIKSmartInternal(double px, double py, double pz, String preferredConfig, boolean isRight) {
+        JCheckBox fAlphaCb = isRight ? fixedAlphaCbRight : fixedAlphaCbLeft;
+        JSlider aSlider = isRight ? alphaSliderRight : alphaSliderLeft;
+        JComboBox<String> cCombo = isRight ? configComboRight : configComboLeft;
+        double[] activeAngles = isRight ? anglesRight : anglesLeft;
+
+        if (fAlphaCb.isSelected()) {
+            double currentAlpha = aSlider.getValue();
+            List<double[]> candidates = tryAlpha(px, py, pz, currentAlpha, isRight);
             double[] best = selectBestByPositionError(candidates, px, py, pz);
             if (best != null && ikSelectionLogEnabled) {
                 double err = computePositionError(best, px, py, pz);
@@ -1437,32 +1713,30 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double minCost = Double.MAX_VALUE;
         double[] bestQ = null;
-        double bestAlpha = alphaSlider.getValue();
+        double bestAlpha = aSlider.getValue();
         double[] q_pref = new double[NUM_JOINTS];
         q_pref[2] = 60.0;
         q_pref[3] = -35.0;
 
-        double currentAlpha = alphaSlider.getValue();
+        double currentAlpha = aSlider.getValue();
 
         // 1. Try local search around current alpha first (very fast, covers small movements)
         for (double a = currentAlpha - 15; a <= currentAlpha + 15; a += 5.0) {
-            String[] configs = { "+", "-" };
-            String userPref = configCombo.getSelectedIndex() == 0 ? "+" : "-";
+            String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
-            for (String cfg : configs) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, cfg);
-                for (double[] q : candidates) {
-                    double posErr = computePositionError(q, px, py, pz);
-                    if (posErr > MAX_IK_POSITION_ERROR) {
-                        continue;
-                    }
-                    double cost = calculateIKCost(a, q, angles, q_pref, cfg, userPref);
-                    cost += posErr * 50.0;
-                    if (cost < minCost) {
-                        minCost = cost;
-                        bestQ = q;
-                        bestAlpha = a;
-                    }
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight);
+            for (double[] q : candidates) {
+                double posErr = computePositionError(q, px, py, pz);
+                if (posErr > MAX_IK_POSITION_ERROR) {
+                    continue;
+                }
+                String actualCfg = getActualConfig(q, isRight);
+                double cost = calculateIKCost(a, q, activeAngles, q_pref, actualCfg, userPref, isRight);
+                cost += posErr * 50.0;
+                if (cost < minCost) {
+                    minCost = cost;
+                    bestQ = q;
+                    bestAlpha = a;
                 }
             }
         }
@@ -1471,8 +1745,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (bestQ != null && computePositionError(bestQ, px, py, pz) < 0.2) {
             final double finalAlpha = bestAlpha;
             SwingUtilities.invokeLater(() -> {
-                if (!alphaSlider.getValueIsAdjusting()) {
-                    alphaSlider.setValue((int) Math.round(finalAlpha));
+                if (!aSlider.getValueIsAdjusting()) {
+                    aSlider.setValue((int) Math.round(finalAlpha));
                 }
             });
             if (ikSelectionLogEnabled) {
@@ -1485,23 +1759,21 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // 2. Fallback to global scan if local search fails or is inaccurate
         for (double a = -90; a <= 30; a += 5.0) {
-            String[] configs = { "+", "-" };
-            String userPref = configCombo.getSelectedIndex() == 0 ? "+" : "-";
+            String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
-            for (String cfg : configs) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, cfg);
-                for (double[] q : candidates) {
-                    double posErr = computePositionError(q, px, py, pz);
-                    if (posErr > MAX_IK_POSITION_ERROR) {
-                        continue;
-                    }
-                    double cost = calculateIKCost(a, q, angles, q_pref, cfg, userPref);
-                    cost += posErr * 50.0;
-                    if (cost < minCost) {
-                        minCost = cost;
-                        bestQ = q;
-                        bestAlpha = a;
-                    }
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight);
+            for (double[] q : candidates) {
+                double posErr = computePositionError(q, px, py, pz);
+                if (posErr > MAX_IK_POSITION_ERROR) {
+                    continue;
+                }
+                String actualCfg = getActualConfig(q, isRight);
+                double cost = calculateIKCost(a, q, activeAngles, q_pref, actualCfg, userPref, isRight);
+                cost += posErr * 50.0;
+                if (cost < minCost) {
+                    minCost = cost;
+                    bestQ = q;
+                    bestAlpha = a;
                 }
             }
         }
@@ -1509,8 +1781,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (bestQ != null) {
             final int optimalA = (int) Math.round(bestAlpha);
             SwingUtilities.invokeLater(() -> {
-                if (!alphaSlider.getValueIsAdjusting()) {
-                    alphaSlider.setValue(optimalA);
+                if (!aSlider.getValueIsAdjusting()) {
+                    aSlider.setValue(optimalA);
                 }
             });
             if (ikSelectionLogEnabled) {
@@ -1552,7 +1824,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
      * user)
      */
     private double calculateIKCost(double alphaDeg, double[] q, double[] q_prev, double[] q_pref, String cfg,
-            String prefCfg) {
+            String prefCfg, boolean isRight) {
         // 1. Smoothness (w=1.0): Sum of squared joint differences (in Radians)
         // Exclude Joint 2 (i==1) from smoothness penalty to allow shoulder pitch to move freely
         double jSmooth = 0;
@@ -1567,8 +1839,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         // 2. Limits (w=0.5): Penalty for being near limits (10% margin, in Radians^2)
-        double[] minLim = isRightArmSelected ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
-        double[] maxLim = isRightArmSelected ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
+        double[] minLim = isRight ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
+        double[] maxLim = isRight ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
         double jLimit = 0;
         for (int i = 0; i < NUM_JOINTS; i++) {
             double range = 360;
@@ -1584,7 +1856,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // 3. Posture (w=1.5): Deviation from preferred home (normalized by pi/2).
         double jPosture = 0;
         double q3 = q[2];
-        if (isRightArmSelected) {
+        if (isRight) {
             if (q3 < 0) {
                 jPosture += 5.0 * Math.pow(Math.toRadians(q3), 2); // Heavy penalty for wrong sign
             } else {
@@ -1599,7 +1871,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         double q4 = q[3];
-        double q4_pref = isRightArmSelected ? -45.0 : 45.0;
+        double q4_pref = isRight ? -45.0 : 45.0;
         jPosture += 0.2 * Math.pow(Math.toRadians(q4 - q4_pref), 2);
 
         // 4. Alpha (w=1.0): Deviation from preferred alpha (-pi/6). Increased weight to
@@ -1615,19 +1887,27 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return (0.15 * jSmooth) + (0.5 * jLimit) + (3.0 * jPosture) + (0.5 * jPhi) + jConfig;
     }
 
-    private List<double[]> tryAlpha(double px, double py, double pz, double alphaDeg, String prefCfg) {
+    private String getActualConfig(double[] q, boolean isRight) {
+        if (isRight) {
+            return q[2] >= 0 ? "+" : "-";
+        } else {
+            return q[2] <= 0 ? "+" : "-";
+        }
+    }
+
+    private List<double[]> tryAlpha(double px, double py, double pz, double alphaDeg, boolean isRight) {
         List<double[]> validSolutions = new ArrayList<>();
         double alpha_rad = Math.toRadians(alphaDeg);
-        double q1_min = isRightArmSelected ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
-        double q1_max = isRightArmSelected ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
+        double q1_min = isRight ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
+        double q1_max = isRight ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
         double q1_base = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), Math.atan2(py, px)));
         
         double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
         double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
 
-        // Try multiple yaw offsets for the tool orientation. This allows the tool
-        // to rotate around its own vertical axis, freeing the arm to use Joint 2 (shoulder pitch).
-        double[] yawOffsets = { -30.0, -15.0, 0.0, 15.0, 30.0 };
+        double[] yawOffsets = { 0.0, -15.0, 15.0, -30.0, 30.0 };
+        double[] activeAngles = isRight ? anglesRight : anglesLeft;
+
         
         for (double offsetDeg : yawOffsets) {
             double yaw = q1_base + Math.toRadians(offsetDeg);
@@ -1635,40 +1915,41 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             double[][] R_z = { { cy, -sy, 0 }, { sy, cy, 0 }, { 0, 0, 1 } };
             double[][] R_target = multiplyMatrices(R_z, R_y);
 
-            // Convert current angles to radians for initial guess
             double[] qInit = new double[NUM_JOINTS];
             for (int i = 0; i < NUM_JOINTS; i++) {
-                qInit[i] = Math.toRadians(angles[i]);
+                qInit[i] = Math.toRadians(activeAngles[i]);
             }
             
-            // 1. Try local neighborhood search
-            double[] q = solveIK(px, py, pz, R_target, qInit, isRightArmSelected);
+            double[] q = solveIK(px, py, pz, R_target, qInit, isRight);
             boolean localSearchOk = false;
-            if (q != null && isWithinLimits(q)) {
+            if (q != null && isWithinLimits(q, isRight)) {
                 addUniqueSolution(validSolutions, q);
                 double err = computePositionError(q, px, py, pz);
                 if (err < 0.1) {
                     localSearchOk = true;
+                    if (offsetDeg == 0.0) {
+                        return validSolutions;
+                    }
                 }
             }
 
-            // 2. Try standard home postures with multiple Joint 2 initial guesses to avoid local minima
             if (!localSearchOk) {
                 double[] q2_guesses = { 1.2, 0.6, 0.0, -0.6, -1.2 };
                 for (double q2_val : q2_guesses) {
                     double[] qHome = new double[NUM_JOINTS];
                     qHome[0] = qInit[0];
                     qHome[1] = q2_val;
-                    // Joint 3: Right Arm prefers positive (0.3), Left Arm prefers negative (-0.3)
-                    qHome[2] = isRightArmSelected ? 0.3 : -0.3;
-                    // Joint 4: Right Arm prefers negative (-35 deg), Left Arm prefers positive (35 deg)
-                    qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
+                    qHome[2] = isRight ? 0.3 : -0.3;
+                    qHome[3] = isRight ? Math.toRadians(-35.0) : Math.toRadians(35.0);
                     
-                    double[] q2 = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
-                    if (q2 != null && isWithinLimits(q2)) {
+                    double[] q2 = solveIK(px, py, pz, R_target, qHome, isRight);
+                    if (q2 != null && isWithinLimits(q2, isRight)) {
                         addUniqueSolution(validSolutions, q2);
                     }
                 }
+            }
+            if (offsetDeg == 0.0 && validSolutions.isEmpty()) {
+                break;
             }
         }
         return validSolutions;
@@ -1689,11 +1970,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     public double[] solveIKSmart(double px, double py, double pz, double[][] R_target) {
         double[] qInit = new double[NUM_JOINTS];
+        double[] activeAngles = isRightArmSelected ? anglesRight : anglesLeft;
         for (int i = 0; i < NUM_JOINTS; i++) {
-            qInit[i] = Math.toRadians(angles[i]);
+            qInit[i] = Math.toRadians(activeAngles[i]);
         }
         double[] q = solveIK(px, py, pz, R_target, qInit, isRightArmSelected);
-        if (q != null && isWithinLimits(q)) {
+        if (q != null && isWithinLimits(q, isRightArmSelected)) {
             return q;
         }
         
@@ -1708,7 +1990,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
             
             q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
-            if (q != null && isWithinLimits(q)) {
+            if (q != null && isWithinLimits(q, isRightArmSelected)) {
                 return q;
             }
         }
@@ -1735,11 +2017,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] best = null;
         double[] minLim = isRightArmSelected ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
         double[] maxLim = isRightArmSelected ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
+        double[] activeAngles = isRightArmSelected ? anglesRight : anglesLeft;
         for (double[] q : solutions) {
             double score = 0;
             for (int i = 0; i < NUM_JOINTS; i++) {
                 double qDeg = q[i]; // q is already in Degrees
-                double diffCurrent = Math.abs(qDeg - angles[i]);
+                double diffCurrent = Math.abs(qDeg - activeAngles[i]);
                 if (diffCurrent > 180)
                     diffCurrent = 360 - diffCurrent;
                 score += diffCurrent * ((i == 1) ? 0.3 : 2.0);
@@ -1758,10 +2041,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private boolean isWithinLimits(double[] q) {
-        double[] minLim = isRightArmSelected ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
-        double[] maxLim = isRightArmSelected ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
+        return isWithinLimits(q, isRightArmSelected);
+    }
+
+    private boolean isWithinLimits(double[] q, boolean isRight) {
+        double[] minLim = isRight ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
+        double[] maxLim = isRight ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
         for (int i = 0; i < q.length; i++) {
-            // q is in Degrees, limits are in Degrees
             if (q[i] < (minLim[i] - 0.1) || q[i] > (maxLim[i] + 0.1))
                 return false;
         }
