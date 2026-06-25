@@ -1900,7 +1900,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double alpha_rad = Math.toRadians(alphaDeg);
         double q1_min = isRight ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
         double q1_max = isRight ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
-        double q1_base = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), Math.atan2(py, px)));
+        double q1_base = isRight ? Math.atan2(py, px) : -Math.atan2(py, -px);
+        q1_base = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), q1_base));
         
         double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
         double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
@@ -1908,12 +1909,24 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] yawOffsets = { 0.0, -15.0, 15.0, -30.0, 30.0 };
         double[] activeAngles = isRight ? anglesRight : anglesLeft;
 
-        
         for (double offsetDeg : yawOffsets) {
             double yaw = q1_base + Math.toRadians(offsetDeg);
-            double cy = Math.cos(yaw), sy = Math.sin(yaw);
-            double[][] R_z = { { cy, -sy, 0 }, { sy, cy, 0 }, { 0, 0, 1 } };
-            double[][] R_target = multiplyMatrices(R_z, R_y);
+            double[][] R_target;
+            if (isRight) {
+                double cy = Math.cos(yaw), sy = Math.sin(yaw);
+                double[][] R_z = { { cy, -sy, 0 }, { sy, cy, 0 }, { 0, 0, 1 } };
+                R_target = multiplyMatrices(R_z, R_y);
+            } else {
+                double yawR = -yaw;
+                double cyR = Math.cos(yawR), syR = Math.sin(yawR);
+                double[][] R_z_right = { { cyR, -syR, 0 }, { syR, cyR, 0 }, { 0, 0, 1 } };
+                double[][] R_target_right = multiplyMatrices(R_z_right, R_y);
+                R_target = new double[][] {
+                    {  R_target_right[0][0], -R_target_right[0][1], -R_target_right[0][2] },
+                    { -R_target_right[1][0],  R_target_right[1][1],  R_target_right[1][2] },
+                    { -R_target_right[2][0],  R_target_right[2][1],  R_target_right[2][2] }
+                };
+            }
 
             double[] qInit = new double[NUM_JOINTS];
             for (int i = 0; i < NUM_JOINTS; i++) {
@@ -1981,7 +1994,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             double[] qHome = new double[NUM_JOINTS];
             double q1_min = isRightArmSelected ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
             double q1_max = isRightArmSelected ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
-            qHome[0] = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), Math.atan2(py, px)));
+            double q1_base = isRightArmSelected ? Math.atan2(py, px) : -Math.atan2(py, -px);
+            qHome[0] = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), q1_base));
             qHome[1] = q2_val;
             qHome[2] = isRightArmSelected ? 0.3 : -0.3;
             qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
@@ -1998,12 +2012,28 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double alpha_rad = Math.toRadians(alpha_deg);
         double q1_min = isRightArmSelected ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
         double q1_max = isRightArmSelected ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
-        double q1 = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), Math.atan2(py, px)));
-        double c1 = Math.cos(q1), s1 = Math.sin(q1);
-        double ca = Math.cos(-alpha_rad), sa = Math.sin(-alpha_rad);
-        double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
-        double[][] R_z = { { c1, -s1, 0 }, { s1, c1, 0 }, { 0, 0, 1 } };
-        double[][] R_target = multiplyMatrices(R_z, R_y);
+        double q1_base = isRightArmSelected ? Math.atan2(py, px) : -Math.atan2(py, -px);
+        double q1 = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), q1_base));
+        double[][] R_target;
+        if (isRightArmSelected) {
+            double c1 = Math.cos(q1), s1 = Math.sin(q1);
+            double ca = Math.cos(-alpha_rad), sa = Math.sin(-alpha_rad);
+            double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
+            double[][] R_z = { { c1, -s1, 0 }, { s1, c1, 0 }, { 0, 0, 1 } };
+            R_target = multiplyMatrices(R_z, R_y);
+        } else {
+            double q1R = -q1;
+            double c1R = Math.cos(q1R), s1R = Math.sin(q1R);
+            double ca = Math.cos(-alpha_rad), sa = Math.sin(-alpha_rad);
+            double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
+            double[][] R_z_right = { { c1R, -s1R, 0 }, { s1R, c1R, 0 }, { 0, 0, 1 } };
+            double[][] R_target_right = multiplyMatrices(R_z_right, R_y);
+            R_target = new double[][] {
+                {  R_target_right[0][0], -R_target_right[0][1], -R_target_right[0][2] },
+                { -R_target_right[1][0],  R_target_right[1][1],  R_target_right[1][2] },
+                { -R_target_right[2][0],  R_target_right[2][1],  R_target_right[2][2] }
+            };
+        }
         return solveIKSmart(px, py, pz, R_target);
     }
 
