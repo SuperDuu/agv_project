@@ -15,6 +15,8 @@ public class ArmPanel extends JPanel
     int demoStep = 0;
     double[] clickTarget = null; // To draw where we clicked
     ArrayList<double[]> workspacePoints = new ArrayList<>();
+    ArrayList<double[]> workspacePointsRight = new ArrayList<>();
+    ArrayList<double[]> workspacePointsLeft = new ArrayList<>();
     java.util.HashSet<String> workspaceKeys = new java.util.HashSet<>();
 
     MainFrame robot;
@@ -830,33 +832,85 @@ public class ArmPanel extends JPanel
     void drawWorkspace(Graphics2D g2, int cx, int cy) {
         if (workspacePoints.isEmpty())
             return;
-        g2.setColor(new Color(110, 170, 255, 80));
-        g2.setStroke(new BasicStroke(1));
-        synchronized (workspacePoints) {
-            for (int i = 0; i < workspacePoints.size() - 1; i++) {
-                int[] p1 = project(workspacePoints.get(i), cx, cy);
-                int[] p2 = project(workspacePoints.get(i + 1), cx, cy);
-                if (Math.abs(p1[0] - p2[0]) < 150 && Math.abs(p1[1] - p2[1]) < 150) {
-                    g2.drawLine(p1[0], p1[1], p2[0], p2[1]);
+
+        // Draw Right Workspace (Cyan)
+        if (!workspacePointsRight.isEmpty()) {
+            g2.setColor(new Color(0, 150, 255, 45)); // translucent cyan/blue
+            g2.setStroke(new BasicStroke(1));
+            synchronized (workspacePointsRight) {
+                for (int i = 0; i < workspacePointsRight.size() - 1; i++) {
+                    int[] p1 = project(workspacePointsRight.get(i), cx, cy);
+                    int[] p2 = project(workspacePointsRight.get(i + 1), cx, cy);
+                    if (Math.abs(p1[0] - p2[0]) < 150 && Math.abs(p1[1] - p2[1]) < 150) {
+                        g2.drawLine(p1[0], p1[1], p2[0], p2[1]);
+                    }
+                }
+            }
+            g2.setColor(new Color(0, 150, 255, 80));
+            synchronized (workspacePointsRight) {
+                for (double[] p : workspacePointsRight) {
+                    int[] sc = project(p, cx, cy);
+                    g2.fillRect(sc[0], sc[1], 2, 2);
                 }
             }
         }
-        g2.setColor(new Color(110, 170, 255, 120));
-        synchronized (workspacePoints) {
-            for (double[] p : workspacePoints) {
-                int[] sc = project(p, cx, cy);
-                g2.fillRect(sc[0], sc[1], 2, 2);
+
+        // Draw Left Workspace (Pink/Magenta)
+        if (!workspacePointsLeft.isEmpty()) {
+            g2.setColor(new Color(255, 0, 128, 45)); // translucent pink/magenta
+            g2.setStroke(new BasicStroke(1));
+            synchronized (workspacePointsLeft) {
+                for (int i = 0; i < workspacePointsLeft.size() - 1; i++) {
+                    int[] p1 = project(workspacePointsLeft.get(i), cx, cy);
+                    int[] p2 = project(workspacePointsLeft.get(i + 1), cx, cy);
+                    if (Math.abs(p1[0] - p2[0]) < 150 && Math.abs(p1[1] - p2[1]) < 150) {
+                        g2.drawLine(p1[0], p1[1], p2[0], p2[1]);
+                    }
+                }
+            }
+            g2.setColor(new Color(255, 0, 128, 80));
+            synchronized (workspacePointsLeft) {
+                for (double[] p : workspacePointsLeft) {
+                    int[] sc = project(p, cx, cy);
+                    g2.fillRect(sc[0], sc[1], 2, 2);
+                }
             }
         }
     }
 
     void addWorkspacePoint(double[] p) {
+        addWorkspacePoint(p, robot.isRightArmSelected);
+    }
+
+    void addWorkspacePoint(double[] p, boolean isRight) {
         String key = (int) (p[0] / 2) + "," + (int) (p[1] / 2) + "," + (int) (p[2] / 2);
         if (!workspaceKeys.contains(key)) {
             synchronized (workspacePoints) {
                 workspacePoints.add(p.clone());
             }
+            if (isRight) {
+                synchronized (workspacePointsRight) {
+                    workspacePointsRight.add(p.clone());
+                }
+            } else {
+                synchronized (workspacePointsLeft) {
+                    workspacePointsLeft.add(p.clone());
+                }
+            }
             workspaceKeys.add(key);
         }
+    }
+
+    public void clearWorkspace() {
+        synchronized (workspacePoints) {
+            workspacePoints.clear();
+        }
+        synchronized (workspacePointsRight) {
+            workspacePointsRight.clear();
+        }
+        synchronized (workspacePointsLeft) {
+            workspacePointsLeft.clear();
+        }
+        workspaceKeys.clear();
     }
 }
