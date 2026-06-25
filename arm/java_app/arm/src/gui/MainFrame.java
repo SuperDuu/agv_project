@@ -1923,12 +1923,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             double[] q = solveIK(px, py, pz, R_target, qInit, isRight);
             boolean localSearchOk = false;
             if (q != null && isWithinLimits(q, isRight)) {
-                double[] qDeg = new double[NUM_JOINTS];
-                for (int i = 0; i < NUM_JOINTS; i++) {
-                    qDeg[i] = Math.toDegrees(q[i]);
-                }
-                addUniqueSolution(validSolutions, qDeg);
-                double err = computePositionError(qDeg, px, py, pz);
+                addUniqueSolution(validSolutions, q);
+                double err = computePositionError(q, px, py, pz);
                 if (err < 0.1) {
                     localSearchOk = true;
                     if (offsetDeg == 0.0) {
@@ -1948,11 +1944,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     
                     double[] q2 = solveIK(px, py, pz, R_target, qHome, isRight);
                     if (q2 != null && isWithinLimits(q2, isRight)) {
-                        double[] q2Deg = new double[NUM_JOINTS];
-                        for (int i = 0; i < NUM_JOINTS; i++) {
-                            q2Deg[i] = Math.toDegrees(q2[i]);
-                        }
-                        addUniqueSolution(validSolutions, q2Deg);
+                        addUniqueSolution(validSolutions, q2);
                     }
                 }
             }
