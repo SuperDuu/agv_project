@@ -1874,16 +1874,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double q4_pref = isRight ? -45.0 : 45.0;
         jPosture += 0.2 * Math.pow(Math.toRadians(q4 - q4_pref), 2);
 
-        // 3b. Wrist Pitch (Joint 5): Prevent backward bending (prefer negative for Right, positive for Left)
+        // 3b. Wrist Pitch (Joint 5): Prevent backward bending (prefer positive for Right, negative for Left)
         double q5 = q[4];
         if (isRight) {
-            if (q5 > 0) {
+            if (q5 < 0) {
                 jPosture += 4.0 * Math.pow(Math.toRadians(q5), 2); // Heavy penalty for wrong sign
             } else {
                 jPosture += 0.2 * Math.pow(Math.toRadians(q5), 2); // Small pull to keep close to 0
             }
         } else {
-            if (q5 < 0) {
+            if (q5 > 0) {
                 jPosture += 4.0 * Math.pow(Math.toRadians(q5), 2); // Heavy penalty for wrong sign
             } else {
                 jPosture += 0.2 * Math.pow(Math.toRadians(q5), 2); // Small pull to keep close to 0
