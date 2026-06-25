@@ -71,6 +71,13 @@ def main():
             data_str = json.dumps(packet)
             sock.sendto(data_str.encode('utf-8'), (udp_ip, udp_port))
 
+            # Print debug info to console when there is active input
+            has_active_axis = any(abs(a) > 0.15 for a in axes)
+            has_active_btn = any(b == 1 for b in buttons)
+            has_active_hat = any(h != 0 for h in hats)
+            if has_active_axis or has_active_btn or has_active_hat:
+                print(f"[DEBUG_CONTROLLER] Axes: {axes} | Buttons: {buttons} | Hats: {hats}")
+
             # Limit rate to 50Hz (20ms) for responsive, low-latency control
             clock.tick(50)
 
