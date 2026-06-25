@@ -109,12 +109,15 @@ public class ArmPanel extends JPanel
         }
 
         double[] targetPos = { p0, p1, fixedZ };
+        System.out.printf("[DEBUG_CLICK] Click position: (X=%.2f, Y=%.2f, Z=%.2f)\n", p0, p1, fixedZ);
         
         String prefCfgRight = robot.configComboRight.getSelectedIndex() == 0 ? "+" : "-";
         double[] resultRight = robot.solveIKSmartRight(p0, p1, fixedZ, prefCfgRight);
+        System.out.printf("[DEBUG_CLICK] Right Arm Solver: %s\n", resultRight == null ? "FAILED" : "SUCCESS");
         
         String prefCfgLeft = robot.configComboLeft.getSelectedIndex() == 0 ? "+" : "-";
         double[] resultLeft = robot.solveIKSmartLeft(p0, p1, fixedZ, prefCfgLeft);
+        System.out.printf("[DEBUG_CLICK] Left Arm Solver: %s\n", resultLeft == null ? "FAILED" : "SUCCESS");
 
         boolean chooseRight = true;
         double[] chosenResult = null;
@@ -122,6 +125,7 @@ public class ArmPanel extends JPanel
         if (resultRight != null && resultLeft != null) {
             double costRight = calculateMovementCost(resultRight, robot.getAnglesRight());
             double costLeft = calculateMovementCost(resultLeft, robot.getAnglesLeft());
+            System.out.printf("[DEBUG_CLICK] Both reached. costRight=%.2f, costLeft=%.2f\n", costRight, costLeft);
             if (costRight <= costLeft) {
                 chooseRight = true;
                 chosenResult = resultRight;
@@ -136,6 +140,7 @@ public class ArmPanel extends JPanel
             chooseRight = false;
             chosenResult = resultLeft;
         }
+        System.out.printf("[DEBUG_CLICK] Decision: Chosen Arm = %s\n", chosenResult == null ? "NONE" : (chooseRight ? "RIGHT" : "LEFT"));
 
         if (chosenResult != null) {
             robot.isRightArmSelected = chooseRight;
