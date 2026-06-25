@@ -147,12 +147,22 @@ public class ArmPanel extends JPanel
             robot.trajArmCombo.setSelectedIndex(chooseRight ? 0 : 1);
             if (chooseRight) {
                 robot.setTargetAnglesRight(chosenResult);
+                
+                // Retract Left arm to home, preserving shared Joint 1
+                double[] leftHome = { chosenResult[0], 0, -10, 30, 0, 0 };
+                robot.setTargetAnglesLeft(leftHome);
+                
                 robot.setGotoStatusRight(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
-                robot.setGotoStatusLeft("Đứng yên", Color.GRAY);
+                robot.setGotoStatusLeft("Về Home", Color.BLUE);
             } else {
                 robot.setTargetAnglesLeft(chosenResult);
+                
+                // Retract Right arm to home, preserving shared Joint 1
+                double[] rightHome = { chosenResult[0], 0, 10, -30, 0, 0 };
+                robot.setTargetAnglesRight(rightHome);
+                
                 robot.setGotoStatusLeft(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
-                robot.setGotoStatusRight("Đứng yên", Color.GRAY);
+                robot.setGotoStatusRight("Về Home", Color.BLUE);
             }
         } else {
             robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
