@@ -3,6 +3,7 @@ package gui;
 import javax.swing.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Arrays;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -2145,6 +2146,23 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int[] buttons = controllerReceiver.getButtons();
 
         if (axes == null || axes.length < 4) return;
+
+        // Print debug info to Java console when active
+        boolean hasActiveAxis = false;
+        for (double a : axes) {
+            // Treat axes that idle at -1.0 (triggers) as active only when pressed (value > -0.85)
+            if (Math.abs(a) > 0.15 && Math.abs(a + 1.0) > 0.15) { 
+                hasActiveAxis = true; 
+                break; 
+            }
+        }
+        boolean hasActiveBtn = false;
+        for (int b : buttons) {
+            if (b == 1) { hasActiveBtn = true; break; }
+        }
+        if (hasActiveAxis || hasActiveBtn) {
+            System.out.println("[DEBUG_JAVA] Axes: " + Arrays.toString(axes) + " | Buttons: " + Arrays.toString(buttons));
+        }
 
         // 1. Detect mapping & extract axes
         double lx = axes[0];
