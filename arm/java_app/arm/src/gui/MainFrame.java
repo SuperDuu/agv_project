@@ -1463,7 +1463,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         for (double a = trajectoryLastAlpha - 12; a <= trajectoryLastAlpha + 12; a += 1.0) {
             List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected);
             for (double[] q : candidates) {
-                double posErr = computePositionError(q, px, py, pz);
+                double posErr = computePositionError(q, px, py, pz, isRightArmSelected);
                 for (String cfgTry : cfgCandidates) {
                     String actualCfg = getActualConfig(q, isRightArmSelected);
                     if (!actualCfg.equals(cfgTry)) continue;
@@ -1490,7 +1490,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             for (double a = -90; a <= 30; a += 1.5) {
                 List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected);
                 for (double[] q : candidates) {
-                    double posErr = computePositionError(q, px, py, pz);
+                    double posErr = computePositionError(q, px, py, pz, isRightArmSelected);
                     for (String cfgTry : cfgFallback) {
                         String actualCfg = getActualConfig(q, isRightArmSelected);
                         if (!actualCfg.equals(cfgTry)) continue;
@@ -1702,9 +1702,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (fAlphaCb.isSelected()) {
             double currentAlpha = aSlider.getValue();
             List<double[]> candidates = tryAlpha(px, py, pz, currentAlpha, isRight);
-            double[] best = selectBestByPositionError(candidates, px, py, pz);
+            double[] best = selectBestByPositionError(candidates, px, py, pz, isRight);
             if (best != null && ikSelectionLogEnabled) {
-                double err = computePositionError(best, px, py, pz);
+                double err = computePositionError(best, px, py, pz, isRight);
                 System.out.println(String.format("IK Selected | target=[%.2f, %.2f, %.2f] err=%.4f",
                         px, py, pz, err));
             }
@@ -1726,7 +1726,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
             List<double[]> candidates = tryAlpha(px, py, pz, a, isRight);
             for (double[] q : candidates) {
-                double posErr = computePositionError(q, px, py, pz);
+                double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr > MAX_IK_POSITION_ERROR) {
                     continue;
                 }
@@ -1742,7 +1742,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         // If local search found a highly accurate solution, return it immediately
-        if (bestQ != null && computePositionError(bestQ, px, py, pz) < 0.2) {
+        if (bestQ != null && computePositionError(bestQ, px, py, pz, isRight) < 0.2) {
             final double finalAlpha = bestAlpha;
             SwingUtilities.invokeLater(() -> {
                 if (!aSlider.getValueIsAdjusting()) {
@@ -1750,7 +1750,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 }
             });
             if (ikSelectionLogEnabled) {
-                double err = computePositionError(bestQ, px, py, pz);
+                double err = computePositionError(bestQ, px, py, pz, isRight);
                 System.out.println(String.format("IK Selected (Local) | target=[%.2f, %.2f, %.2f] alpha=%.1f err=%.4f",
                         px, py, pz, bestAlpha, err));
             }
@@ -1763,7 +1763,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
             List<double[]> candidates = tryAlpha(px, py, pz, a, isRight);
             for (double[] q : candidates) {
-                double posErr = computePositionError(q, px, py, pz);
+                double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr > MAX_IK_POSITION_ERROR) {
                     continue;
                 }
@@ -1786,7 +1786,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 }
             });
             if (ikSelectionLogEnabled) {
-                double err = computePositionError(bestQ, px, py, pz);
+                double err = computePositionError(bestQ, px, py, pz, isRight);
                 System.out.println(String.format("IK Selected (Global) | target=[%.2f, %.2f, %.2f] alpha=%.1f err=%.4f",
                         px, py, pz, bestAlpha, err));
             }
@@ -1795,19 +1795,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return null;
     }
 
-    private double computePositionError(double[] qDeg, double tx, double ty, double tz) {
-        double[] fk = armPanel.computeFK(qDeg[0], qDeg[1], qDeg[2], qDeg[3], qDeg[4], qDeg[5]);
+    private double computePositionError(double[] qDeg, double tx, double ty, double tz, boolean isRight) {
+        double[] fk = armPanel.computeFK(qDeg[0], qDeg[1], qDeg[2], qDeg[3], qDeg[4], qDeg[5], isRight);
         double dx = fk[0] - tx;
         double dy = fk[1] - ty;
         double dz = fk[2] - tz;
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-    private double[] selectBestByPositionError(List<double[]> candidates, double tx, double ty, double tz) {
+    private double[] selectBestByPositionError(List<double[]> candidates, double tx, double ty, double tz, boolean isRight) {
         double[] best = null;
         double minErr = Double.MAX_VALUE;
         for (double[] q : candidates) {
-            double err = computePositionError(q, tx, ty, tz);
+            double err = computePositionError(q, tx, ty, tz, isRight);
             if (err < minErr) {
                 minErr = err;
                 best = q;
@@ -1945,7 +1945,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             boolean localSearchOk = false;
             if (q != null && isWithinLimits(q, isRight)) {
                 addUniqueSolution(validSolutions, q);
-                double err = computePositionError(q, px, py, pz);
+                double err = computePositionError(q, px, py, pz, isRight);
                 if (err < 0.1) {
                     localSearchOk = true;
                     if (offsetDeg == 0.0) {
