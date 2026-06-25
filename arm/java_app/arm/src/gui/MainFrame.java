@@ -2200,17 +2200,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (l2_val < 0.05) l2_val = 0;
         if (r2_val < 0.05) r2_val = 0;
 
-        // Bumpers (button index 4 is L1, 5 is R1 on both layouts)
-        boolean l1 = buttons.length > 4 && buttons[4] == 1;
-        boolean r1 = buttons.length > 5 && buttons[5] == 1;
+        // Bumpers (L1: index 4 or 9, R1: index 5 or 10)
+        boolean l1 = (buttons.length > 9 && buttons[9] == 1) || (buttons.length > 4 && buttons[4] == 1);
+        boolean r1 = (buttons.length > 10 && buttons[10] == 1) || (buttons.length > 5 && buttons[5] == 1);
 
         // Reset buttons: 
         // Reset Left: Triangle/Y (button 3)
-        // Reset Right: Circle/B (button 1 or 2)
-        // Reset Both: Options/Start (button 7 or 9)
         boolean resetLeft = buttons.length > 3 && buttons[3] == 1;
+        // Reset Right: Circle/B (button 1 or 2)
         boolean resetRight = buttons.length > 2 && (buttons[1] == 1 || buttons[2] == 1);
-        boolean resetBoth = buttons.length > 9 && (buttons[7] == 1 || buttons[9] == 1);
+        // Reset Both: Options/Start (button 6, 7 or 8)
+        boolean resetBoth = (buttons.length > 8 && buttons[8] == 1) || 
+                            (buttons.length > 7 && buttons[7] == 1) || 
+                            (buttons.length > 6 && buttons[6] == 1);
 
         if (resetBoth) {
             double[] rightHome = { 0, 0, 10, -30, 0, 0 };
