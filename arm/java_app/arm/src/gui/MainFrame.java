@@ -909,10 +909,22 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (result != null) {
                 if (isRight) {
                     setTargetAnglesRight(result);
+                    
+                    // Retract Left arm to home, preserving shared Joint 1
+                    double[] leftHome = { result[0], 0, -10, 30, 0, 0 };
+                    setTargetAnglesLeft(leftHome);
+                    
                     setGotoStatusRight("OK", new Color(0, 140, 0));
+                    setGotoStatusLeft("Về Home", Color.BLUE);
                 } else {
                     setTargetAnglesLeft(result);
+                    
+                    // Retract Right arm to home, preserving shared Joint 1
+                    double[] rightHome = { result[0], 0, 10, -30, 0, 0 };
+                    setTargetAnglesRight(rightHome);
+                    
                     setGotoStatusLeft("OK", new Color(0, 140, 0));
+                    setGotoStatusRight("Về Home", Color.BLUE);
                 }
             } else {
                 if (isRight) setGotoStatusRight("Ngoài tầm/Góc!", Color.RED);
@@ -1874,20 +1886,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double q4_pref = isRight ? -45.0 : 45.0;
         jPosture += 0.2 * Math.pow(Math.toRadians(q4 - q4_pref), 2);
 
-        // 3b. Wrist Pitch (Joint 5): Prevent backward bending (prefer positive for Right, negative for Left)
+        // 3b. Wrist Pitch (Joint 5): Prevent backward bending (prefer positive for both arms)
         double q5 = q[4];
-        if (isRight) {
-            if (q5 < 0) {
-                jPosture += 4.0 * Math.pow(Math.toRadians(q5), 2); // Heavy penalty for wrong sign
-            } else {
-                jPosture += 0.2 * Math.pow(Math.toRadians(q5), 2); // Small pull to keep close to 0
-            }
+        if (q5 < 0) {
+            jPosture += 4.0 * Math.pow(Math.toRadians(q5), 2); // Heavy penalty for wrong sign
         } else {
-            if (q5 > 0) {
-                jPosture += 4.0 * Math.pow(Math.toRadians(q5), 2); // Heavy penalty for wrong sign
-            } else {
-                jPosture += 0.2 * Math.pow(Math.toRadians(q5), 2); // Small pull to keep close to 0
-            }
+            jPosture += 0.2 * Math.pow(Math.toRadians(q5), 2); // Small pull to keep close to 0
         }
 
         // 3c. Wrist Roll (Joint 6): Small pull to neutral (0) to stabilize orientation
