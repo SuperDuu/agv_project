@@ -49,8 +49,6 @@ public class UartManager {
         if (port != null && port.isOpen()) {
             byte[] buffer = data.getBytes();
             port.writeBytes(buffer, buffer.length);
-        } else {
-            System.out.println("Port not open. Cannot send: " + data);
         }
     }
 
