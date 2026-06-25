@@ -109,23 +109,79 @@ public class ArmPanel extends JPanel
         }
 
         double[] targetPos = { p0, p1, fixedZ };
-        String prefCfg = robot.configCombo.getSelectedIndex() == 0 ? "+" : "-";
-        double[] result = robot.solveIKSmart(p0, p1, fixedZ, prefCfg);
+        
+        String prefCfgRight = robot.configComboRight.getSelectedIndex() == 0 ? "+" : "-";
+        double[] resultRight = robot.solveIKSmartRight(p0, p1, fixedZ, prefCfgRight);
+        
+        String prefCfgLeft = robot.configComboLeft.getSelectedIndex() == 0 ? "+" : "-";
+        double[] resultLeft = robot.solveIKSmartLeft(p0, p1, fixedZ, prefCfgLeft);
 
-        if (result != null) {
-            robot.setTargetAngles(result);
-            robot.setGotoStatus(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
+        boolean chooseRight = true;
+        double[] chosenResult = null;
+
+        if (resultRight != null && resultLeft != null) {
+            double costRight = calculateMovementCost(resultRight, robot.getAnglesRight());
+            double costLeft = calculateMovementCost(resultLeft, robot.getAnglesLeft());
+            if (costRight <= costLeft) {
+                chooseRight = true;
+                chosenResult = resultRight;
+            } else {
+                chooseRight = false;
+                chosenResult = resultLeft;
+            }
+        } else if (resultRight != null) {
+            chooseRight = true;
+            chosenResult = resultRight;
+        } else if (resultLeft != null) {
+            chooseRight = false;
+            chosenResult = resultLeft;
+        }
+
+        if (chosenResult != null) {
+            robot.isRightArmSelected = chooseRight;
+            robot.trajArmCombo.setSelectedIndex(chooseRight ? 0 : 1);
+            if (chooseRight) {
+                robot.setTargetAnglesRight(chosenResult);
+                robot.setGotoStatusRight(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
+                robot.setGotoStatusLeft("Đứng yên", Color.GRAY);
+            } else {
+                robot.setTargetAnglesLeft(chosenResult);
+                robot.setGotoStatusLeft(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
+                robot.setGotoStatusRight("Đứng yên", Color.GRAY);
+            }
         } else {
-            robot.setGotoStatus("Ngoài tầm (Click)", Color.RED);
+            robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
+            robot.setGotoStatusLeft("Ngoài tầm (Click)", Color.RED);
         }
 
         repaint();
         return targetPos;
     }
 
+    private double calculateMovementCost(double[] target, double[] current) {
+        double sum = 0;
+        for (int i = 0; i < target.length; i++) {
+            double diff = target[i] - current[i];
+            while (diff > 180) diff -= 360;
+            while (diff < -180) diff += 360;
+            sum += diff * diff;
+        }
+        return sum;
+    }
+
     public double[] getEndEffectorPosition() {
         double[][] pts3d = computeAllJoints3D();
         // Return index 6 (NUM_JOINTS + 1) which is the actual distal tooltip center.
+        return pts3d[NUM_JOINTS + 1];
+    }
+
+    public double[] getRightEndEffectorPosition() {
+        double[][] pts3d = computeAllJoints3DRight();
+        return pts3d[NUM_JOINTS + 1];
+    }
+
+    public double[] getLeftEndEffectorPosition() {
+        double[][] pts3d = computeAllJoints3DLeft();
         return pts3d[NUM_JOINTS + 1];
     }
 
@@ -216,7 +272,7 @@ public class ArmPanel extends JPanel
         }
         // Draw the last wrist Joint 6 sphere manually
         drawables.add(new JointSphere(pts3dRight[6], tubeWidths[5], new Color(50, 120, 200)));
-        drawables.add(new GripperDrawable(T_end_right, pts3dRight[7]));
+        drawables.add(new GripperDrawable(T_end_right, pts3dRight[7], true));
 
         // Left Arm segments (skip base to avoid overlapping torso)
         for (int i = 1; i < pts3dLeft.length - 2; i++) {
@@ -227,7 +283,7 @@ public class ArmPanel extends JPanel
         }
         // Draw the last wrist Joint 6 sphere manually
         drawables.add(new JointSphere(pts3dLeft[6], tubeWidths[5], new Color(200, 80, 80)));
-        drawables.add(new GripperDrawable(T_end_left, pts3dLeft[7]));
+        drawables.add(new GripperDrawable(T_end_left, pts3dLeft[7], false));
 
         // 3. Sort by depth (vz descending - Painter's Algorithm)
         drawables.sort((a, b) -> Double.compare(b.getDepth(), a.getDepth()));
@@ -458,10 +514,12 @@ public class ArmPanel extends JPanel
         double[] p3D;
         double[] pWrist;
         double depth;
+        boolean isRight;
 
-        GripperDrawable(double[][] T, double[] p) {
+        GripperDrawable(double[][] T, double[] p, boolean isRight) {
             this.T = T;
             this.p3D = p.clone();
+            this.isRight = isRight;
             double ux = T[0][2], uy = T[1][2], uz = T[2][2];
             // L7 is the length of the gripper. So pWrist is joint 6.
             this.pWrist = new double[] { p[0] - ux * L7, p[1] - uy * L7, p[2] - uz * L7 };
@@ -536,7 +594,7 @@ public class ArmPanel extends JPanel
             drawThickLink(g2, 1.5, -1.2, 5.5, -1.2, 0.5, new Color(200, 205, 210), new Color(120, 125, 130), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
 
             // 4. Fingers opening logic (Parallel sliding bars)
-            double w = robot.isGripped ? 1.0 : 3.5; 
+            double w = isRight ? (robot.isGrippedRight ? 1.0 : 3.5) : (robot.isGrippedLeft ? 1.0 : 3.5); 
 
             // Left Finger (Parallel bar, CNC Anodized Orange)
             drawThickLink(g2, 5.5, w, L7, w, 0.9, new Color(245, 125, 20), new Color(150, 70, 0), ux, uy, uz, nx, ny, nz, bx, by, bz, f, cx, cy);
