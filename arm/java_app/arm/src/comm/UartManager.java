@@ -13,9 +13,13 @@ public class UartManager {
 
     public static List<String> getAvailablePorts() {
         List<String> portList = new ArrayList<>();
-        SerialPort[] ports = SerialPort.getCommPorts();
-        for (SerialPort p : ports) {
-            portList.add(p.getSystemPortName());
+        try {
+            SerialPort[] ports = SerialPort.getCommPorts();
+            for (SerialPort p : ports) {
+                portList.add(p.getSystemPortName());
+            }
+        } catch (Throwable t) {
+            System.err.println("Warning: Could not get serial ports: " + t.getMessage());
         }
         return portList;
     }
