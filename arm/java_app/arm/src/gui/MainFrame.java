@@ -339,12 +339,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (isRightArmSelected != right) {
                 isRightArmSelected = right;
                 updateArm();
-                if (showWorkspace) {
-                    armPanel.workspacePoints.clear();
-                    armPanel.workspaceKeys.clear();
-                    armPanel.workspaceStatus = "";
-                    runWorkspaceExploration();
-                }
             }
         });
         topP.add(new JLabel("  Loại quỹ đạo: "));
@@ -617,8 +611,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         workspaceItem.addItemListener(e -> {
             showWorkspace = workspaceItem.isSelected();
             if (showWorkspace) {
-                armPanel.workspacePoints.clear();
-                armPanel.workspaceKeys.clear();
+                armPanel.clearWorkspace();
                 armPanel.workspaceStatus = "";
                 runWorkspaceExploration();
             } else {
@@ -1662,52 +1655,54 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     void runWorkspaceExploration() {
         stopWorkspaceExploration();
 
-        final boolean isRight = isRightArmSelected;
-
         explorationThread = new Thread(() -> {
             final double step = 8; // Degrees
-            final double[] minLim = isRight ? kinematics.Kinematics.JOINT_MIN_RIGHT : kinematics.Kinematics.JOINT_MIN_LEFT;
-            final double[] maxLim = isRight ? kinematics.Kinematics.JOINT_MAX_RIGHT : kinematics.Kinematics.JOINT_MAX_LEFT;
+            final boolean[] arms = { true, false }; // Scan Right (true) first, then Left (false)
 
-            final double q4_min = minLim[3];
-            final double q4_max = maxLim[3];
-            final double[] q4_samples = { q4_min, (q4_min + q4_max) / 2.0, q4_max };
+            for (boolean isRight : arms) {
+                final double[] minLim = isRight ? kinematics.Kinematics.JOINT_MIN_RIGHT : kinematics.Kinematics.JOINT_MIN_LEFT;
+                final double[] maxLim = isRight ? kinematics.Kinematics.JOINT_MAX_RIGHT : kinematics.Kinematics.JOINT_MAX_LEFT;
 
-            final double q5_min = minLim[4];
-            final double q5_max = maxLim[4];
-            final double[] q5_samples = { q5_min + 30.0, (q5_min + q5_max) / 2.0, q5_max - 30.0 };
+                final double q4_min = minLim[3];
+                final double q4_max = maxLim[3];
+                final double[] q4_samples = { q4_min, (q4_min + q4_max) / 2.0, q4_max };
 
-            for (double q4 : q4_samples) {
-                for (double q5 : q5_samples) {
-                    for (double q3 = minLim[2]; q3 <= maxLim[2]; q3 += step) {
-                        for (double q2 = minLim[1]; q2 <= maxLim[1]; q2 += step) {
-                            // Compute FK for q1=0
-                            double[] p0 = armPanel.computeFK(0, q2, q3, q4, q5, 0, isRight);
+                final double q5_min = minLim[4];
+                final double q5_max = maxLim[4];
+                final double[] q5_samples = { q5_min + 30.0, (q5_min + q5_max) / 2.0, q5_max - 30.0 };
 
-                            // Rotate around Z axis (symmetry)
-                            for (double q1 = minLim[0]; q1 <= maxLim[0]; q1 += 15) {
-                                double rad = Math.toRadians(q1);
-                                double x = p0[0] * Math.cos(rad) - p0[1] * Math.sin(rad);
-                                double y = p0[0] * Math.sin(rad) + p0[1] * Math.cos(rad);
-                                double z = p0[2];
+                for (double q4 : q4_samples) {
+                    for (double q5 : q5_samples) {
+                        for (double q3 = minLim[2]; q3 <= maxLim[2]; q3 += step) {
+                            for (double q2 = minLim[1]; q2 <= maxLim[1]; q2 += step) {
+                                // Compute FK for q1=0
+                                double[] p0 = armPanel.computeFK(0, q2, q3, q4, q5, 0, isRight);
 
-                                if (z >= -5) { // Floor limit
-                                    armPanel.addWorkspacePoint(new double[] { x, y, z });
+                                // Rotate around Z axis (symmetry)
+                                for (double q1 = minLim[0]; q1 <= maxLim[0]; q1 += 15) {
+                                    double rad = Math.toRadians(q1);
+                                    double x = p0[0] * Math.cos(rad) - p0[1] * Math.sin(rad);
+                                    double y = p0[0] * Math.sin(rad) + p0[1] * Math.cos(rad);
+                                    double z = p0[2];
+
+                                    if (z >= -5) { // Floor limit
+                                        armPanel.addWorkspacePoint(new double[] { x, y, z }, isRight);
+                                    }
                                 }
                             }
-                        }
-                        if (Thread.interrupted())
-                            return;
+                            if (Thread.interrupted())
+                                return;
 
-                        final int count = armPanel.workspacePoints.size();
-                        SwingUtilities.invokeLater(() -> {
-                            armPanel.workspaceStatus = String.format("ĐANG QUÉT VÙNG LÀM VIỆC... (%d điểm)", count);
-                            armPanel.repaint();
-                        });
-                        try {
-                            Thread.sleep(1);
-                        } catch (InterruptedException e) {
-                            return;
+                            final int count = armPanel.workspacePoints.size();
+                            SwingUtilities.invokeLater(() -> {
+                                armPanel.workspaceStatus = String.format("ĐANG QUÉT VÙNG LÀM VIỆC... (%d điểm)", count);
+                                armPanel.repaint();
+                            });
+                            try {
+                                Thread.sleep(1);
+                            } catch (InterruptedException e) {
+                                return;
+                            }
                         }
                     }
                 }
