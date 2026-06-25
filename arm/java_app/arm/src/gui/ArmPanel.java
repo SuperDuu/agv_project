@@ -143,7 +143,6 @@ public class ArmPanel extends JPanel
         System.out.printf("[DEBUG_CLICK] Decision: Chosen Arm = %s\n", chosenResult == null ? "NONE" : (chooseRight ? "RIGHT" : "LEFT"));
 
         if (chosenResult != null) {
-            robot.isRightArmSelected = chooseRight;
             robot.trajArmCombo.setSelectedIndex(chooseRight ? 0 : 1);
             if (chooseRight) {
                 robot.setTargetAnglesRight(chosenResult);
