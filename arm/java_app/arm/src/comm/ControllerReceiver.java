@@ -17,6 +17,12 @@ public class ControllerReceiver implements Runnable {
     private final int[] buttons = new int[32];
     private final int[] hats = new int[4];
     private volatile long lastPacketTime = 0;
+    
+    private gui.MainFrame mainFrame;
+
+    public void setMainFrame(gui.MainFrame mainFrame) {
+        this.mainFrame = mainFrame;
+    }
 
     public ControllerReceiver(int port) {
         this.port = port;
@@ -59,6 +65,34 @@ public class ControllerReceiver implements Runnable {
 
     private void parseMessage(String message) {
         try {
+            if (message.startsWith("PICK:")) {
+                String[] tokens = message.substring(5).split(",");
+                if (tokens.length >= 3) {
+                    double px = Double.parseDouble(tokens[0].trim());
+                    double py = Double.parseDouble(tokens[1].trim());
+                    double pz = Double.parseDouble(tokens[2].trim());
+                    if (mainFrame != null) {
+                        mainFrame.triggerPickAndPlace(px, py, pz);
+                    }
+                }
+                return;
+            } else if (message.contains("\"pick\":")) {
+                int startBracket = message.indexOf("[", message.indexOf("\"pick\":"));
+                int endBracket = message.indexOf("]", startBracket);
+                if (startBracket != -1 && endBracket != -1) {
+                    String[] tokens = message.substring(startBracket + 1, endBracket).split(",");
+                    if (tokens.length >= 3) {
+                        double px = Double.parseDouble(tokens[0].trim());
+                        double py = Double.parseDouble(tokens[1].trim());
+                        double pz = Double.parseDouble(tokens[2].trim());
+                        if (mainFrame != null) {
+                            mainFrame.triggerPickAndPlace(px, py, pz);
+                        }
+                    }
+                }
+                return;
+            }
+
             // Very simple JSON parser for:
             // {"axes": [x, y, ...], "buttons": [b0, b1, ...], "hats": [h0, h1]}
             
