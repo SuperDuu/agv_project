@@ -334,6 +334,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         JPanel topP = new JPanel(new FlowLayout(FlowLayout.LEFT));
         topP.add(new JLabel("Cánh tay: "));
         topP.add(trajArmCombo);
+        trajArmCombo.addActionListener(e -> {
+            boolean right = (trajArmCombo.getSelectedIndex() == 0);
+            if (isRightArmSelected != right) {
+                isRightArmSelected = right;
+                updateArm();
+                if (showWorkspace) {
+                    armPanel.workspacePoints.clear();
+                    armPanel.workspaceKeys.clear();
+                    armPanel.workspaceStatus = "";
+                    runWorkspaceExploration();
+                }
+            }
+        });
         topP.add(new JLabel("  Loại quỹ đạo: "));
         topP.add(trajTypeCombo);
         trajPanel.add(topP);
@@ -609,8 +622,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 armPanel.workspaceStatus = "";
                 runWorkspaceExploration();
             } else {
-                if (explorationThread != null)
-                    explorationThread.interrupt();
+                stopWorkspaceExploration();
                 armPanel.workspaceStatus = "";
                 armPanel.repaint();
             }
@@ -1638,25 +1650,42 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return null;
     }
 
+    void stopWorkspaceExploration() {
+        if (explorationThread != null && explorationThread.isAlive()) {
+            explorationThread.interrupt();
+            try {
+                explorationThread.join(500);
+            } catch (InterruptedException ignored) {}
+        }
+    }
+
     void runWorkspaceExploration() {
-        if (explorationThread != null && explorationThread.isAlive())
-            return;
+        stopWorkspaceExploration();
+
+        final boolean isRight = isRightArmSelected;
 
         explorationThread = new Thread(() -> {
             final double step = 8; // Degrees
-            // Sample wrist orientations to get total reachable volume
-            final double[] q4_samples = { -45, 0, 45 };
-            final double[] q5_samples = { -60, 0, 60 };
+            final double[] minLim = isRight ? kinematics.Kinematics.JOINT_MIN_RIGHT : kinematics.Kinematics.JOINT_MIN_LEFT;
+            final double[] maxLim = isRight ? kinematics.Kinematics.JOINT_MAX_RIGHT : kinematics.Kinematics.JOINT_MAX_LEFT;
+
+            final double q4_min = minLim[3];
+            final double q4_max = maxLim[3];
+            final double[] q4_samples = { q4_min, (q4_min + q4_max) / 2.0, q4_max };
+
+            final double q5_min = minLim[4];
+            final double q5_max = maxLim[4];
+            final double[] q5_samples = { q5_min + 30.0, (q5_min + q5_max) / 2.0, q5_max - 30.0 };
 
             for (double q4 : q4_samples) {
                 for (double q5 : q5_samples) {
-                    for (double q3 = JOINT_MIN[2]; q3 <= JOINT_MAX[2]; q3 += step) {
-                        for (double q2 = JOINT_MIN[1]; q2 <= JOINT_MAX[1]; q2 += step) {
+                    for (double q3 = minLim[2]; q3 <= maxLim[2]; q3 += step) {
+                        for (double q2 = minLim[1]; q2 <= maxLim[1]; q2 += step) {
                             // Compute FK for q1=0
-                            double[] p0 = armPanel.computeFK(0, q2, q3, q4, q5, 0);
+                            double[] p0 = armPanel.computeFK(0, q2, q3, q4, q5, 0, isRight);
 
                             // Rotate around Z axis (symmetry)
-                            for (double q1 = JOINT_MIN[0]; q1 <= JOINT_MAX[0]; q1 += 15) {
+                            for (double q1 = minLim[0]; q1 <= maxLim[0]; q1 += 15) {
                                 double rad = Math.toRadians(q1);
                                 double x = p0[0] * Math.cos(rad) - p0[1] * Math.sin(rad);
                                 double y = p0[0] * Math.sin(rad) + p0[1] * Math.cos(rad);
