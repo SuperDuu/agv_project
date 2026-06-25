@@ -10,6 +10,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 import static kinematics.Kinematics.*;
+import comm.ControllerReceiver;
 
 public final class MainFrame extends JFrame implements ActionListener, ChangeListener {
     private static final double MAX_IK_POSITION_ERROR = 1.5; // General IK threshold (allow a bit of error)
@@ -121,6 +122,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     boolean ikSelectionLogEnabled = true;
 
     comm.UartManager uartManager = new comm.UartManager();
+    private ControllerReceiver controllerReceiver;
+    private Timer controllerTimer;
 
     private void trajDebug(String phase, String msg) {
         System.out.println("[TRAJ][" + phase + "] " + msg);
@@ -142,6 +145,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
         startMotionTimer();
+        
+        // Start PS5 Controller Receiver & Timer
+        controllerReceiver = new ControllerReceiver(5005);
+        controllerReceiver.start();
+        startControllerTimer();
+
         updateArm();
     }
 
@@ -2107,9 +2116,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private boolean isWithinLimits(double[] q) {
         return isWithinLimits(q, isRightArmSelected);
-    }
-
-    private boolean isWithinLimits(double[] q, boolean isRight) {
+    }    private boolean isWithinLimits(double[] q, boolean isRight) {
         double[] minLim = isRight ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
         double[] maxLim = isRight ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
         for (int i = 0; i < q.length; i++) {
@@ -2117,6 +2124,221 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 return false;
         }
         return true;
+    }
+
+    private void startControllerTimer() {
+        controllerTimer = new Timer(40, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (controllerReceiver != null && controllerReceiver.isConnected()) {
+                    processControllerInput();
+                }
+            }
+        });
+        controllerTimer.start();
+    }
+
+    private void processControllerInput() {
+        if (controllerReceiver == null || !controllerReceiver.isConnected()) return;
+
+        double[] axes = controllerReceiver.getAxes();
+        int[] buttons = controllerReceiver.getButtons();
+
+        if (axes == null || axes.length < 4) return;
+
+        // 1. Detect mapping & extract axes
+        double lx = axes[0];
+        double ly = axes[1];
+        double rx = 0.0;
+        double ry = 0.0;
+        double l2_val = 0.0;
+        double r2_val = 0.0;
+
+        if (axes.length >= 6) {
+            // Check DirectInput triggers: axes[4] and axes[5] idle at -1.0
+            if (Math.abs(axes[4] + 1.0) < 0.25 && Math.abs(axes[5] + 1.0) < 0.25) {
+                rx = axes[2];
+                ry = axes[3];
+                l2_val = (axes[4] + 1.0) / 2.0; // scale to [0, 1]
+                r2_val = (axes[5] + 1.0) / 2.0; // scale to [0, 1]
+            } else {
+                // Xbox emulation (triggers combined or separate)
+                rx = axes[3];
+                ry = axes[4];
+                l2_val = (axes[2] + 1.0) / 2.0;
+                r2_val = axes.length > 5 ? (axes[5] + 1.0) / 2.0 : 0.0;
+            }
+        } else {
+            rx = axes[2];
+            ry = axes[3];
+        }
+
+        // Apply deadzone of 0.15
+        double deadzone = 0.15;
+        if (Math.abs(lx) < deadzone) lx = 0;
+        if (Math.abs(ly) < deadzone) ly = 0;
+        if (Math.abs(rx) < deadzone) rx = 0;
+        if (Math.abs(ry) < deadzone) ry = 0;
+        if (l2_val < 0.05) l2_val = 0;
+        if (r2_val < 0.05) r2_val = 0;
+
+        // Bumpers (button index 4 is L1, 5 is R1 on both layouts)
+        boolean l1 = buttons.length > 4 && buttons[4] == 1;
+        boolean r1 = buttons.length > 5 && buttons[5] == 1;
+
+        // Reset buttons: 
+        // Reset Left: Triangle/Y (button 3)
+        // Reset Right: Circle/B (button 1 or 2)
+        // Reset Both: Options/Start (button 7 or 9)
+        boolean resetLeft = buttons.length > 3 && buttons[3] == 1;
+        boolean resetRight = buttons.length > 2 && (buttons[1] == 1 || buttons[2] == 1);
+        boolean resetBoth = buttons.length > 9 && (buttons[7] == 1 || buttons[9] == 1);
+
+        if (resetBoth) {
+            double[] rightHome = { 0, 0, 10, -30, 0, 0 };
+            double[] leftHome = { 0, 0, -10, 30, 0, 0 };
+            setTargetAnglesRight(rightHome);
+            setTargetAnglesLeft(leftHome);
+            setGotoStatusRight("Home (PS5)", Color.BLUE);
+            setGotoStatusLeft("Home (PS5)", Color.BLUE);
+            return;
+        }
+        if (resetLeft) {
+            double[] leftHome = { targetAnglesRight[0], 0, -10, 30, 0, 0 };
+            setTargetAnglesLeft(leftHome);
+            setGotoStatusLeft("Home (PS5)", Color.BLUE);
+        }
+        if (resetRight) {
+            double[] rightHome = { targetAnglesLeft[0], 0, 10, -30, 0, 0 };
+            setTargetAnglesRight(rightHome);
+            setGotoStatusRight("Home (PS5)", Color.BLUE);
+        }
+
+        // 2. Process displacements
+        double speed = 0.5; // 0.5 cm per step
+        boolean rightMoved = (rx != 0 || ry != 0 || r1 || r2_val > 0);
+        boolean leftMoved = (lx != 0 || ly != 0 || l1 || l2_val > 0);
+
+        if (rightMoved || leftMoved) {
+            // Determine active master for joint 1
+            boolean rightIsMaster = isRightArmSelected;
+            if (rightMoved && !leftMoved) rightIsMaster = true;
+            else if (leftMoved && !rightMoved) rightIsMaster = false;
+
+            double sharedJoint1 = targetAngles[0]; // default to current target Joint 1
+
+            if (rightIsMaster) {
+                // 1. Solve Right Arm (Master)
+                if (rightMoved) {
+                    double[] eeRight = armPanel.computeFK(targetAnglesRight[0], targetAnglesRight[1], targetAnglesRight[2], targetAnglesRight[3], targetAnglesRight[4], targetAnglesRight[5], true);
+                    double dx = rx * speed;
+                    double dy = -ry * speed;
+                    double dz = 0;
+                    if (r1) dz += speed;
+                    if (r2_val > 0) dz -= r2_val * speed;
+
+                    double nx = eeRight[0] + dx;
+                    double ny = eeRight[1] + dy;
+                    double nz = eeRight[2] + dz;
+
+                    String prefCfg = configComboRight.getSelectedIndex() == 0 ? "+" : "-";
+                    double[] sol = solveIKSmartRight(nx, ny, nz, prefCfg);
+                    if (sol != null) {
+                        setTargetAnglesRight(sol);
+                        sharedJoint1 = sol[0];
+                        setGotoStatusRight(String.format("OK (%.1f, %.1f, %.1f)", nx, ny, nz), new Color(0, 140, 0));
+                    } else {
+                        setGotoStatusRight("Ngoài tầm (PS5)", Color.RED);
+                    }
+                }
+
+                // 2. Solve Left Arm (Slave, with Joint 1 synchronized)
+                if (leftMoved) {
+                    double[] eeLeft = armPanel.computeFK(targetAnglesLeft[0], targetAnglesLeft[1], targetAnglesLeft[2], targetAnglesLeft[3], targetAnglesLeft[4], targetAnglesLeft[5], false);
+                    double dx = lx * speed;
+                    double dy = -ly * speed;
+                    double dz = 0;
+                    if (l1) dz += speed;
+                    if (l2_val > 0) dz -= l2_val * speed;
+
+                    double nx = eeLeft[0] + dx;
+                    double ny = eeLeft[1] + dy;
+                    double nz = eeLeft[2] + dz;
+
+                    String prefCfg = configComboLeft.getSelectedIndex() == 0 ? "+" : "-";
+                    double[] sol = solveIKSmartLeft(nx, ny, nz, prefCfg);
+                    if (sol != null) {
+                        // Force Joint 1 to match the master
+                        sol[0] = sharedJoint1;
+                        setTargetAnglesLeft(sol);
+                        setGotoStatusLeft(String.format("OK (%.1f, %.1f, %.1f)", nx, ny, nz), new Color(0, 140, 0));
+                    } else {
+                        setGotoStatusLeft("Ngoài tầm (PS5)", Color.RED);
+                    }
+                } else {
+                    // Update Joint 1 for Left Arm
+                    double[] leftHome = targetAnglesLeft.clone();
+                    leftHome[0] = sharedJoint1;
+                    setTargetAnglesLeft(leftHome);
+                }
+            } else {
+                // 1. Solve Left Arm (Master)
+                if (leftMoved) {
+                    double[] eeLeft = armPanel.computeFK(targetAnglesLeft[0], targetAnglesLeft[1], targetAnglesLeft[2], targetAnglesLeft[3], targetAnglesLeft[4], targetAnglesLeft[5], false);
+                    double dx = lx * speed;
+                    double dy = -ly * speed;
+                    double dz = 0;
+                    if (l1) dz += speed;
+                    if (l2_val > 0) dz -= l2_val * speed;
+
+                    double nx = eeLeft[0] + dx;
+                    double ny = eeLeft[1] + dy;
+                    double nz = eeLeft[2] + dz;
+
+                    String prefCfg = configComboLeft.getSelectedIndex() == 0 ? "+" : "-";
+                    double[] sol = solveIKSmartLeft(nx, ny, nz, prefCfg);
+                    if (sol != null) {
+                        setTargetAnglesLeft(sol);
+                        sharedJoint1 = sol[0];
+                        setGotoStatusLeft(String.format("OK (%.1f, %.1f, %.1f)", nx, ny, nz), new Color(0, 140, 0));
+                    } else {
+                        setGotoStatusLeft("Ngoài tầm (PS5)", Color.RED);
+                    }
+                }
+
+                // 2. Solve Right Arm (Slave, with Joint 1 synchronized)
+                if (rightMoved) {
+                    double[] eeRight = armPanel.computeFK(targetAnglesRight[0], targetAnglesRight[1], targetAnglesRight[2], targetAnglesRight[3], targetAnglesRight[4], targetAnglesRight[5], true);
+                    double dx = rx * speed;
+                    double dy = -ry * speed;
+                    double dz = 0;
+                    if (r1) dz += speed;
+                    if (r2_val > 0) dz -= r2_val * speed;
+
+                    double nx = eeRight[0] + dx;
+                    double ny = eeRight[1] + dy;
+                    double nz = eeRight[2] + dz;
+
+                    String prefCfg = configComboRight.getSelectedIndex() == 0 ? "+" : "-";
+                    double[] sol = solveIKSmartRight(nx, ny, nz, prefCfg);
+                    if (sol != null) {
+                        // Force Joint 1 to match the master
+                        sol[0] = sharedJoint1;
+                        setTargetAnglesRight(sol);
+                        setGotoStatusRight(String.format("OK (%.1f, %.1f, %.1f)", nx, ny, nz), new Color(0, 140, 0));
+                    } else {
+                        setGotoStatusRight("Ngoài tầm (PS5)", Color.RED);
+                    }
+                } else {
+                    // Update Joint 1 for Right Arm
+                    double[] rightHome = targetAnglesRight.clone();
+                    rightHome[0] = sharedJoint1;
+                    setTargetAnglesRight(rightHome);
+                }
+            }
+
+            armPanel.repaint();
+        }
     }
 
 }
