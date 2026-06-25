@@ -799,7 +799,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
      * Format: R:q1,q2,... and L:q1,q2,...
      */
     private void sendJointsToUart() {
-        if (uartManager != null) {
+        if (uartManager != null && uartManager.isConnected()) {
             // Check Right Arm
             boolean changedRight = false;
             for (int i = 0; i < NUM_JOINTS; i++) {
