@@ -1797,9 +1797,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         boolean fixedGround = (gCombo.getSelectedIndex() == 0);
 
         // 1) Search near previous alpha to avoid branch jumping
-        double aStart = fixedGround ? 0.0 : (trajectoryLastAlpha - 12);
-        double aEnd = fixedGround ? 0.0 : (trajectoryLastAlpha + 12);
-        double aStep = 1.0;
+        // For fixedGround: scan full range but add alpha² penalty to prefer alpha=0
+        double aStart = fixedGround ? -90 : (trajectoryLastAlpha - 12);
+        double aEnd = fixedGround ? 30 : (trajectoryLastAlpha + 12);
+        double aStep = fixedGround ? 3.0 : 1.0;
         for (double a = aStart; a <= aEnd; a += aStep) {
             List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected);
             for (double[] q : candidates) {
@@ -1808,6 +1809,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     String actualCfg = getActualConfig(q, isRightArmSelected);
                     if (!actualCfg.equals(cfgTry)) continue;
                     double c = posErr * 220.0 + continuityCost(q, qRef) * 0.04;
+                    // Heavy alpha penalty for fixedGround mode
+                    if (fixedGround) {
+                        c += a * a * 50.0;
+                    }
                     if (posErr <= MAX_IK_POSITION_ERROR && c < bestStrictCost) {
                         bestStrictCost = c;
                         bestStrictQ = q;
@@ -1825,12 +1830,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         // 2) Fallback to global scan if local search fails or is inaccurate
-        if (bestStrictQ == null && bestRelaxedQ == null) {
+        // For fixedGround, step 1 already scanned full range, so only fallback for free mode
+        if (bestStrictQ == null && bestRelaxedQ == null && !fixedGround) {
             String[] cfgFallback = isFirstWaypoint ? cfgCandidates : new String[] { trajectoryLockedCfg, altCfg };
-            double aStartGlobal = fixedGround ? 0.0 : -90;
-            double aEndGlobal = fixedGround ? 0.0 : 30;
-            double aStepGlobal = 1.5;
-            for (double a = aStartGlobal; a <= aEndGlobal; a += aStepGlobal) {
+            for (double a = -90; a <= 30; a += 1.5) {
                 List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRightArmSelected);
@@ -2065,31 +2068,44 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         boolean fixedGround = (gCombo.getSelectedIndex() == 0);
 
         if (fixedGround) {
-            double currentAlpha = 0.0;
-            List<double[]> candidates = tryAlpha(px, py, pz, currentAlpha, isRight);
+            // Scan alphas from 0 outward, heavily penalizing deviation from 0
+            // This ensures the gripper is as vertical as possible while still being reachable
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
             double minCost = Double.MAX_VALUE;
             double[] best = null;
-            for (double[] q : candidates) {
-                double posErr = computePositionError(q, px, py, pz, isRight);
-                if (posErr > MAX_IK_POSITION_ERROR) {
-                    continue;
-                }
-                String actualCfg = getActualConfig(q, isRight);
-                double cost = posErr * 200.0;
-                if (!actualCfg.equals(userPref)) {
-                    cost += 10000.0; // Heavy penalty for wrong config
-                }
-                cost += continuityCost(q, activeAngles) * 0.05;
-                if (cost < minCost) {
-                    minCost = cost;
-                    best = q;
+            double bestAlphaGround = 0.0;
+            
+            // Try alpha=0 first, then expand outward in small steps
+            for (double a = -90; a <= 30; a += 3.0) {
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight);
+                for (double[] q : candidates) {
+                    double posErr = computePositionError(q, px, py, pz, isRight);
+                    if (posErr > MAX_IK_POSITION_ERROR) {
+                        continue;
+                    }
+                    String actualCfg = getActualConfig(q, isRight);
+                    // Very heavy penalty for alpha deviation from 0 (vertical gripper)
+                    double alphaPenalty = a * a * 50.0;
+                    double cost = posErr * 200.0 + alphaPenalty;
+                    if (!actualCfg.equals(userPref)) {
+                        cost += 10000.0;
+                    }
+                    cost += continuityCost(q, activeAngles) * 0.02;
+                    if (cost < minCost) {
+                        minCost = cost;
+                        best = q;
+                        bestAlphaGround = a;
+                    }
                 }
             }
-            if (best != null && ikSelectionLogEnabled) {
-                double err = computePositionError(best, px, py, pz, isRight);
-                System.out.println(String.format("IK Selected (Fixed Ground) | target=[%.2f, %.2f, %.2f] err=%.4f",
-                        px, py, pz, err));
+            if (best != null) {
+                if (isRight) activeAlphaRight = bestAlphaGround;
+                else activeAlphaLeft = bestAlphaGround;
+                if (ikSelectionLogEnabled) {
+                    double err = computePositionError(best, px, py, pz, isRight);
+                    System.out.println(String.format("IK Selected (Fixed Ground) | target=[%.2f, %.2f, %.2f] alpha=%.1f err=%.4f",
+                            px, py, pz, bestAlphaGround, err));
+                }
             }
             return best;
         }
