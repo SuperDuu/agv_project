@@ -50,10 +50,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     JComboBox<String> configComboRight = new JComboBox<>(new String[] { "Up (+)", "Down (-)" });
     JComboBox<String> configComboLeft = new JComboBox<>(new String[] { "Up (+)", "Down (-)" });
-    JSlider alphaSliderRight = new JSlider(-90, 30, -30);
-    JSlider alphaSliderLeft = new JSlider(-90, 30, -30);
-    JCheckBox fixedAlphaCbRight = new JCheckBox("Alpha cố định", false);
-    JCheckBox fixedAlphaCbLeft = new JCheckBox("Alpha cố định", false);
+    JComboBox<String> gripperModeComboRight = new JComboBox<>(new String[] { "Bàn tay song song mặt đất", "Tự do" });
+    JComboBox<String> gripperModeComboLeft = new JComboBox<>(new String[] { "Bàn tay song song mặt đất", "Tự do" });
+    double activeAlphaRight = 0.0;
+    double activeAlphaLeft = 0.0;
 
     JButton btnReset = new JButton("Reset");
     JButton btnDemo = new JButton("Quỹ đạo Xoắn ốc");
@@ -327,23 +327,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         JComboBox<String> comb = isRight ? configComboRight : configComboLeft;
         configPanel.add(comb);
 
-        JSlider aSlider = isRight ? alphaSliderRight : alphaSliderLeft;
-        aSlider.setMajorTickSpacing(30);
-        aSlider.setPaintTicks(true);
-        aSlider.setPaintLabels(true);
-        aSlider.setPreferredSize(new Dimension(150, 45));
-        JCheckBox fAlphaCb = isRight ? fixedAlphaCbRight : fixedAlphaCbLeft;
-
+        JComboBox<String> gCombo = isRight ? gripperModeComboRight : gripperModeComboLeft;
         JPanel alphaRow = new JPanel(new BorderLayout());
-        alphaRow.add(new JLabel("Alpha Bending:"), BorderLayout.NORTH);
-        alphaRow.add(aSlider, BorderLayout.CENTER);
-        alphaRow.add(fAlphaCb, BorderLayout.SOUTH);
-        aSlider.addChangeListener(e -> {
-            if (!aSlider.getValueIsAdjusting()) {
-                gotoCoordinate(isRight);
-            }
-        });
-        fAlphaCb.addActionListener(e -> {
+        alphaRow.add(new JLabel("Chế độ hướng kẹp:"), BorderLayout.NORTH);
+        alphaRow.add(gCombo, BorderLayout.CENTER);
+
+        gCombo.addActionListener(e -> {
             gotoCoordinate(isRight);
         });
         comb.addActionListener(e -> {
@@ -600,7 +589,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                                                 : (configComboLeft.getSelectedIndex() == 0 ? "+" : "-");
                 trajectoryLockedCfg = cfg;
                 trajectoryLastQ = null;
-                trajectoryLastAlpha = isRightArmSelected ? alphaSliderRight.getValue() : alphaSliderLeft.getValue();
+                trajectoryLastAlpha = getInitialTrajectoryAlpha(isRightArmSelected);
 
                 String report = buildLineFeasibilityReport(sx, sy, sz, ex, ey, ez);
                 trajDebug("LINE_CHECK", report.replace('\n', ' '));
@@ -1327,13 +1316,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
         final JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
         final JLabel[] armAngleLbls = isRight ? angleLblsRight : angleLblsLeft;
-        final JSlider armAlphaSlider = isRight ? alphaSliderRight : alphaSliderLeft;
         final JComboBox<String> armConfigCombo = isRight ? configComboRight : configComboLeft;
 
         String cfg = armConfigCombo.getSelectedIndex() == 0 ? "+" : "-";
         trajectoryLockedCfg = cfg;
         trajectoryLastQ = null;
-        trajectoryLastAlpha = armAlphaSlider.getValue();
+        trajectoryLastAlpha = getInitialTrajectoryAlpha(isRight);
 
         // Nhảy đến điểm xuất phát
         double[] startResult = solveIKForTrajectoryPoint(sx, sy, sz);
@@ -1488,13 +1476,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
         final JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
         final JLabel[] armAngleLbls = isRight ? angleLblsRight : angleLblsLeft;
-        final JSlider armAlphaSlider = isRight ? alphaSliderRight : alphaSliderLeft;
         final JComboBox<String> armConfigCombo = isRight ? configComboRight : configComboLeft;
 
         String cfg = armConfigCombo.getSelectedIndex() == 0 ? "+" : "-";
         trajectoryLockedCfg = cfg;
         trajectoryLastQ = null;
-        trajectoryLastAlpha = armAlphaSlider.getValue();
+        trajectoryLastAlpha = getInitialTrajectoryAlpha(isRight);
 
         double[] startPt = path.get(0);
         double[] startResult = solveIKForTrajectoryPoint(startPt[0], startPt[1], startPt[2]);
@@ -1652,13 +1639,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
         final JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
         final JLabel[] armAngleLbls = isRight ? angleLblsRight : angleLblsLeft;
-        final JSlider armAlphaSlider = isRight ? alphaSliderRight : alphaSliderLeft;
         final JComboBox<String> armConfigCombo = isRight ? configComboRight : configComboLeft;
 
         String cfg = armConfigCombo.getSelectedIndex() == 0 ? "+" : "-";
         trajectoryLockedCfg = cfg;
         trajectoryLastQ = null;
-        trajectoryLastAlpha = armAlphaSlider.getValue();
+        trajectoryLastAlpha = getInitialTrajectoryAlpha(isRight);
 
         // Tính toán điểm xuất phát của Xoắn ốc tại thời điểm t = 0
         double startX = cx + R * Math.cos(0);
@@ -1775,6 +1761,15 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             s += d * d;
         }
         return s;
+    }
+
+    private double getInitialTrajectoryAlpha(boolean isRight) {
+        JComboBox<String> gCombo = isRight ? gripperModeComboRight : gripperModeComboLeft;
+        if (gCombo.getSelectedIndex() == 0) {
+            return 0.0;
+        } else {
+            return isRight ? activeAlphaRight : activeAlphaLeft;
+        }
     }
 
     private double[] solveIKForTrajectoryPoint(double px, double py, double pz) {
@@ -2055,13 +2050,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private double[] solveIKSmartInternal(double px, double py, double pz, String preferredConfig, boolean isRight) {
-        JCheckBox fAlphaCb = isRight ? fixedAlphaCbRight : fixedAlphaCbLeft;
-        JSlider aSlider = isRight ? alphaSliderRight : alphaSliderLeft;
+        JComboBox<String> gCombo = isRight ? gripperModeComboRight : gripperModeComboLeft;
         JComboBox<String> cCombo = isRight ? configComboRight : configComboLeft;
         double[] activeAngles = isRight ? anglesRight : anglesLeft;
+        boolean fixedGround = (gCombo.getSelectedIndex() == 0);
 
-        if (fAlphaCb.isSelected()) {
-            double currentAlpha = aSlider.getValue();
+        if (fixedGround) {
+            double currentAlpha = 0.0;
             List<double[]> candidates = tryAlpha(px, py, pz, currentAlpha, isRight);
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
             double minCost = Double.MAX_VALUE;
@@ -2084,7 +2079,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
             if (best != null && ikSelectionLogEnabled) {
                 double err = computePositionError(best, px, py, pz, isRight);
-                System.out.println(String.format("IK Selected (Fixed Alpha) | target=[%.2f, %.2f, %.2f] err=%.4f",
+                System.out.println(String.format("IK Selected (Fixed Ground) | target=[%.2f, %.2f, %.2f] err=%.4f",
                         px, py, pz, err));
             }
             return best;
@@ -2092,12 +2087,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double minCost = Double.MAX_VALUE;
         double[] bestQ = null;
-        double bestAlpha = aSlider.getValue();
+        double currentAlpha = isRight ? activeAlphaRight : activeAlphaLeft;
+        double bestAlpha = currentAlpha;
         double[] q_pref = new double[NUM_JOINTS];
         q_pref[2] = 60.0;
         q_pref[3] = -35.0;
-
-        double currentAlpha = aSlider.getValue();
 
         // 1. Try local search around current alpha first (very fast, covers small movements)
         for (double a = currentAlpha - 15; a <= currentAlpha + 15; a += 5.0) {
@@ -2122,12 +2116,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // If local search found a highly accurate solution, return it immediately
         if (bestQ != null && computePositionError(bestQ, px, py, pz, isRight) < 0.2) {
-            final double finalAlpha = bestAlpha;
-            SwingUtilities.invokeLater(() -> {
-                if (!aSlider.getValueIsAdjusting()) {
-                    aSlider.setValue((int) Math.round(finalAlpha));
-                }
-            });
+            if (isRight) {
+                activeAlphaRight = bestAlpha;
+            } else {
+                activeAlphaLeft = bestAlpha;
+            }
             if (ikSelectionLogEnabled) {
                 double err = computePositionError(bestQ, px, py, pz, isRight);
                 System.out.println(String.format("IK Selected (Local) | target=[%.2f, %.2f, %.2f] alpha=%.1f err=%.4f",
@@ -2158,12 +2151,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         if (bestQ != null) {
-            final int optimalA = (int) Math.round(bestAlpha);
-            SwingUtilities.invokeLater(() -> {
-                if (!aSlider.getValueIsAdjusting()) {
-                    aSlider.setValue(optimalA);
-                }
-            });
+            if (isRight) {
+                activeAlphaRight = bestAlpha;
+            } else {
+                activeAlphaLeft = bestAlpha;
+            }
             if (ikSelectionLogEnabled) {
                 double err = computePositionError(bestQ, px, py, pz, isRight);
                 System.out.println(String.format("IK Selected (Global) | target=[%.2f, %.2f, %.2f] alpha=%.1f err=%.4f",
