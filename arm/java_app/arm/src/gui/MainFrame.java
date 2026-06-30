@@ -338,6 +338,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         alphaRow.add(new JLabel("Alpha Bending:"), BorderLayout.NORTH);
         alphaRow.add(aSlider, BorderLayout.CENTER);
         alphaRow.add(fAlphaCb, BorderLayout.SOUTH);
+        aSlider.addChangeListener(e -> {
+            if (!aSlider.getValueIsAdjusting()) {
+                gotoCoordinate(isRight);
+            }
+        });
+        fAlphaCb.addActionListener(e -> {
+            gotoCoordinate(isRight);
+        });
+        comb.addActionListener(e -> {
+            gotoCoordinate(isRight);
+        });
+
         configPanel.add(alphaRow);
 
         panel.add(configPanel);
@@ -2051,10 +2063,28 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (fAlphaCb.isSelected()) {
             double currentAlpha = aSlider.getValue();
             List<double[]> candidates = tryAlpha(px, py, pz, currentAlpha, isRight);
-            double[] best = selectBestByPositionError(candidates, px, py, pz, isRight);
+            String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
+            double minCost = Double.MAX_VALUE;
+            double[] best = null;
+            for (double[] q : candidates) {
+                double posErr = computePositionError(q, px, py, pz, isRight);
+                if (posErr > MAX_IK_POSITION_ERROR) {
+                    continue;
+                }
+                String actualCfg = getActualConfig(q, isRight);
+                double cost = posErr * 200.0;
+                if (!actualCfg.equals(userPref)) {
+                    cost += 10000.0; // Heavy penalty for wrong config
+                }
+                cost += continuityCost(q, activeAngles) * 0.05;
+                if (cost < minCost) {
+                    minCost = cost;
+                    best = q;
+                }
+            }
             if (best != null && ikSelectionLogEnabled) {
                 double err = computePositionError(best, px, py, pz, isRight);
-                System.out.println(String.format("IK Selected | target=[%.2f, %.2f, %.2f] err=%.4f",
+                System.out.println(String.format("IK Selected (Fixed Alpha) | target=[%.2f, %.2f, %.2f] err=%.4f",
                         px, py, pz, err));
             }
             return best;
