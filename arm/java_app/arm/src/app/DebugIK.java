@@ -1,82 +1,175 @@
 package app;
 
 import kinematics.Kinematics;
+import static kinematics.Kinematics.*;
 
+/**
+ * Scans the actual reachable workspace and tests gripper orientation.
+ */
 public class DebugIK {
     public static void main(String[] args) {
-        System.out.println("=== ROBUST GRIPPER ORIENTATION TEST AND DEBUG ===");
+        System.out.println("=== WORKSPACE SCAN & ORIENTATION DEBUG ===\n");
         
-        // Simulating a line trajectory from (30, -10, 60) to (30, 20, 60)
-        double sx = 9.79, sy = -2.0, sz = 67.71;
-        double ex = 9.79, ey = 2.0, ez = 67.71;
-        int steps = 5;
-        
-        System.out.println("\n--- MODE: Bàn tay song song mặt đất (alpha = 0.0) ---");
         boolean isRight = true;
+        double[] homeRad = new double[6];
+        double[] homeAngles = { 0, 0, 10, -30, 0, 0 };
+        for (int i = 0; i < 6; i++) homeRad[i] = Math.toRadians(homeAngles[i]);
         
-        double[] qInit = { 0, 0, 10, -30, 0, 0 }; // default starting angles
-        double[] qPrev = new double[6];
-        for(int i=0; i<6; i++) qPrev[i] = Math.toRadians(qInit[i]);
+        // 1. Scan to find reachable positions
+        System.out.println("--- STEP 1: Find reachable positions by FK sampling ---");
+        System.out.println("Sampling various joint angles, printing FK positions:\n");
         
-        for (int i = 0; i <= steps; i++) {
-            double r = i / (double) steps;
-            double tx = sx + (ex - sx) * r;
-            double ty = sy + (ey - sy) * r;
-            double tz = sz + (ez - sz) * r;
+        double[][] sampleAngles = {
+            {0, 0, 10, -30, 0, 0},      // home
+            {0, 0, 30, -60, 0, 0},
+            {0, 0, 50, -80, 0, 0},
+            {0, 0, -30, 30, 0, 0},
+            {0, 30, 10, -30, 0, 0},
+            {0, -30, 10, -30, 0, 0},
+            {20, 0, 10, -30, 0, 0},
+            {-20, 0, 10, -30, 0, 0},
+            {0, 0, 0, 0, 0, 0},
+            {0, 0, 60, -90, 0, 0},
+            {0, 0, 80, -110, 0, 0},
+            {0, 45, 30, -60, 0, 0},
+            {0, -45, 30, -60, 0, 0},
+            {0, 0, 10, -30, 45, 0},
+            {0, 0, 10, -30, -45, 0},
+        };
+        
+        for (double[] angles : sampleAngles) {
+            double[] rad = new double[6];
+            for (int i = 0; i < 6; i++) rad[i] = Math.toRadians(angles[i]);
+            double[][] T = computeFKMatrix(rad, isRight);
+            double[] uz = { T[0][2], T[1][2], T[2][2] };
+            double tilt = Math.toDegrees(Math.acos(Math.min(1.0, Math.abs(uz[2]))));
+            System.out.printf("  q=[%4.0f,%4.0f,%4.0f,%4.0f,%4.0f,%4.0f] -> Pos=(%.1f, %.1f, %.1f) tilt=%.1f deg\n",
+                angles[0], angles[1], angles[2], angles[3], angles[4], angles[5],
+                T[0][3], T[1][3], T[2][3], tilt);
+        }
+        
+        // 2. Test IK with soft-constraint at the FK-derived reachable positions  
+        System.out.println("\n--- STEP 2: IK with soft-constraint fixedGround at reachable positions ---\n");
+        
+        for (double[] angles : sampleAngles) {
+            double[] rad = new double[6];
+            for (int i = 0; i < 6; i++) rad[i] = Math.toRadians(angles[i]);
+            double[][] T = computeFKMatrix(rad, isRight);
+            double px = T[0][3], py = T[1][3], pz = T[2][3];
             
-            // Under fixedGround = true, alpha is forced to 0.0
-            double alphaDeg = 0.0;
-            double alpha_rad = Math.toRadians(alphaDeg);
-            double q1_base = Math.atan2(ty, tx);
-            
-            double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
-            double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
-            double cy = Math.cos(q1_base), syAngle = Math.sin(q1_base);
-            double[][] R_z = { { cy, -syAngle, 0 }, { syAngle, cy, 0 }, { 0, 0, 1 } };
-            double[][] R_target = multiplyMatrices(R_z, R_y);
-            
-            double[] qSol = Kinematics.solveIK(tx, ty, tz, R_target, qPrev, isRight);
-            if (qSol != null) {
-                // FK
+            // Test soft constraint approach
+            testSoftConstraint(px, py, pz, isRight, homeRad);
+        }
+        
+        // 3. Test slider-range positions  
+        System.out.println("\n--- STEP 3: IK at slider positions (X=-50..50, Y=-50..50, Z=-20..80) ---\n");
+        int reachable = 0, total = 0;
+        for (int x = -50; x <= 50; x += 10) {
+            for (int y = -50; y <= 50; y += 10) {
+                for (int z = 0; z <= 80; z += 20) {
+                    total++;
+                    double[] q = solveWithAnyAlpha(x, y, z, isRight, homeRad);
+                    if (q != null) {
+                        reachable++;
+                    }
+                }
+            }
+        }
+        System.out.printf("Slider grid: %d / %d positions are reachable (%.1f%%)\n", reachable, total, 100.0*reachable/total);
+        
+        // Show a few that work
+        System.out.println("\nReachable slider positions with soft-constraint orientation:");
+        for (int x = -10; x <= 20; x += 5) {
+            for (int y = -10; y <= 10; y += 5) {
+                for (int z = 40; z <= 80; z += 10) {
+                    testSoftConstraint(x, y, z, isRight, homeRad);
+                }
+            }
+        }
+    }
+    
+    static void testSoftConstraint(double px, double py, double pz, boolean isRight, double[] qInitRad) {
+        double bestCost = Double.MAX_VALUE;
+        double[] bestQ = null;
+        double bestAlpha = 0;
+        
+        for (double a = -90; a <= 30; a += 3.0) {
+            double[] q = solveWithAlpha(px, py, pz, a, isRight, qInitRad);
+            if (q != null) {
                 double[] qRad = new double[6];
-                for(int j=0; j<6; j++) qRad[j] = Math.toRadians(qSol[j]);
-                double[][] T_fk = Kinematics.computeFKMatrix(qRad, isRight);
-                double[][] R_fk = extractRotation(T_fk);
-                
-                // Position error
-                double err = Math.sqrt(Math.pow(T_fk[0][3] - tx, 2) + Math.pow(T_fk[1][3] - ty, 2) + Math.pow(T_fk[2][3] - tz, 2));
-                
-                // Tool axes
-                double[] uz = { R_fk[0][2], R_fk[1][2], R_fk[2][2] };
-                
-                System.out.printf("Point %d: Target=(%.2f, %.2f, %.2f) | Solved q=[%.2f, %.2f, %.2f, %.2f, %.2f, %.2f] | PosErr=%.4f mm | Tool Z-axis=[%.4f, %.4f, %.4f]\n",
-                    i, tx, ty, tz, qSol[0], qSol[1], qSol[2], qSol[3], qSol[4], qSol[5], err, uz[0], uz[1], uz[2]);
-                
-                // Update previous state for continuity
-                qPrev = qRad;
-            } else {
-                System.out.printf("Point %d: Target=(%.2f, %.2f, %.2f) | IK FAILED!\n", i, tx, ty, tz);
+                for (int i = 0; i < 6; i++) qRad[i] = Math.toRadians(q[i]);
+                double[][] T = computeFKMatrix(qRad, isRight);
+                double posErr = Math.sqrt(Math.pow(T[0][3]-px,2)+Math.pow(T[1][3]-py,2)+Math.pow(T[2][3]-pz,2));
+                if (posErr > 1.5) continue;
+                double cost = posErr * 200.0 + a * a * 50.0;
+                if (cost < bestCost) { bestCost = cost; bestQ = q; bestAlpha = a; }
             }
         }
+        
+        if (bestQ != null) {
+            double[] qRad = new double[6];
+            for (int i = 0; i < 6; i++) qRad[i] = Math.toRadians(bestQ[i]);
+            double[][] T = computeFKMatrix(qRad, isRight);
+            double posErr = Math.sqrt(Math.pow(T[0][3]-px,2)+Math.pow(T[1][3]-py,2)+Math.pow(T[2][3]-pz,2));
+            double[] uz = { T[0][2], T[1][2], T[2][2] };
+            double tilt = Math.toDegrees(Math.acos(Math.min(1.0, Math.abs(uz[2]))));
+            System.out.printf("  (%6.1f,%6.1f,%6.1f) -> alpha=%5.1f  tilt=%5.1f deg  posErr=%.3f\n",
+                px, py, pz, bestAlpha, tilt, posErr);
+        } else {
+            System.out.printf("  (%6.1f,%6.1f,%6.1f) -> UNREACHABLE\n", px, py, pz);
+        }
     }
-
-    private static double[][] multiplyMatrices(double[][] A, double[][] B) {
+    
+    static double[] solveWithAnyAlpha(double px, double py, double pz, boolean isRight, double[] qInitRad) {
+        for (double a = -90; a <= 30; a += 10.0) {
+            double[] q = solveWithAlpha(px, py, pz, a, isRight, qInitRad);
+            if (q != null) return q;
+        }
+        return null;
+    }
+    
+    static double[] solveWithAlpha(double px, double py, double pz, double alphaDeg, boolean isRight, double[] qInitRad) {
+        double alpha_rad = Math.toRadians(alphaDeg);
+        double q1_base = isRight ? Math.atan2(py, px) : -Math.atan2(py, -px);
+        double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
+        double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
+        
+        double[] yawOffsets = { 0.0, -15.0, 15.0 };
+        double[] bestQ = null;
+        double bestErr = Double.MAX_VALUE;
+        
+        for (double offsetDeg : yawOffsets) {
+            double yaw = q1_base + Math.toRadians(offsetDeg);
+            double cy = Math.cos(yaw), syA = Math.sin(yaw);
+            double[][] R_z = { { cy, -syA, 0 }, { syA, cy, 0 }, { 0, 0, 1 } };
+            double[][] R_target = mul3x3(R_z, R_y);
+            
+            double[] q = solveIK(px, py, pz, R_target, qInitRad, isRight);
+            if (q != null && withinLimits(q, isRight)) {
+                double[] qRad = new double[6];
+                for (int i = 0; i < 6; i++) qRad[i] = Math.toRadians(q[i]);
+                double[][] T = computeFKMatrix(qRad, isRight);
+                double err = Math.sqrt(Math.pow(T[0][3]-px,2)+Math.pow(T[1][3]-py,2)+Math.pow(T[2][3]-pz,2));
+                if (err < bestErr) { bestErr = err; bestQ = q; }
+            }
+        }
+        return (bestQ != null && bestErr < 1.5) ? bestQ : null;
+    }
+    
+    static boolean withinLimits(double[] q, boolean isRight) {
+        double[] mins = isRight ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
+        double[] maxs = isRight ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
+        for (int i = 0; i < q.length; i++) {
+            if (q[i] < mins[i] - 0.5 || q[i] > maxs[i] + 0.5) return false;
+        }
+        return true;
+    }
+    
+    static double[][] mul3x3(double[][] A, double[][] B) {
         double[][] C = new double[3][3];
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                C[i][j] = A[i][0] * B[0][j] + A[i][1] * B[1][j] + A[i][2] * B[2][j];
-            }
-        }
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++)
+                C[i][j] = A[i][0]*B[0][j] + A[i][1]*B[1][j] + A[i][2]*B[2][j];
         return C;
-    }
-
-    private static double[][] extractRotation(double[][] T) {
-        double[][] R = new double[3][3];
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                R[i][j] = T[i][j];
-            }
-        }
-        return R;
     }
 }
