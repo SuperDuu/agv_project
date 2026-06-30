@@ -10,6 +10,8 @@ public class ArmPanel extends JPanel
         implements MouseListener, MouseMotionListener, MouseWheelListener {
 
     ArrayList<double[]> trail = new ArrayList<>();
+    public ArrayList<double[]> referencePath = new ArrayList<>();
+    private boolean isDrawingPath = false;
     double camAz = -30, camEl = 25, scale = 5.0;
     int lastX, lastY;
     int demoStep = 0;
@@ -34,6 +36,19 @@ public class ArmPanel extends JPanel
     public void mousePressed(MouseEvent e) {
         lastX = e.getX();
         lastY = e.getY();
+        if (robot.isDrawingActive() && SwingUtilities.isLeftMouseButton(e)) {
+            isDrawingPath = true;
+            referencePath.clear();
+            double zDraw = 20.0;
+            try {
+                zDraw = Double.parseDouble(robot.txtMouseZ.getText().trim());
+            } catch (NumberFormatException ex) {}
+            double[] pt = screenToWorld(e.getX(), e.getY(), zDraw);
+            if (pt != null) {
+                referencePath.add(pt);
+            }
+            repaint();
+        }
     }
 
     @Override
@@ -47,6 +62,10 @@ public class ArmPanel extends JPanel
 
     @Override
     public void mouseReleased(MouseEvent e) {
+        if (isDrawingPath) {
+            isDrawingPath = false;
+            repaint();
+        }
     }
 
     @Override
@@ -60,14 +79,34 @@ public class ArmPanel extends JPanel
     // --- MouseMotionListener ---
     @Override
     public void mouseDragged(MouseEvent e) {
-        int dx = e.getX() - lastX, dy = e.getY() - lastY;
-        if (SwingUtilities.isLeftMouseButton(e)) {
-            camAz += dx * 0.5;
-            camEl = Math.max(-85, Math.min(85, camEl - dy * 0.5));
+        if (isDrawingPath) {
+            double zDraw = 20.0;
+            try {
+                zDraw = Double.parseDouble(robot.txtMouseZ.getText().trim());
+            } catch (NumberFormatException ex) {}
+            double[] pt = screenToWorld(e.getX(), e.getY(), zDraw);
+            if (pt != null) {
+                if (!referencePath.isEmpty()) {
+                    double[] last = referencePath.get(referencePath.size() - 1);
+                    double dist = Math.sqrt(Math.pow(pt[0] - last[0], 2) + Math.pow(pt[1] - last[1], 2));
+                    if (dist > 1.5) { // Threshold to prevent too many close points
+                        referencePath.add(pt);
+                    }
+                } else {
+                    referencePath.add(pt);
+                }
+            }
+            repaint();
+        } else {
+            int dx = e.getX() - lastX, dy = e.getY() - lastY;
+            if (SwingUtilities.isLeftMouseButton(e)) {
+                camAz += dx * 0.5;
+                camEl = Math.max(-85, Math.min(85, camEl - dy * 0.5));
+            }
+            lastX = e.getX();
+            lastY = e.getY();
+            repaint();
         }
-        lastX = e.getX();
-        lastY = e.getY();
-        repaint();
     }
 
     @Override
@@ -79,6 +118,33 @@ public class ArmPanel extends JPanel
     public void mouseWheelMoved(MouseWheelEvent e) {
         scale = Math.max(1.0, Math.min(30.0, scale - e.getWheelRotation() * 0.8));
         repaint();
+    }
+
+    public double[] screenToWorld(int sx, int sy, double fixedZ) {
+        int cx = getWidth() / 2, cy = getHeight() * 2 / 3;
+
+        double az = Math.toRadians(camAz), el = Math.toRadians(camEl);
+        double cAz = Math.cos(az), sAz = Math.sin(az), cEl = Math.cos(el), sEl = Math.sin(el);
+
+        double scrX = (sx - cx) / scale;
+        double scrY = -(sy - cy) / scale;
+
+        if (Math.abs(sEl) < 0.05)
+            return null; // Avoid singularity near horizontal view
+
+        double p0 = 0, p1 = 0;
+        // Numerical solve for world (p0, p1) given ScreenX, ScreenY and fixed World Z
+        for (int iter = 0; iter < 100; iter++) {
+            double vz = p0 * cAz * cEl + p1 * sAz * cEl + fixedZ * sEl;
+            double f = 10000.0 / (10000.0 + vz);
+            double vx = scrX / f;
+            double vy_prime = scrY / f - fixedZ * cEl;
+
+            p0 = (-sAz * sEl * vx - cAz * vy_prime) / sEl;
+            p1 = (-sAz * vy_prime + cAz * sEl * vx) / sEl;
+        }
+
+        return new double[] { p0, p1, fixedZ };
     }
 
     /**
@@ -243,6 +309,7 @@ public class ArmPanel extends JPanel
             }
             drawTrail(g2, cx, cy);
         }
+        drawReferencePath(g2, cx, cy);
 
         double[][] T_end_right = computeEndEffectorMatrixRight();
         double[][] T_end_left = computeEndEffectorMatrixLeft();
@@ -698,6 +765,18 @@ public class ArmPanel extends JPanel
 //            g2.drawLine(p1[0]+1, p1[1], p2[0], p2[1]+1);
 //            g2.drawLine(p1[0]-1, p1[1], p2[0], p2[1]-1);
         }
+    }
+
+    void drawReferencePath(Graphics2D g2, int cx, int cy) {
+        if (referencePath == null || referencePath.isEmpty()) return;
+        g2.setColor(new Color(0, 200, 0)); // Bright Green
+        g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1.0f, new float[]{5.0f, 5.0f}, 0.0f)); // Dashed line
+        for (int i = 1; i < referencePath.size(); i++) {
+            int[] p1 = project(referencePath.get(i - 1), cx, cy);
+            int[] p2 = project(referencePath.get(i), cx, cy);
+            g2.drawLine(p1[0], p1[1], p2[0], p2[1]);
+        }
+        g2.setStroke(new BasicStroke(1.0f)); // Reset stroke
     }
 
     // drawGripper method removed (now handled by GripperDrawable class)
