@@ -99,7 +99,7 @@ public class ArmPanel extends JPanel
             repaint();
         } else {
             int dx = e.getX() - lastX, dy = e.getY() - lastY;
-            if (SwingUtilities.isLeftMouseButton(e)) {
+            if (SwingUtilities.isLeftMouseButton(e) || SwingUtilities.isRightMouseButton(e)) {
                 camAz += dx * 0.5;
                 camEl = Math.max(-85, Math.min(85, camEl - dy * 0.5));
             }
