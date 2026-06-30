@@ -87,7 +87,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     boolean manualMode = false;
     boolean isUpdatingFromFK = false;
 
-    JComboBox<String> trajTypeCombo = new JComboBox<>(new String[] { "Đường thẳng", "Xoắn ốc" });
+    JComboBox<String> trajTypeCombo = new JComboBox<>(new String[] { "Đường thẳng", "Xoắn ốc", "Vẽ bằng chuột", "Công thức toán học" });
     JTextField txtLStartX = new JTextField("-16.3", 4);
     JTextField txtLStartY = new JTextField("13.8", 4);
     JTextField txtLStartZ = new JTextField("20", 4);
@@ -100,6 +100,24 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JTextField txtSR = new JTextField("5", 4);
     JTextField txtSH = new JTextField("10", 4);
     JTextField txtSK = new JTextField("3", 4);
+
+    // Mouse Draw UI components
+    public JCheckBox cbEnableDrawing = new JCheckBox("Bật chế độ vẽ (Kéo chuột trái)", true);
+    public JTextField txtMouseZ = new JTextField("20", 4);
+    public JButton btnClearMouseDraw = new JButton("Xóa hình vẽ");
+
+    // Math Formula UI components
+    public JComboBox<String> comboMathType = new JComboBox<>(new String[] { "Hình tròn (Circle)", "Đường hình Sin (Sine Wave)", "Hình vô cực (Infinity)" });
+    public JTextField txtMathX = new JTextField("120", 4);
+    public JTextField txtMathY = new JTextField("0", 4);
+    public JTextField txtMathZ = new JTextField("20", 4);
+    public JTextField txtMathSize = new JTextField("25", 4);
+    public JTextField txtMathFreq = new JTextField("1", 4);
+    public JTextField txtMathLength = new JTextField("80", 4);
+
+    public boolean isDrawingActive() {
+        return trajTypeCombo.getSelectedIndex() == 2 && cbEnableDrawing != null && cbEnableDrawing.isSelected();
+    }
     JTabbedPane mainTabs;
 
     JCheckBox fixedHeightCb = new JCheckBox("Click cố định Z", false);
@@ -340,6 +358,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (isRightArmSelected != right) {
                 isRightArmSelected = right;
                 updateArm();
+                if (right) {
+                    txtMathX.setText("120");
+                } else {
+                    txtMathX.setText("-120");
+                }
             }
         });
         topP.add(new JLabel("  Loại quỹ đạo: "));
@@ -391,11 +414,63 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         pSpiral.add(s3);
         cards.add(pSpiral, "Xoắn ốc");
 
+        // --- Card 3: Mouse Draw ---
+        JPanel pMouse = new JPanel(new GridLayout(3, 1, 5, 2));
+        pMouse.setBorder(BorderFactory.createTitledBorder("Thông số Vẽ bằng chuột"));
+
+        JPanel m1 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        m1.add(cbEnableDrawing);
+
+        JPanel m2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        m2.add(new JLabel("Cao độ Z vẽ:"));
+        m2.add(txtMouseZ);
+        m2.add(Box.createHorizontalStrut(10));
+        m2.add(btnClearMouseDraw);
+
+        btnClearMouseDraw.addActionListener(evt -> {
+            armPanel.referencePath.clear();
+            armPanel.repaint();
+        });
+
+        pMouse.add(m1);
+        pMouse.add(m2);
+        cards.add(pMouse, "Vẽ bằng chuột");
+
+        // --- Card 4: Math Formula ---
+        JPanel pFormula = new JPanel(new GridLayout(4, 1, 5, 2));
+        pFormula.setBorder(BorderFactory.createTitledBorder("Thông số Công thức toán học"));
+
+        JPanel f1 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        f1.add(new JLabel("Công thức:"));
+        f1.add(comboMathType);
+
+        JPanel f2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        f2.add(new JLabel("Tâm/Bắt đầu (X,Y,Z):"));
+        f2.add(txtMathX);
+        f2.add(txtMathY);
+        f2.add(txtMathZ);
+
+        JPanel f3 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        f3.add(new JLabel("Biên độ/Bán kính (R/A):"));
+        f3.add(txtMathSize);
+        f3.add(new JLabel(" Số vòng/Tần số (K/f):"));
+        f3.add(txtMathFreq);
+
+        JPanel f4 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        f4.add(new JLabel("Chiều dài Sin (L):"));
+        f4.add(txtMathLength);
+
+        pFormula.add(f1);
+        pFormula.add(f2);
+        pFormula.add(f3);
+        pFormula.add(f4);
+        cards.add(pFormula, "Công thức toán học");
+
         trajPanel.add(cards);
 
-        trajTypeCombo.addItemListener(e -> {
+        trajTypeCombo.addItemListener(evt -> {
             CardLayout cl = (CardLayout) (cards.getLayout());
-            cl.show(cards, (String) e.getItem());
+            cl.show(cards, (String) evt.getItem());
         });
 
         JPanel botP = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
@@ -414,9 +489,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (trajectoryTimer != null)
                 trajectoryTimer.stop();
             isRightArmSelected = (trajArmCombo.getSelectedIndex() == 0);
-            boolean isLine = trajTypeCombo.getSelectedIndex() == 0;
+            int selection = trajTypeCombo.getSelectedIndex();
             try {
-                if (isLine) {
+                if (selection == 0) { // Đường thẳng
                     double sx = Double.parseDouble(txtLStartX.getText());
                     double sy = Double.parseDouble(txtLStartY.getText());
                     double sz = Double.parseDouble(txtLStartZ.getText());
@@ -426,7 +501,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     trajDebug("INPUT_LINE", String.format("S=(%.2f,%.2f,%.2f) E=(%.2f,%.2f,%.2f)",
                             sx, sy, sz, ex, ey, ez));
                     runLineTrajectory(sx, sy, sz, ex, ey, ez);
-                } else {
+                } else if (selection == 1) { // Xoắn ốc
                     double cx = Double.parseDouble(txtSStartX.getText());
                     double cy = Double.parseDouble(txtSStartY.getText());
                     double cz = Double.parseDouble(txtSStartZ.getText());
@@ -436,6 +511,58 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     trajDebug("INPUT_SPIRAL", String.format("C=(%.2f,%.2f,%.2f) R=%.2f H=%.2f K=%.2f",
                             cx, cy, cz, r, h, k));
                     runSpiralTrajectoryParam(cx, cy, cz, r, h, k);
+                } else if (selection == 2) { // Vẽ bằng chuột
+                    trajDebug("INPUT_MOUSE_DRAW", "Running custom mouse drawn trajectory");
+                    runCustomPathTrajectory(armPanel.referencePath);
+                } else if (selection == 3) { // Công thức toán học
+                    int mathIdx = comboMathType.getSelectedIndex();
+                    double mx = Double.parseDouble(txtMathX.getText());
+                    double my = Double.parseDouble(txtMathY.getText());
+                    double mz = Double.parseDouble(txtMathZ.getText());
+                    double mSize = Double.parseDouble(txtMathSize.getText());
+                    double mFreq = Double.parseDouble(txtMathFreq.getText());
+                    double mLen = Double.parseDouble(txtMathLength.getText());
+                    
+                    ArrayList<double[]> mathPath = new ArrayList<>();
+                    if (mathIdx == 0) { // Circle
+                        int numSteps = (int) (100 * mFreq);
+                        for (int i = 0; i <= numSteps; i++) {
+                            double theta = (i / (double) numSteps) * 2 * Math.PI * mFreq;
+                            mathPath.add(new double[] {
+                                mx + mSize * Math.cos(theta),
+                                my + mSize * Math.sin(theta),
+                                mz
+                            });
+                        }
+                    } else if (mathIdx == 1) { // Sine wave
+                        int numSteps = 100;
+                        double direction = isRightArmSelected ? 1.0 : -1.0;
+                        for (int i = 0; i <= numSteps; i++) {
+                            double ratio = i / (double) numSteps;
+                            double tx = mx + direction * ratio * mLen;
+                            double ty = my + mSize * Math.sin(2 * Math.PI * mFreq * ratio);
+                            double tz = mz;
+                            mathPath.add(new double[] { tx, ty, tz });
+                        }
+                    } else { // Infinity / Lemniscate of Bernoulli
+                        int numSteps = (int) (100 * mFreq);
+                        for (int i = 0; i <= numSteps; i++) {
+                            double t = (i / (double) numSteps) * 2 * Math.PI * mFreq;
+                            double denom = 1 + Math.pow(Math.sin(t), 2);
+                            double tx = mx + (mSize * Math.cos(t)) / denom;
+                            double ty = my + (mSize * Math.sin(t) * Math.cos(t)) / denom;
+                            double tz = mz;
+                            mathPath.add(new double[] { tx, ty, tz });
+                        }
+                    }
+                    
+                    // Show generated path in referencePath
+                    armPanel.referencePath.clear();
+                    armPanel.referencePath.addAll(mathPath);
+                    armPanel.repaint();
+                    
+                    trajDebug("INPUT_MATH_FORMULA", String.format("Math formula type=%d mx=%.2f size=%.2f freq=%.2f", mathIdx, mx, mSize, mFreq));
+                    runCustomPathTrajectory(mathPath);
                 }
             } catch (Exception ex) {
                 trajDebug("INPUT_ERROR", ex.toString());
@@ -1315,13 +1442,179 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                             setGotoStatus("~ Điểm khó đạt, đang giữ pose gần nhất", new Color(180, 110, 0));
                         }
                     });
-                    trajDebug("LINE_TIMER_START", "Trajectory timer started");
+                                  trajDebug("LINE_TIMER_START", "Trajectory timer started");
                     trajectoryTimer.start();
                 });
                 delayTimer.start();
             }
         });
         prepareTimer.start();
+    }
+
+    void runCustomPathTrajectory(java.util.List<double[]> path) {
+        if (path == null || path.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Không có tọa độ quỹ đạo để chạy!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        setTitle("Đang di chuyển tới điểm xuất phát...");
+        setGotoStatus("Đang chuẩn bị quỹ đạo tùy chỉnh...", new Color(0, 90, 180));
+        if (speedSlider.getValue() <= 0) {
+            speedSlider.setValue(30);
+            speedLabel.setText("30 °/s");
+        }
+
+        // Tắt hiển thị quỹ đạo cũ và xóa cặn
+        showTrailCb.setSelected(false);
+        armPanel.trail.clear();
+
+        final boolean isRight = isRightArmSelected;
+        final double[] armAngles = isRight ? anglesRight : anglesLeft;
+        final double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
+        final JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
+        final JLabel[] armAngleLbls = isRight ? angleLblsRight : angleLblsLeft;
+        final JSlider armAlphaSlider = isRight ? alphaSliderRight : alphaSliderLeft;
+        final JComboBox<String> armConfigCombo = isRight ? configComboRight : configComboLeft;
+
+        String cfg = armConfigCombo.getSelectedIndex() == 0 ? "+" : "-";
+        trajectoryLockedCfg = cfg;
+        trajectoryLastQ = null;
+        trajectoryLastAlpha = armAlphaSlider.getValue();
+
+        double[] startPt = path.get(0);
+        double[] startResult = solveIKForTrajectoryPoint(startPt[0], startPt[1], startPt[2]);
+        if (startResult != null) {
+            if (isRight) {
+                setTargetAnglesRight(startResult);
+            } else {
+                setTargetAnglesLeft(startResult);
+            }
+            trajectoryLastQ = startResult.clone();
+            updateArm();
+        } else {
+            setGotoStatus("Điểm bắt đầu quỹ đạo ngoài tầm!", Color.RED);
+            setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
+            return;
+        }
+
+        // Resample the path
+        double speed = Math.max(1.0, speedSlider.getValue() / 2.0); // units per sec
+        java.util.List<double[]> resampled = resamplePath(path, speed);
+        if (resampled.isEmpty()) {
+            resampled = path;
+        }
+
+        final java.util.List<double[]> finalPath = resampled;
+        final int[] currentIndex = { 0 };
+        final int[] waitMs = { 0 };
+
+        Timer prepareTimer = new Timer(50, evt -> {
+            waitMs[0] += 50;
+            boolean arrived = true;
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                if (Math.abs(armAngles[i] - armTargetAngles[i]) > 0.5)
+                    arrived = false;
+            }
+            if (arrived || waitMs[0] >= 5000) {
+                ((Timer) evt.getSource()).stop();
+                if (!arrived) {
+                    setGotoStatus("Hết thời gian chờ điểm đầu, bắt đầu chạy quỹ đạo từ vị trí hiện tại", new Color(180, 110, 0));
+                }
+                setTitle("Chờ 1 giây...");
+
+                Timer delayTimer = new Timer(1000, evt2 -> {
+                    ((Timer) evt2.getSource()).stop();
+
+                    setTitle("Quỹ đạo tùy chỉnh đang chạy...");
+                    showTrailCb.setSelected(true);
+
+                    trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
+                        if (currentIndex[0] >= finalPath.size()) {
+                            trajectoryTimer.stop();
+                            setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
+                            setGotoStatus("Quỹ đạo tùy chỉnh hoàn thành!", new Color(0, 140, 0));
+                            return;
+                        }
+
+                        double[] pt = finalPath.get(currentIndex[0]);
+                        double tx = pt[0];
+                        double ty = pt[1];
+                        double tz = pt[2];
+                        currentIndex[0]++;
+
+                        double[] result = solveIKForTrajectoryPoint(tx, ty, tz);
+                        if (result != null) {
+                            trajectoryLastQ = result.clone();
+                            for (int i = 0; i < NUM_JOINTS; i++) {
+                                armTargetAngles[i] = armAngles[i] = result[i];
+                                armSliders[i].removeChangeListener(this);
+                                armSliders[i].setValue((int) Math.round(armAngles[i]));
+                                armSliders[i].addChangeListener(this);
+                                armAngleLbls[i].setText((int) Math.round(armAngles[i]) + "°");
+                            }
+                            updateArm();
+                        } else {
+                            if (trajectoryLastQ != null) {
+                                if (isRight) {
+                                    setTargetAnglesRight(trajectoryLastQ);
+                                } else {
+                                    setTargetAnglesLeft(trajectoryLastQ);
+                                }
+                            }
+                            setGotoStatus("~ Điểm khó đạt, đang giữ pose gần nhất", new Color(180, 110, 0));
+                        }
+                    });
+                    trajectoryTimer.start();
+                });
+                delayTimer.start();
+            }
+        });
+        prepareTimer.start();
+    }
+
+    private java.util.List<double[]> resamplePath(java.util.List<double[]> path, double speedUnitsPerSec) {
+        java.util.List<double[]> result = new java.util.ArrayList<>();
+        if (path.size() < 2) return path;
+
+        double dt = MOTION_DT_MS / 1000.0;
+        double stepLen = speedUnitsPerSec * dt;
+        if (stepLen <= 0.05) stepLen = 0.05; // avoid infinite loop or precision hang
+
+        double[] lastPt = path.get(0);
+        result.add(lastPt.clone());
+
+        double remainingDist = 0;
+
+        for (int i = 1; i < path.size(); i++) {
+            double[] pA = path.get(i - 1);
+            double[] pB = path.get(i);
+
+            double segmentLen = Math.sqrt(Math.pow(pB[0] - pA[0], 2) + Math.pow(pB[1] - pA[1], 2) + Math.pow(pB[2] - pA[2], 2));
+            if (segmentLen < 1e-4) continue;
+
+            double currentDist = remainingDist;
+            while (currentDist <= segmentLen) {
+                double t = currentDist / segmentLen;
+                double[] p = {
+                    pA[0] + (pB[0] - pA[0]) * t,
+                    pA[1] + (pB[1] - pA[1]) * t,
+                    pA[2] + (pB[2] - pA[2]) * t
+                };
+                result.add(p);
+                currentDist += stepLen;
+            }
+            remainingDist = currentDist - segmentLen;
+        }
+
+        // Ensure last point is added if not already
+        double[] lastTarget = path.get(path.size() - 1);
+        double[] lastAdded = result.get(result.size() - 1);
+        double finalDist = Math.sqrt(Math.pow(lastTarget[0]-lastAdded[0],2) + Math.pow(lastTarget[1]-lastAdded[1],2) + Math.pow(lastTarget[2]-lastAdded[2],2));
+        if (finalDist > 0.01) {
+            result.add(lastTarget.clone());
+        }
+
+        return result;
     }
 
     void runSpiralTrajectoryParam(double cx, double cy, double cz, double R, double H, double K) {
