@@ -41,3 +41,64 @@ void Set_Servo_Angle(uint8_t index, uint16_t angle) {
                      
     __HAL_TIM_SET_COMPARE(servos[index].htim, servos[index].channel, pulse);
 }
+
+void Servo_Test_Patterns(void) {
+    // -------------------------------------------------------------------------
+    // Pattern 1: Dynamic Sweep (All channels sweep together)
+    // -------------------------------------------------------------------------
+    // Sweeps all servos from 0 to 270 degrees, then back.
+    for (uint16_t angle = 0; angle <= 270; angle += 2) {
+        for (uint8_t i = 0; i < MAX_SERVOS; i++) {
+            Set_Servo_Angle(i, angle);
+        }
+        HAL_Delay(15);
+    }
+    HAL_Delay(500);
+
+    for (int16_t angle = 270; angle >= 0; angle -= 2) {
+        for (uint8_t i = 0; i < MAX_SERVOS; i++) {
+            Set_Servo_Angle(i, (uint16_t)angle);
+        }
+        HAL_Delay(15);
+    }
+
+    HAL_Delay(1000);
+
+    // -------------------------------------------------------------------------
+    // Pattern 2: Channel Identification (Unique static duty cycle per channel)
+    // -------------------------------------------------------------------------
+    // Set each channel to a distinct angle so you can measure/identify each:
+    // Ch 0: 0 deg (500us)    | Ch 5: 150 deg (1611us)
+    // Ch 1: 30 deg (722us)   | Ch 6: 180 deg (1833us)
+    // Ch 2: 60 deg (944us)   | Ch 7: 210 deg (2055us)
+    // Ch 3: 90 deg (1166us)  | Ch 8: 240 deg (2277us)
+    // Ch 4: 120 deg (1388us) | Ch 9: 270 deg (2500us)
+    // -------------------------------------------------------------------------
+    for (uint8_t i = 0; i < MAX_SERVOS; i++) {
+        uint16_t test_angle = i * 30; // 0 to 270 degrees
+        Set_Servo_Angle(i, test_angle);
+    }
+    HAL_Delay(5000); // Hold for 5 seconds
+
+    // -------------------------------------------------------------------------
+    // Pattern 3: Discrete Limit Test (All MIN, all MID, all MAX)
+    // -------------------------------------------------------------------------
+    // All MIN (0 deg / 500us)
+    for (uint8_t i = 0; i < MAX_SERVOS; i++) {
+        Set_Servo_Angle(i, 0);
+    }
+    HAL_Delay(2000);
+
+    // All MID (135 deg / 1500us)
+    for (uint8_t i = 0; i < MAX_SERVOS; i++) {
+        Set_Servo_Angle(i, 135);
+    }
+    HAL_Delay(2000);
+
+    // All MAX (270 deg / 2500us)
+    for (uint8_t i = 0; i < MAX_SERVOS; i++) {
+        Set_Servo_Angle(i, 270);
+    }
+    HAL_Delay(2000);
+}
+

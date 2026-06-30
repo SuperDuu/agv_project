@@ -21,6 +21,7 @@ extern Servo_t servos[MAX_SERVOS];
 
 void Servo_Init(void);
 void Set_Servo_Angle(uint8_t index, uint16_t angle);
+void Servo_Test_Patterns(void);
 
 #ifdef __cplusplus
 }
