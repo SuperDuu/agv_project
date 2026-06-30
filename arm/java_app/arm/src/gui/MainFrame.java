@@ -1793,8 +1793,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double bestRelaxedAlpha = trajectoryLastAlpha;
         String bestRelaxedCfg = trajectoryLockedCfg;
 
+        JComboBox<String> gCombo = isRightArmSelected ? gripperModeComboRight : gripperModeComboLeft;
+        boolean fixedGround = (gCombo.getSelectedIndex() == 0);
+
         // 1) Search near previous alpha to avoid branch jumping
-        for (double a = trajectoryLastAlpha - 12; a <= trajectoryLastAlpha + 12; a += 1.0) {
+        double aStart = fixedGround ? 0.0 : (trajectoryLastAlpha - 12);
+        double aEnd = fixedGround ? 0.0 : (trajectoryLastAlpha + 12);
+        double aStep = 1.0;
+        for (double a = aStart; a <= aEnd; a += aStep) {
             List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRightArmSelected);
@@ -1821,7 +1827,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // 2) Fallback to global scan if local search fails or is inaccurate
         if (bestStrictQ == null && bestRelaxedQ == null) {
             String[] cfgFallback = isFirstWaypoint ? cfgCandidates : new String[] { trajectoryLockedCfg, altCfg };
-            for (double a = -90; a <= 30; a += 1.5) {
+            double aStartGlobal = fixedGround ? 0.0 : -90;
+            double aEndGlobal = fixedGround ? 0.0 : 30;
+            double aStepGlobal = 1.5;
+            for (double a = aStartGlobal; a <= aEndGlobal; a += aStepGlobal) {
                 List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRightArmSelected);
