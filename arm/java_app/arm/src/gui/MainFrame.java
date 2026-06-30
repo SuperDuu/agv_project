@@ -347,6 +347,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private JPanel buildTrajectoryPanel() {
         JPanel trajPanel = new JPanel();
+        JButton btnCheckLine = new JButton("Kiểm tra đoạn thẳng");
         trajPanel.setLayout(new BoxLayout(trajPanel, BoxLayout.Y_AXIS));
         trajPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
@@ -385,8 +386,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         l2.add(txtLEndY);
         l2.add(txtLEndZ);
 
+        JPanel l3 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        l3.add(btnCheckLine);
+
         pLine.add(l1);
         pLine.add(l2);
+        pLine.add(l3);
         cards.add(pLine, "Đường thẳng");
 
         // --- Card 2: Spiral ---
@@ -476,7 +481,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         JPanel botP = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         JButton btnStartTraj = new JButton("Bắt đầu");
         JButton btnStopTraj = new JButton("Dừng");
-        JButton btnCheckLine = new JButton("Kiểm tra đoạn thẳng");
 
         btnStopTraj.addActionListener(e -> {
             if (trajectoryTimer != null)
@@ -595,7 +599,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         });
 
-        botP.add(btnCheckLine);
         botP.add(btnStartTraj);
         botP.add(btnStopTraj);
         trajPanel.add(botP);
