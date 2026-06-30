@@ -144,6 +144,7 @@ public class ArmPanel extends JPanel
             p1 = (-sAz * vy_prime + cAz * sEl * vx) / sEl;
         }
 
+        System.out.printf("[DEBUG_DRAW] Screen (%d, %d) -> World: (X=%.2f, Y=%.2f, Z=%.2f)\n", sx, sy, p0, p1, fixedZ);
         return new double[] { p0, p1, fixedZ };
     }
 

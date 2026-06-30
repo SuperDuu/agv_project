@@ -1770,6 +1770,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         String[] cfgCandidates = isFirstWaypoint ? new String[] { trajectoryLockedCfg, altCfg }
                 : new String[] { trajectoryLockedCfg };
 
+        System.out.printf("[DEBUG_TRAJ_IK] Target: (X=%.2f, Y=%.2f, Z=%.2f) | Arm=%s | ConfigRef=%s | isFirst=%b\n",
+            px, py, pz, isRightArmSelected ? "RIGHT" : "LEFT", trajectoryLockedCfg, isFirstWaypoint);
+
         double bestStrictCost = Double.MAX_VALUE;
         double[] bestStrictQ = null;
         double bestStrictAlpha = trajectoryLastAlpha;
@@ -1836,13 +1839,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (bestStrictQ != null) {
             trajectoryLastAlpha = bestStrictAlpha;
             trajectoryLockedCfg = bestStrictCfg;
+            System.out.printf("[DEBUG_TRAJ_IK] SUCCESS (Strict) | Config=%s | Alpha=%.1f\n", bestStrictCfg, bestStrictAlpha);
             return bestStrictQ;
         }
         if (bestRelaxedQ != null) {
             trajectoryLastAlpha = bestRelaxedAlpha;
             trajectoryLockedCfg = bestRelaxedCfg;
+            System.out.printf("[DEBUG_TRAJ_IK] SUCCESS (Relaxed) | Config=%s | Alpha=%.1f\n", bestRelaxedCfg, bestRelaxedAlpha);
             return bestRelaxedQ;
         }
+        System.out.println("[DEBUG_TRAJ_IK] FAILED - No valid IK found!");
         return null;
     }
 
