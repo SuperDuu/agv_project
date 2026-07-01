@@ -21,6 +21,14 @@ public class ArmPanel extends JPanel
     ArrayList<double[]> workspacePointsLeft = new ArrayList<>();
     java.util.HashSet<String> workspaceKeys = new java.util.HashSet<>();
 
+    // Workspace slice at fixed Z
+    ArrayList<double[]> workspaceSlicePointsRight = new ArrayList<>();
+    ArrayList<double[]> workspaceSlicePointsLeft = new ArrayList<>();
+    ArrayList<double[]> sliceOuterRight = new ArrayList<>();
+    ArrayList<double[]> sliceInnerRight = new ArrayList<>();
+    ArrayList<double[]> sliceOuterLeft = new ArrayList<>();
+    ArrayList<double[]> sliceInnerLeft = new ArrayList<>();
+
     MainFrame robot;
 
     public ArmPanel(MainFrame robot) {
@@ -276,6 +284,11 @@ public class ArmPanel extends JPanel
 
         if (robot.showWorkspace)
             drawWorkspace(g2, cx, cy);
+
+        if (robot.showWorkspaceSlice) {
+            drawWorkspaceSlice(g2, cx, cy, true);  // Right slice
+            drawWorkspaceSlice(g2, cx, cy, false); // Left slice
+        }
 
         if (!workspaceStatus.isEmpty()) {
             g2.setFont(new Font("Arial", Font.BOLD, 18));
@@ -952,6 +965,93 @@ public class ArmPanel extends JPanel
         }
     }
 
+    void drawWorkspaceSlice(Graphics2D g2, int cx, int cy, boolean isRight) {
+        java.util.List<double[]> outer;
+        java.util.List<double[]> inner;
+        java.util.List<double[]> dots;
+
+        if (isRight) {
+            synchronized (workspaceSlicePointsRight) {
+                outer = new ArrayList<>(sliceOuterRight);
+                inner = new ArrayList<>(sliceInnerRight);
+                dots = new ArrayList<>(workspaceSlicePointsRight);
+            }
+        } else {
+            synchronized (workspaceSlicePointsLeft) {
+                outer = new ArrayList<>(sliceOuterLeft);
+                inner = new ArrayList<>(sliceInnerLeft);
+                dots = new ArrayList<>(workspaceSlicePointsLeft);
+            }
+        }
+
+        if (outer.isEmpty() && inner.isEmpty() && dots.isEmpty()) {
+            return;
+        }
+
+        // Draw translucent glowing polygon
+        if (outer.size() >= 3) {
+            Polygon poly = new Polygon();
+            for (int i = 0; i < outer.size(); i++) {
+                int[] sc = project(outer.get(i), cx, cy);
+                poly.addPoint(sc[0], sc[1]);
+            }
+            for (int i = inner.size() - 1; i >= 0; i--) {
+                int[] sc = project(inner.get(i), cx, cy);
+                poly.addPoint(sc[0], sc[1]);
+            }
+
+            if (isRight) {
+                g2.setColor(new Color(0, 200, 255, 45)); // Translucent Cyan
+            } else {
+                g2.setColor(new Color(255, 0, 150, 45)); // Translucent Magenta
+            }
+            g2.fill(poly);
+
+            // Draw outlines
+            g2.setStroke(new BasicStroke(2.0f));
+            if (isRight) {
+                g2.setColor(new Color(0, 150, 255, 180));
+            } else {
+                g2.setColor(new Color(255, 0, 128, 180));
+            }
+
+            for (int i = 0; i < outer.size() - 1; i++) {
+                int[] p1 = project(outer.get(i), cx, cy);
+                int[] p2 = project(outer.get(i + 1), cx, cy);
+                g2.drawLine(p1[0], p1[1], p2[0], p2[1]);
+            }
+            for (int i = 0; i < inner.size() - 1; i++) {
+                int[] p1 = project(inner.get(i), cx, cy);
+                int[] p2 = project(inner.get(i + 1), cx, cy);
+                g2.drawLine(p1[0], p1[1], p2[0], p2[1]);
+            }
+
+            // Connect ends
+            if (!inner.isEmpty()) {
+                int[] pOuterStart = project(outer.get(0), cx, cy);
+                int[] pInnerStart = project(inner.get(0), cx, cy);
+                g2.drawLine(pOuterStart[0], pOuterStart[1], pInnerStart[0], pInnerStart[1]);
+
+                int[] pOuterEnd = project(outer.get(outer.size() - 1), cx, cy);
+                int[] pInnerEnd = project(inner.get(inner.size() - 1), cx, cy);
+                g2.drawLine(pOuterEnd[0], pOuterEnd[1], pInnerEnd[0], pInnerEnd[1]);
+            }
+        }
+
+        // Draw fine grid dots
+        if (!dots.isEmpty()) {
+            if (isRight) {
+                g2.setColor(new Color(0, 150, 255, 120));
+            } else {
+                g2.setColor(new Color(255, 0, 128, 120));
+            }
+            for (double[] p : dots) {
+                int[] sc = project(p, cx, cy);
+                g2.fillRect(sc[0] - 1, sc[1] - 1, 2, 2);
+            }
+        }
+    }
+
     void addWorkspacePoint(double[] p) {
         addWorkspacePoint(p, robot.isRightArmSelected);
     }
@@ -986,5 +1086,40 @@ public class ArmPanel extends JPanel
             workspacePointsLeft.clear();
         }
         workspaceKeys.clear();
+    }
+
+    public void clearWorkspaceSlice() {
+        synchronized (workspaceSlicePointsRight) {
+            workspaceSlicePointsRight.clear();
+            sliceOuterRight.clear();
+            sliceInnerRight.clear();
+        }
+        synchronized (workspaceSlicePointsLeft) {
+            workspaceSlicePointsLeft.clear();
+            sliceOuterLeft.clear();
+            sliceInnerLeft.clear();
+        }
+    }
+
+    public void setWorkspaceSliceData(java.util.List<double[]> dots, java.util.List<double[]> outer, java.util.List<double[]> inner, boolean isRight) {
+        if (isRight) {
+            synchronized (workspaceSlicePointsRight) {
+                workspaceSlicePointsRight.clear();
+                workspaceSlicePointsRight.addAll(dots);
+                sliceOuterRight.clear();
+                sliceOuterRight.addAll(outer);
+                sliceInnerRight.clear();
+                sliceInnerRight.addAll(inner);
+            }
+        } else {
+            synchronized (workspaceSlicePointsLeft) {
+                workspaceSlicePointsLeft.clear();
+                workspaceSlicePointsLeft.addAll(dots);
+                sliceOuterLeft.clear();
+                sliceOuterLeft.addAll(outer);
+                sliceInnerLeft.clear();
+                sliceInnerLeft.addAll(inner);
+            }
+        }
     }
 }

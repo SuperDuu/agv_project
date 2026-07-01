@@ -112,6 +112,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     boolean showWorkspace = false;
     Thread explorationThread;
+    boolean showWorkspaceSlice = false;
+    Thread sliceExplorationThread;
     String lastLimitInfo = "";
 
     boolean isGripped = false;
@@ -401,6 +403,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (isRightArmSelected != right) {
                 isRightArmSelected = right;
                 updateArm();
+                if (showWorkspaceSlice) {
+                    updateWorkspaceSlice();
+                }
             }
         });
         topPanel.add(new JLabel(" Tay Vẽ:"));
@@ -556,6 +561,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         });
 
+        JCheckBoxMenuItem workspaceSliceItem = new JCheckBoxMenuItem("Hiện Lát Cắt Vùng Làm Việc (Fixed Z)", showWorkspaceSlice);
+        workspaceSliceItem.addItemListener(e -> {
+            showWorkspaceSlice = workspaceSliceItem.isSelected();
+            if (showWorkspaceSlice) {
+                updateWorkspaceSlice();
+            } else {
+                stopWorkspaceSliceExploration();
+                armPanel.clearWorkspaceSlice();
+                armPanel.repaint();
+            }
+        });
+
         JMenuItem topViewItem = new JMenuItem("Hệ Trục (Top View)");
         topViewItem.setActionCommand("TopView");
         topViewItem.addActionListener(menuItemListener);
@@ -567,6 +584,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         hienthiMenu.add(gridItem);
         hienthiMenu.add(trailItem);
         hienthiMenu.add(workspaceItem);
+        hienthiMenu.add(workspaceSliceItem);
         hienthiMenu.addSeparator();
         hienthiMenu.add(topViewItem);
         hienthiMenu.add(perspItem);
@@ -876,6 +894,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     setGotoStatusLeft("OK", new Color(0, 140, 0));
                     setGotoStatusRight("Về Home", Color.BLUE);
                 }
+                if (showWorkspaceSlice) {
+                    updateWorkspaceSlice();
+                }
             } else {
                 if (isRight) setGotoStatusRight("Ngoài tầm/Góc!", Color.RED);
                 else setGotoStatusLeft("Ngoài tầm/Góc!", Color.RED);
@@ -1006,6 +1027,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         txYRight.setText(String.valueOf((int) py));
                         txZRight.setText(String.valueOf((int) pz));
                         setGotoStatusRight("OK", new Color(0, 140, 0));
+                        if (i == 2 && showWorkspaceSlice) {
+                            updateWorkspaceSlice();
+                        }
                     }
                 } catch (Exception ex) {
                 }
@@ -1029,6 +1053,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         txYLeft.setText(String.valueOf((int) py));
                         txZLeft.setText(String.valueOf((int) pz));
                         setGotoStatusLeft("OK", new Color(0, 140, 0));
+                        if (i == 2 && showWorkspaceSlice) {
+                            updateWorkspaceSlice();
+                        }
                     }
                 } catch (Exception ex) {
                 }
@@ -1749,6 +1776,179 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         explorationThread.setPriority(Thread.MIN_PRIORITY);
         explorationThread.start();
+    }
+
+    public double getActiveArmZ() {
+        try {
+            JTextField tZ = isRightArmSelected ? txZRight : txZLeft;
+            return Double.parseDouble(tZ.getText().trim());
+        } catch (Exception e) {
+            return 20.0;
+        }
+    }
+
+    private boolean checkPointReachableFast(double x, double y, double z, boolean isRight, double[] qInitGuess) {
+        double dx = x;
+        double dy = y;
+        double dz = z - (kinematics.Kinematics.L0 + kinematics.Kinematics.L1);
+        double distSq = dx * dx + dy * dy + dz * dz;
+        double maxReach = kinematics.Kinematics.L2 + kinematics.Kinematics.L3 + kinematics.Kinematics.L4 
+                + kinematics.Kinematics.L5 + kinematics.Kinematics.L6 + kinematics.Kinematics.L7;
+        if (distSq > maxReach * maxReach) return false;
+
+        double q1_deg = isRight ? Math.toDegrees(Math.atan2(y, x)) : Math.toDegrees(-Math.atan2(y, -x));
+        double q1_min = isRight ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
+        double q1_max = isRight ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
+        if (q1_deg < q1_min - 2.0 || q1_deg > q1_max + 2.0) return false;
+
+        double alpha_rad = 0.0;
+        double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
+        double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
+        double yaw = isRight ? Math.atan2(y, x) : -Math.atan2(y, -x);
+        double[][] R_target;
+        if (isRight) {
+            double cy = Math.cos(yaw), sy = Math.sin(yaw);
+            double[][] R_z = { { cy, -sy, 0 }, { sy, cy, 0 }, { 0, 0, 1 } };
+            R_target = kinematics.Kinematics.multiplyMatrices(R_z, R_y);
+        } else {
+            double yawR = -yaw;
+            double cyR = Math.cos(yawR), syR = Math.sin(yawR);
+            double[][] R_z_right = { { cyR, -syR, 0 }, { syR, cyR, 0 }, { 0, 0, 1 } };
+            double[][] R_target_right = kinematics.Kinematics.multiplyMatrices(R_z_right, R_y);
+            R_target = new double[][] {
+                {  R_target_right[0][0], -R_target_right[0][1], -R_target_right[0][2] },
+                { -R_target_right[1][0],  R_target_right[1][1],  R_target_right[1][2] },
+                { -R_target_right[2][0],  R_target_right[2][1],  R_target_right[2][2] }
+            };
+        }
+
+        double[] qInitRad = new double[NUM_JOINTS];
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            qInitRad[i] = Math.toRadians(qInitGuess[i]);
+        }
+
+        double[] qSol = kinematics.Kinematics.solveIK(x, y, z, R_target, qInitRad, isRight);
+        if (qSol != null && isWithinLimits(qSol, isRight)) {
+            System.arraycopy(qSol, 0, qInitGuess, 0, NUM_JOINTS);
+            return true;
+        }
+
+        alpha_rad = Math.toRadians(-30.0);
+        ca = Math.cos(Math.PI + alpha_rad); sa = Math.sin(Math.PI + alpha_rad);
+        R_y[0][0] = ca; R_y[0][2] = sa; R_y[2][0] = -sa; R_y[2][2] = ca;
+        if (isRight) {
+            double cy = Math.cos(yaw), sy = Math.sin(yaw);
+            double[][] R_z = { { cy, -sy, 0 }, { sy, cy, 0 }, { 0, 0, 1 } };
+            R_target = kinematics.Kinematics.multiplyMatrices(R_z, R_y);
+        } else {
+            double yawR = -yaw;
+            double cyR = Math.cos(yawR), syR = Math.sin(yawR);
+            double[][] R_z_right = { { cyR, -syR, 0 }, { syR, cyR, 0 }, { 0, 0, 1 } };
+            double[][] R_target_right = kinematics.Kinematics.multiplyMatrices(R_z_right, R_y);
+            R_target = new double[][] {
+                {  R_target_right[0][0], -R_target_right[0][1], -R_target_right[0][2] },
+                { -R_target_right[1][0],  R_target_right[1][1],  R_target_right[1][2] },
+                { -R_target_right[2][0],  R_target_right[2][1],  R_target_right[2][2] }
+            };
+        }
+        qSol = kinematics.Kinematics.solveIK(x, y, z, R_target, qInitRad, isRight);
+        if (qSol != null && isWithinLimits(qSol, isRight)) {
+            System.arraycopy(qSol, 0, qInitGuess, 0, NUM_JOINTS);
+            return true;
+        }
+
+        return false;
+    }
+
+    public void updateWorkspaceSlice() {
+        if (!showWorkspaceSlice) return;
+
+        stopWorkspaceSliceExploration();
+
+        final double fixedZ = getActiveArmZ();
+        final boolean isRight = isRightArmSelected;
+
+        sliceExplorationThread = new Thread(() -> {
+            java.util.List<double[]> dots = new java.util.ArrayList<>();
+            java.util.List<double[]> outer = new java.util.ArrayList<>();
+            java.util.List<double[]> inner = new java.util.ArrayList<>();
+
+            double[] qWarmStart = (isRight ? anglesRight : anglesLeft).clone();
+
+            double q1_min = isRight ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
+            double q1_max = isRight ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
+
+            for (double theta = q1_min; theta <= q1_max; theta += 1.0) {
+                if (Thread.interrupted()) return;
+
+                double rad = Math.toRadians(theta);
+                double cos = Math.cos(rad);
+                double sin = Math.sin(rad);
+
+                double rMinFound = -1;
+                double rMaxFound = -1;
+
+                int stepIndex = 0;
+                for (double r = 10.0; r <= 80.0; r += 0.8) {
+                    double px, py;
+                    if (isRight) {
+                        px = r * cos;
+                        py = r * sin;
+                    } else {
+                        px = -r * cos;
+                        py = -r * sin;
+                    }
+
+                    boolean ok = checkPointReachableFast(px, py, fixedZ, isRight, qWarmStart);
+                    if (ok) {
+                        if (rMinFound < 0) {
+                            rMinFound = r;
+                        }
+                        rMaxFound = r;
+
+                        if (stepIndex % 2 == 0) {
+                            dots.add(new double[] { px, py, fixedZ });
+                        }
+                    }
+                    stepIndex++;
+                }
+
+                if (rMinFound > 0 && rMaxFound > 0) {
+                    double pxMin, pyMin, pxMax, pyMax;
+                    if (isRight) {
+                        pxMin = rMinFound * cos;
+                        pyMin = rMinFound * sin;
+                        pxMax = rMaxFound * cos;
+                        pyMax = rMaxFound * sin;
+                    } else {
+                        pxMin = -rMinFound * cos;
+                        pyMin = -rMinFound * sin;
+                        pxMax = -rMaxFound * cos;
+                        pyMax = -rMaxFound * sin;
+                    }
+                    inner.add(new double[] { pxMin, pyMin, fixedZ });
+                    outer.add(new double[] { pxMax, pyMax, fixedZ });
+                }
+            }
+
+            armPanel.setWorkspaceSliceData(dots, outer, inner, isRight);
+
+            SwingUtilities.invokeLater(() -> {
+                armPanel.repaint();
+            });
+        });
+
+        sliceExplorationThread.setPriority(Thread.MIN_PRIORITY);
+        sliceExplorationThread.start();
+    }
+
+    public void stopWorkspaceSliceExploration() {
+        if (sliceExplorationThread != null && sliceExplorationThread.isAlive()) {
+            sliceExplorationThread.interrupt();
+            try {
+                sliceExplorationThread.join(500);
+            } catch (InterruptedException ignored) {}
+        }
     }
 
     public double[] solveIKSmart(double px, double py, double pz, String preferredConfig) {
