@@ -100,10 +100,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     public boolean isDrawingActive() {
         return trajTypeCombo.getSelectedIndex() == 0 && cbEnableDrawing != null && cbEnableDrawing.isSelected();
     }
-    JTabbedPane mainTabs;
-
-    JCheckBox fixedHeightCb = new JCheckBox("Click cố định Z", false);
-    JSpinner fixedHeightSpinner = new JSpinner(new SpinnerNumberModel(20.0, -200.0, 500.0, 1.0));
+    JCheckBox fixedHeightCb = new JCheckBox("Click cố định Z (chuột phải)", false);
+    JSpinner fixedHeightSpinner = new JSpinner(new SpinnerNumberModel(100.0, -200.0, 500.0, 1.0));
     boolean fixedHeightMode = false;
     JCheckBoxMenuItem clickModeItem;
     JSlider speedSlider = new JSlider(0, 120, 60);
@@ -201,8 +199,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         controlPanel.setLayout(new BorderLayout());
         controlPanel.setPreferredSize(new Dimension(680, 0));
 
-        mainTabs = new JTabbedPane();
-
         JPanel manualPanel = new JPanel(new GridLayout(1, 2, 8, 0));
         manualPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
@@ -220,11 +216,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         scrollManual.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         scrollManual.getHorizontalScrollBar().setUnitIncrement(16);
         scrollManual.getVerticalScrollBar().setUnitIncrement(16);
-        mainTabs.addTab("Điều khiển song song", scrollManual);
 
-        mainTabs.addTab("Quỹ đạo", buildTrajectoryPanel());
-
-        controlPanel.add(mainTabs, BorderLayout.CENTER);
+        controlPanel.add(scrollManual, BorderLayout.CENTER);
     }
 
     private JPanel buildArmControlPanel(final boolean isRight) {
@@ -364,89 +357,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return panel;
     }
 
-    private JPanel buildTrajectoryPanel() {
-        JPanel trajPanel = new JPanel();
-        trajPanel.setLayout(new BoxLayout(trajPanel, BoxLayout.Y_AXIS));
-        trajPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        JPanel topP = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        topP.add(new JLabel("Cánh tay: "));
-        topP.add(trajArmCombo);
-        trajArmCombo.addActionListener(e -> {
-            boolean right = (trajArmCombo.getSelectedIndex() == 0);
-            if (isRightArmSelected != right) {
-                isRightArmSelected = right;
-                updateArm();
-            }
-        });
-        topP.add(new JLabel("  Loại quỹ đạo: "));
-        topP.add(trajTypeCombo);
-        trajPanel.add(topP);
-        JPanel cards = new JPanel(new CardLayout());
-
-        // --- Card 1: Mouse Draw ---
-        JPanel pMouse = new JPanel(new GridLayout(3, 1, 5, 2));
-        pMouse.setBorder(BorderFactory.createTitledBorder("Thông số Vẽ bằng chuột"));
-
-        JPanel m1 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        m1.add(cbEnableDrawing);
-
-        JPanel m2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        m2.add(new JLabel("Cao độ Z vẽ:"));
-        m2.add(txtMouseZ);
-        m2.add(Box.createHorizontalStrut(10));
-        m2.add(btnClearMouseDraw);
-
-        btnClearMouseDraw.addActionListener(evt -> {
-            armPanel.referencePath.clear();
-            armPanel.repaint();
-        });
-
-        pMouse.add(m1);
-        pMouse.add(m2);
-        cards.add(pMouse, "Vẽ bằng chuột");
-
-        trajPanel.add(cards);
-
-        trajTypeCombo.addItemListener(evt -> {
-            CardLayout cl = (CardLayout) (cards.getLayout());
-            cl.show(cards, (String) evt.getItem());
-        });
-
-        JPanel botP = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
-        JButton btnStartTraj = new JButton("Bắt đầu");
-        JButton btnStopTraj = new JButton("Dừng");
-
-        btnStopTraj.addActionListener(e -> {
-            if (trajectoryTimer != null)
-                trajectoryTimer.stop();
-            setTitle("Mô Phỏng robot song song");
-        });
-
-        btnStartTraj.addActionListener(e -> {
-            trajDebug("START_CLICK", "Start trajectory button clicked");
-            if (trajectoryTimer != null)
-                trajectoryTimer.stop();
-            isRightArmSelected = (trajArmCombo.getSelectedIndex() == 0);
-            try {
-                trajDebug("INPUT_MOUSE_DRAW", "Running custom mouse drawn trajectory");
-                runCustomPathTrajectory(armPanel.referencePath);
-            } catch (Exception ex) {
-                trajDebug("INPUT_ERROR", ex.toString());
-                JOptionPane.showMessageDialog(this, "Vui lòng nhập số hợp lệ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            }
-        });
-
-        botP.add(btnStartTraj);
-        botP.add(btnStopTraj);
-        trajPanel.add(botP);
-
-        trajPanel.add(Box.createVerticalGlue());
-
-        return trajPanel;
-    }
-
-
     private void buildTopPanel() {
         add(BorderLayout.NORTH, topPanel);
 
@@ -460,6 +370,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         btnEStop.addActionListener(e -> emergencyStop());
         topPanel.add(btnEStop);
         topPanel.add(new JSeparator(SwingConstants.VERTICAL));
+
         JButton btnGripper = new JButton("Đóng / Mở Kẹp");
         btnGripper.addActionListener(e -> {
             if (isRightArmSelected) {
@@ -481,8 +392,54 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         });
         topPanel.add(btnGripper);
 
-        topPanel.add(new JLabel("  Tốc độ di chuyển:"));
-        speedSlider.setPreferredSize(new Dimension(140, 25));
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
+
+        trajArmCombo.addActionListener(e -> {
+            boolean right = (trajArmCombo.getSelectedIndex() == 0);
+            if (isRightArmSelected != right) {
+                isRightArmSelected = right;
+                updateArm();
+            }
+        });
+        topPanel.add(new JLabel(" Tay Vẽ:"));
+        topPanel.add(trajArmCombo);
+
+        cbEnableDrawing.setText("Bật Vẽ");
+        topPanel.add(cbEnableDrawing);
+
+        JButton btnClearMouseDraw = new JButton("Xóa Hình");
+        btnClearMouseDraw.addActionListener(evt -> {
+            armPanel.referencePath.clear();
+            armPanel.repaint();
+        });
+        topPanel.add(btnClearMouseDraw);
+
+        JButton btnStartTraj = new JButton("Chạy Quỹ Đạo");
+        btnStartTraj.addActionListener(e -> {
+            trajDebug("START_CLICK", "Start trajectory button clicked");
+            if (trajectoryTimer != null) trajectoryTimer.stop();
+            isRightArmSelected = (trajArmCombo.getSelectedIndex() == 0);
+            try {
+                trajDebug("INPUT_MOUSE_DRAW", "Running custom mouse drawn trajectory");
+                runCustomPathTrajectory(armPanel.referencePath);
+            } catch (Exception ex) {
+                trajDebug("INPUT_ERROR", ex.toString());
+                JOptionPane.showMessageDialog(this, "Có lỗi xảy ra", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        topPanel.add(btnStartTraj);
+
+        JButton btnStopTraj = new JButton("Dừng");
+        btnStopTraj.addActionListener(e -> {
+            if (trajectoryTimer != null) trajectoryTimer.stop();
+            setTitle("Mô Phỏng robot song song");
+        });
+        topPanel.add(btnStopTraj);
+
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
+
+        topPanel.add(new JLabel("  Tốc độ:"));
+        speedSlider.setPreferredSize(new Dimension(100, 25));
         speedSlider.setMajorTickSpacing(30);
         speedSlider.setPaintTicks(true);
         speedSlider.addChangeListener(ev -> speedLabel.setText(speedSlider.getValue() + " °/s"));
@@ -554,9 +511,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         resetItem.setMnemonic('R');
         resetItem.setActionCommand("Reset");
 
-        JMenuItem trajItem = new JMenuItem("Quản lý Quỹ Đạo");
-        trajItem.setMnemonic('Q');
-        trajItem.setActionCommand("Trajectory");
 
         JMenuItem exitItem = new JMenuItem("Thoát");
         exitItem.setMnemonic('X');
@@ -564,11 +518,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         MenuItemListener menuItemListener = new MenuItemListener();
         resetItem.addActionListener(menuItemListener);
-        trajItem.addActionListener(menuItemListener);
+
         exitItem.addActionListener(menuItemListener);
 
         dieukhienMenu.add(resetItem);
-        dieukhienMenu.add(trajItem);
+
         dieukhienMenu.addSeparator();
         dieukhienMenu.add(exitItem);
 
@@ -649,7 +603,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         public void actionPerformed(ActionEvent e) {
             switch (e.getActionCommand()) {
                 case "Reset" -> resetAngles();
-                case "Trajectory" -> mainTabs.setSelectedIndex(1);
+
                 case "TopView" -> {
                     armPanel.camAz = 0;
                     armPanel.camEl = 89.9;

@@ -39,10 +39,7 @@ public class ArmPanel extends JPanel
         if (robot.isDrawingActive() && SwingUtilities.isLeftMouseButton(e)) {
             isDrawingPath = true;
             referencePath.clear();
-            double zDraw = 20.0;
-            try {
-                zDraw = Double.parseDouble(robot.txtMouseZ.getText().trim());
-            } catch (NumberFormatException ex) {}
+            double zDraw = robot.getFixedHeight();
             double[] pt = screenToWorld(e.getX(), e.getY(), zDraw);
             if (pt != null) {
                 referencePath.add(pt);
@@ -80,10 +77,7 @@ public class ArmPanel extends JPanel
     @Override
     public void mouseDragged(MouseEvent e) {
         if (isDrawingPath) {
-            double zDraw = 20.0;
-            try {
-                zDraw = Double.parseDouble(robot.txtMouseZ.getText().trim());
-            } catch (NumberFormatException ex) {}
+            double zDraw = robot.getFixedHeight();
             double[] pt = screenToWorld(e.getX(), e.getY(), zDraw);
             if (pt != null) {
                 if (!referencePath.isEmpty()) {
