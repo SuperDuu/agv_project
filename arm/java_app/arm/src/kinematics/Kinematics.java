@@ -293,8 +293,14 @@ public class Kinematics {
         if (theta < 1e-6) {
             dw[0] = 0; dw[1] = 0; dw[2] = 0;
         } else {
-            // Chuẩn hóa chính xác vector trục xoay theo toán học lý thuyết
-            double s = 0.5 * theta / Math.sin(theta);
+            double sinTheta = Math.sin(theta);
+            double s = 0.5;
+            if (Math.abs(sinTheta) > 1e-4) {
+                s = 0.5 * theta / sinTheta;
+            }
+            // Cap s to avoid numerical explosion near pi (singularity at 180 degrees)
+            if (s > 2.5) s = 2.5;
+
             dw[0] = (R[2][1] - R[1][2]) * s;
             dw[1] = (R[0][2] - R[2][0]) * s;
             dw[2] = (R[1][0] - R[0][1]) * s;

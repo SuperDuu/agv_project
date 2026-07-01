@@ -1165,7 +1165,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 }
                 // Joint Velocity Limiter (Bộ giới hạn vận tốc cứng)
                 // Thay thế bộ lọc thông thấp kiểu mũ để triệt tiêu trễ pha và giằng co cơ học
-                double maxVelocityDegPerSec = 150.0; // Giới hạn tốc độ góc thực tế của động cơ (độ/giây)
+                double maxVelocityDegPerSec = 360.0; // Giới hạn tốc độ góc thực tế của động cơ (độ/giây)
                 double maxStepDeg = maxVelocityDegPerSec * 0.030; // 30ms cho một bước lệnh (MOTION_DT_MS)
 
                 if (jointTrajectory.size() > 1) {
