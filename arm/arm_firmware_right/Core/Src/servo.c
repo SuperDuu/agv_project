@@ -16,10 +16,10 @@ void Servo_Init(void) {
     servos[0] = (Servo_t){&htim8,  TIM_CHANNEL_1, 500, 2550, 270};
     servos[1] = (Servo_t){&htim8,  TIM_CHANNEL_2, 500, 2550, 270};
     servos[2] = (Servo_t){&htim8,  TIM_CHANNEL_3, 500, 2550, 270};
-    servos[3] = (Servo_t){&htim8,  TIM_CHANNEL_4, 500, 2550, 270};
-    servos[4] = (Servo_t){&htim9,  TIM_CHANNEL_1, 500, 2550, 270};
-    servos[5] = (Servo_t){&htim9,  TIM_CHANNEL_2, 500, 2550, 270};
-    servos[6] = (Servo_t){&htim10, TIM_CHANNEL_1, 500, 2550, 270};
+    servos[3] = (Servo_t){&htim8,  TIM_CHANNEL_4, 500, 2500, 180};
+    servos[4] = (Servo_t){&htim10, TIM_CHANNEL_1, 500, 2500, 180};
+    servos[5] = (Servo_t){&htim9,  TIM_CHANNEL_1, 500, 2500, 180};
+    servos[6] = (Servo_t){&htim9,  TIM_CHANNEL_2, 500, 2550, 270};
     servos[7] = (Servo_t){&htim11, TIM_CHANNEL_1, 500, 2550, 270};
     servos[8] = (Servo_t){&htim12, TIM_CHANNEL_1, 500, 2550, 270};
     servos[9] = (Servo_t){&htim12, TIM_CHANNEL_2, 500, 2550, 270};
@@ -35,6 +35,10 @@ void Servo_Init(void) {
             init_angle = 10.0f;   // 10 degrees joint (14 degrees servo)
         } else if (i == 2) {
             init_angle = 192.86f; // Max of joint (270 degrees servo)
+        } else if (i == 3 || i == 5) {
+            init_angle = 90.0f;   // Middle of 180-degree servo
+        } else if (i == 4) {
+            init_angle = 60.0f;   // Middle of joint (90 degrees servo due to 2:3 scaling)
         } else {
             init_angle = (float)servos[i].max_angle / 2.0f; // Default 135 degrees
         }
@@ -53,6 +57,9 @@ void Set_Servo_Angle(uint8_t index, float angle) {
     if (index <= 2) {
         // Apply 5:7 gearbox scaling: servo_angle = joint_angle * 7 / 5
         target_angle = angle * 7.0f / 5.0f;
+    } else if (index == 4) {
+        // Apply 2:3 gearbox scaling: servo_angle = joint_angle * 3 / 2
+        target_angle = angle * 3.0f / 2.0f;
     }
     
     if (target_angle > (float)servos[index].max_angle) {
