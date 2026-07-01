@@ -1272,17 +1272,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
 
 
-    void runCustomPathTrajectory(java.util.List<double[]> path) {
+    private void executeTrajectory(java.util.List<double[]> path, String statusTitle) {
         if (path == null || path.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Không có tọa độ quỹ đạo để chạy!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
         setTitle("Đang di chuyển tới điểm xuất phát...");
-        setGotoStatus("Đang chuẩn bị quỹ đạo tùy chỉnh...", new Color(0, 90, 180));
+        setGotoStatus("Đang chuẩn bị " + statusTitle + "...", new Color(0, 90, 180));
         if (speedSlider.getValue() <= 0) {
             speedSlider.setValue(30);
             speedLabel.setText("30 °/s");
+            setGotoStatus("Tốc độ đang là 0, tự tăng lên 30 °/s để chạy quỹ đạo", new Color(180, 110, 0));
         }
 
         // Tắt hiển thị quỹ đạo cũ và xóa cặn
@@ -1301,6 +1302,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         trajectoryLastQ = null;
         trajectoryLastAlpha = getInitialTrajectoryAlpha(isRight);
 
+        // Nhảy đến điểm xuất phát
         double[] startPt = path.get(0);
         double[] startResult = solveIKForTrajectoryPoint(startPt[0], startPt[1], startPt[2]);
         if (startResult != null) {
@@ -1316,6 +1318,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
             return;
         }
+
+        // Tạm dừng motionTimer để tránh xung đột
+        if (motionTimer != null) motionTimer.stop();
 
         // Resample the path
         double speed = Math.max(1.0, speedSlider.getValue() / 2.0); // units per sec
@@ -1345,14 +1350,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 Timer delayTimer = new Timer(1000, evt2 -> {
                     ((Timer) evt2.getSource()).stop();
 
-                    setTitle("Quỹ đạo tùy chỉnh đang chạy...");
+                    setTitle(statusTitle + " đang chạy...");
                     showTrailCb.setSelected(true);
 
                     trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
                         if (currentIndex[0] >= finalPath.size()) {
                             trajectoryTimer.stop();
                             setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
-                            setGotoStatus("Quỹ đạo tùy chỉnh hoàn thành!", new Color(0, 140, 0));
+                            setGotoStatus("Quỹ đạo hoàn thành!", new Color(0, 140, 0));
+                            // Khôi phục motionTimer
+                            startMotionTimer();
                             return;
                         }
 
@@ -1373,6 +1380,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                                 armAngleLbls[i].setText((int) Math.round(armAngles[i]) + "°");
                             }
                             updateArm();
+                            // Gửi tín hiệu xuống UART để mạch thật chạy
+                            sendJointsToUart();
                         } else {
                             if (trajectoryLastQ != null) {
                                 if (isRight) {
@@ -1390,6 +1399,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         });
         prepareTimer.start();
+    }
+
+    void runCustomPathTrajectory(java.util.List<double[]> path) {
+        executeTrajectory(path, "Quỹ đạo tùy chỉnh");
     }
 
     private java.util.List<double[]> resamplePath(java.util.List<double[]> path, double speedUnitsPerSec) {
@@ -1438,129 +1451,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     void runSpiralTrajectoryParam(double cx, double cy, double cz, double R, double H, double K) {
-        setTitle("Đang di chuyển tới điểm xuất phát...");
-        setGotoStatus("Đang chuẩn bị quỹ đạo xoắn ốc...", new Color(0, 90, 180));
-        trajDebug("SPIRAL_INIT", "Preparing spiral trajectory");
-        if (speedSlider.getValue() <= 0) {
-            speedSlider.setValue(30);
-            speedLabel.setText("30 °/s");
-            setGotoStatus("Tốc độ đang là 0, tự tăng lên 30 °/s để chạy quỹ đạo", new Color(180, 110, 0));
-            trajDebug("SPIRAL_SPEED_FIX", "Speed was 0, forced to 30");
+        java.util.List<double[]> path = new java.util.ArrayList<>();
+        int numPoints = (int) (100 * K);
+        if (numPoints < 100) numPoints = 100;
+        
+        for (int i = 0; i <= numPoints; i++) {
+            double r = i / (double) numPoints;
+            double tx = cx + R * Math.cos(K * 2 * Math.PI * r);
+            double ty = cy + R * Math.sin(K * 2 * Math.PI * r);
+            double tz = cz + H * r;
+            path.add(new double[]{tx, ty, tz});
         }
-
-        // Tắt hiển thị quỹ đạo cũ và xóa cặn
-        showTrailCb.setSelected(false);
-        armPanel.trail.clear();
-
-        final boolean isRight = isRightArmSelected;
-        final double[] armAngles = isRight ? anglesRight : anglesLeft;
-        final double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
-        final JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
-        final JLabel[] armAngleLbls = isRight ? angleLblsRight : angleLblsLeft;
-        final JComboBox<String> armConfigCombo = isRight ? configComboRight : configComboLeft;
-
-        String cfg = armConfigCombo.getSelectedIndex() == 0 ? "+" : "-";
-        trajectoryLockedCfg = cfg;
-        trajectoryLastQ = null;
-        trajectoryLastAlpha = getInitialTrajectoryAlpha(isRight);
-
-        // Tính toán điểm xuất phát của Xoắn ốc tại thời điểm t = 0
-        double startX = cx + R * Math.cos(0);
-        double startY = cy + R * Math.sin(0);
-        double startZ = cz;
-
-        double[] startResult = solveIKForTrajectoryPoint(startX, startY, startZ);
-        if (startResult != null) {
-            trajDebug("SPIRAL_START_IK_OK", String.format("q=[%.1f, %.1f, %.1f, %.1f, %.1f]",
-                    startResult[0], startResult[1], startResult[2], startResult[3], startResult[4]));
-            if (isRight) {
-                setTargetAnglesRight(startResult);
-            } else {
-                setTargetAnglesLeft(startResult);
-            }
-            trajectoryLastQ = startResult.clone();
-            updateArm();
-        } else {
-            trajDebug("SPIRAL_START_IK_FAIL", "No IK for spiral start point");
-            setGotoStatus("Điểm bắt đầu xoắn ốc ngoài tầm!", Color.RED);
-            setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
-            return;
-        }
-
-        // Chờ tay máy di chuyển tới vị trí bắt đầu, ngủ 1s, rồi sau đó mới bắt đầu vẽ
-        // quỹ đạo
-        final int[] waitMs = { 0 };
-        Timer prepareTimer = new Timer(50, evt -> {
-            waitMs[0] += 50;
-            boolean arrived = true;
-            for (int i = 0; i < NUM_JOINTS; i++) {
-                if (Math.abs(armAngles[i] - armTargetAngles[i]) > 0.5)
-                    arrived = false;
-            }
-            if (arrived || waitMs[0] >= 5000) {
-                ((Timer) evt.getSource()).stop();
-                trajDebug("SPIRAL_PREPARE_DONE", "arrived=" + arrived + " waitMs=" + waitMs[0]);
-                if (!arrived) {
-                    setGotoStatus("Hết thời gian chờ điểm đầu, bắt đầu xoắn ốc từ vị trí hiện tại", new Color(180, 110, 0));
-                }
-                setTitle("Chờ 1 giây...");
-
-                Timer delayTimer = new Timer(1000, evt2 -> {
-                    ((Timer) evt2.getSource()).stop();
-
-                    setTitle("Xoắn ốc đang chạy...");
-                    showTrailCb.setSelected(true); // Lúc này mới bật hiển thị vết quỹ đạo
-
-                    final double L = Math.max(0.1, Math.sqrt(Math.pow(2 * Math.PI * R * K, 2) + Math.pow(H, 2)));
-                    double[] ratio = { 0.0 };
-
-                    trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
-                        double speed = Math.max(1.0, speedSlider.getValue() / 2.0); // units/sec
-                        double dt = MOTION_DT_MS / 1000.0;
-                        ratio[0] += (speed * dt) / L;
-
-                        if (ratio[0] >= 1.0) {
-                            ratio[0] = 1.0;
-                            trajectoryTimer.stop();
-                            trajDebug("SPIRAL_DONE", "ratio reached 1.0");
-                            setTitle("Simulation (6-DOF)");
-                        }
-                        double r = ratio[0];
-                        double tx = cx + R * Math.cos(K * 2 * Math.PI * r);
-                        double ty = cy + R * Math.sin(K * 2 * Math.PI * r);
-                        double tz = cz + H * r;
-
-                        double[] result = solveIKForTrajectoryPoint(tx, ty, tz);
-                        if (result != null) {
-                            trajectoryLastQ = result.clone();
-                            for (int i = 0; i < NUM_JOINTS; i++) {
-                                armTargetAngles[i] = armAngles[i] = result[i];
-                                armSliders[i].removeChangeListener(this);
-                                armSliders[i].setValue((int) Math.round(armAngles[i]));
-                                armSliders[i].addChangeListener(this);
-                                armAngleLbls[i].setText((int) Math.round(armAngles[i]) + "°");
-                            }
-                            updateArm();
-                        } else {
-                            trajDebug("SPIRAL_TRACK_HOLD",
-                                    String.format("No IK at p=(%.2f, %.2f, %.2f), hold last pose", tx, ty, tz));
-                            if (trajectoryLastQ != null) {
-                                if (isRight) {
-                                    setTargetAnglesRight(trajectoryLastQ);
-                                } else {
-                                    setTargetAnglesLeft(trajectoryLastQ);
-                                }
-                            }
-                            setGotoStatus("~ Điểm khó đạt, đang giữ pose gần nhất", new Color(180, 110, 0));
-                        }
-                    });
-                    trajDebug("SPIRAL_TIMER_START", "Trajectory timer started");
-                    trajectoryTimer.start();
-                });
-                delayTimer.start();
-            }
-        });
-        prepareTimer.start();
+        executeTrajectory(path, "Quỹ đạo xoắn ốc");
     }
 
     private double wrappedDegDiff(double a, double b) {
