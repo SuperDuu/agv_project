@@ -51,6 +51,18 @@ public class App {
                         process.destroyForcibly();
                     }
                 }));
+
+                // Đọc luồng output của Python để chống nghẽn bộ đệm (Buffer Overflow) gây treo script
+                new Thread(() -> {
+                    try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream()))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            // Chỉ dùng khi cần debug script Python
+                            // System.out.println("[PS5 Python] " + line);
+                        }
+                    } catch (Exception e) {}
+                }).start();
+
                 System.out.println("Đã khởi chạy nền script ps5_controller.py thành công.");
             } catch (Exception ex) {
                 System.err.println("Không thể khởi chạy ps5_controller.py: " + ex.getMessage());
