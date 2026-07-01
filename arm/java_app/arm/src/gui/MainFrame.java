@@ -1470,7 +1470,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         bestRelaxedCfg = cfgTry;
                     }
                     
-                    double rescueC = posErr * 1000.0 + continuityCost(q, qRef, !isFirstWaypoint) * 0.05;
+                    double rescueC = posErr * 150.0 + continuityCost(q, qRef, !isFirstWaypoint) * 1.5;
                     if (rescueC < bestRescueCost) {
                         bestRescueCost = rescueC;
                         bestRescueQ = q;
@@ -1506,7 +1506,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                             bestRelaxedCfg = cfgTry;
                         }
                         
-                        double rescueC = posErr * 1000.0 + continuityCost(q, qRef, !isFirstWaypoint) * 0.05;
+                        double rescueC = posErr * 150.0 + continuityCost(q, qRef, !isFirstWaypoint) * 1.5;
                         if (rescueC < bestRescueCost) {
                             bestRescueCost = rescueC;
                             bestRescueQ = q;

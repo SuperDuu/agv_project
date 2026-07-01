@@ -271,6 +271,7 @@ public class Kinematics {
 
         // Relative rotation in local (End-Effector) frame
         double[][] R = multiplyMatrices(R0T, R1);
+        R = orthonormalize3x3(R);
 
         double dx = T1[0][3] - T0[0][3];
         double dy = T1[1][3] - T0[1][3];
@@ -439,6 +440,31 @@ public class Kinematics {
                     for (int j = 0; j < 4; j++)
                         C[i][j] += A[i][k] * B[k][j];
         return C;
+    }
+
+    public static double[][] orthonormalize3x3(double[][] R) {
+        double[][] Q = new double[3][3];
+        double len0 = Math.sqrt(R[0][0]*R[0][0] + R[1][0]*R[1][0] + R[2][0]*R[2][0]);
+        if (len0 < 1e-9) len0 = 1.0;
+        Q[0][0] = R[0][0] / len0;
+        Q[1][0] = R[1][0] / len0;
+        Q[2][0] = R[2][0] / len0;
+        
+        double dot = Q[0][0]*R[0][1] + Q[1][0]*R[1][1] + Q[2][0]*R[2][1];
+        double v1_x = R[0][1] - dot * Q[0][0];
+        double v1_y = R[1][1] - dot * Q[1][0];
+        double v1_z = R[2][1] - dot * Q[2][0];
+        double len1 = Math.sqrt(v1_x*v1_x + v1_y*v1_y + v1_z*v1_z);
+        if (len1 < 1e-9) len1 = 1.0;
+        Q[0][1] = v1_x / len1;
+        Q[1][1] = v1_y / len1;
+        Q[2][1] = v1_z / len1;
+        
+        Q[0][2] = Q[1][0]*Q[2][1] - Q[2][0]*Q[1][1];
+        Q[1][2] = Q[2][0]*Q[0][1] - Q[0][0]*Q[2][1];
+        Q[2][2] = Q[0][0]*Q[1][1] - Q[1][0]*Q[0][1];
+        
+        return Q;
     }
 
     public static double[][] multiplyMatrices(double[][] A, double[][] B) {
