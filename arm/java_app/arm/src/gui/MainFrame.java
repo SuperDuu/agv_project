@@ -117,6 +117,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     Timer trajectoryTimer;
     double[] trajectoryLastQ = null;
     double trajectoryLastAlpha = 0.0;
+    double trajectoryLastYawOffset = 0.0;
     String trajectoryLockedCfg = "+";
     boolean ikSelectionLogEnabled = false;
 
@@ -1128,6 +1129,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         trajectoryLockedCfg = cfg;
         trajectoryLastQ = null;
         trajectoryLastAlpha = getInitialTrajectoryAlpha(isRight);
+        trajectoryLastYawOffset = 0.0;
 
         // Tạm dừng motionTimer để tránh xung đột
         if (motionTimer != null) motionTimer.stop();
@@ -1400,6 +1402,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         String[] cfgCandidates = isFirstWaypoint ? new String[] { trajectoryLockedCfg, altCfg }
                 : new String[] { trajectoryLockedCfg };
 
+        double preferredYaw = isFirstWaypoint ? Double.NaN : trajectoryLastYawOffset;
+
         if (DEBUG) {
             System.out.printf("[DEBUG_TRAJ_IK] Target: (X=%.2f, Y=%.2f, Z=%.2f) | Arm=%s | ConfigRef=%s | isFirst=%b\n",
                 px, py, pz, isRightArmSelected ? "RIGHT" : "LEFT", trajectoryLockedCfg, isFirstWaypoint);
@@ -1424,7 +1428,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double aEnd = fixedGround ? 30 : (trajectoryLastAlpha + 12);
         double aStep = fixedGround ? 3.0 : 1.0;
         for (double a = aStart; a <= aEnd; a += aStep) {
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRightArmSelected);
                 for (String cfgTry : cfgCandidates) {
@@ -1456,7 +1460,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (bestStrictQ == null && bestRelaxedQ == null && !fixedGround) {
             String[] cfgFallback = isFirstWaypoint ? cfgCandidates : new String[] { trajectoryLockedCfg, altCfg };
             for (double a = -90; a <= 30; a += 1.5) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef);
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRightArmSelected);
                     for (String cfgTry : cfgFallback) {
@@ -1483,16 +1487,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (bestStrictQ != null) {
             trajectoryLastAlpha = bestStrictAlpha;
             trajectoryLockedCfg = bestStrictCfg;
+            trajectoryLastYawOffset = getYawOffsetFromQ(bestStrictQ, px, py, isRightArmSelected);
             if (DEBUG) {
-                System.out.printf("[DEBUG_TRAJ_IK] SUCCESS (Strict) | Config=%s | Alpha=%.1f\n", bestStrictCfg, bestStrictAlpha);
+                System.out.printf("[DEBUG_TRAJ_IK] SUCCESS (Strict) | Config=%s | Alpha=%.1f | YawOffset=%.1f\n", bestStrictCfg, bestStrictAlpha, trajectoryLastYawOffset);
             }
             return bestStrictQ;
         }
         if (bestRelaxedQ != null) {
             trajectoryLastAlpha = bestRelaxedAlpha;
             trajectoryLockedCfg = bestRelaxedCfg;
+            trajectoryLastYawOffset = getYawOffsetFromQ(bestRelaxedQ, px, py, isRightArmSelected);
             if (DEBUG) {
-                System.out.printf("[DEBUG_TRAJ_IK] SUCCESS (Relaxed) | Config=%s | Alpha=%.1f\n", bestRelaxedCfg, bestRelaxedAlpha);
+                System.out.printf("[DEBUG_TRAJ_IK] SUCCESS (Relaxed) | Config=%s | Alpha=%.1f | YawOffset=%.1f\n", bestRelaxedCfg, bestRelaxedAlpha, trajectoryLastYawOffset);
             }
             return bestRelaxedQ;
         }
@@ -1635,7 +1641,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             
             // Try alpha=0 first, then expand outward in larger steps to save CPU
             for (double a = -90; a <= 30; a += 15.0) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles);
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRight);
                     if (posErr > MAX_IK_POSITION_ERROR) {
@@ -1680,7 +1686,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         for (double a = currentAlpha - 15; a <= currentAlpha + 15; a += 5.0) {
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr > MAX_IK_POSITION_ERROR) {
@@ -1716,7 +1722,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         for (double a = -90; a <= 30; a += 15.0) {
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr > MAX_IK_POSITION_ERROR) {
@@ -1861,7 +1867,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
     }
 
-    private List<double[]> tryAlpha(double px, double py, double pz, double alphaDeg, boolean isRight, double[] qRef) {
+    private double getYawOffsetFromQ(double[] q, double px, double py, boolean isRight) {
+        double q1_min = isRight ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
+        double q1_max = isRight ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
+        double q1_base = isRight ? Math.atan2(py, px) : -Math.atan2(py, -px);
+        q1_base = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), q1_base));
+        double diff = Math.toDegrees(Math.toRadians(q[0]) - q1_base);
+        while (diff > 180) diff -= 360;
+        while (diff < -180) diff += 360;
+        return diff;
+    }
+
+    private List<double[]> tryAlpha(double px, double py, double pz, double alphaDeg, boolean isRight, double[] qRef, double preferredYaw) {
         List<double[]> validSolutions = new ArrayList<>();
         double alpha_rad = Math.toRadians(alphaDeg);
         double q1_min = isRight ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
@@ -1872,7 +1889,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
         double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
 
-        double[] yawOffsets = { 0.0, -15.0, 15.0, -30.0, 30.0 };
+        Double[] yawOffsets = { 0.0, -15.0, 15.0, -30.0, 30.0 };
+        if (!Double.isNaN(preferredYaw)) {
+            java.util.Arrays.sort(yawOffsets, (a, b) -> Double.compare(Math.abs(a - preferredYaw), Math.abs(b - preferredYaw)));
+        }
+
         double[] activeAngles = qRef;
 
         for (double offsetDeg : yawOffsets) {
@@ -1911,6 +1932,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             boolean localSearchOk = false;
             if (q != null && isWithinLimits(q, isRight)) {
                 addUniqueSolution(validSolutions, q);
+                if (!Double.isNaN(preferredYaw) && Math.abs(offsetDeg - preferredYaw) < 1.0) {
+                    return validSolutions; // Dừng quét, giữ nguyên cấu hình yaw!
+                }
                 double err = computePositionError(q, px, py, pz, isRight);
                 if (err < 0.1) {
                     localSearchOk = true;

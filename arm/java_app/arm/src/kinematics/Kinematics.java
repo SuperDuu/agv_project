@@ -45,7 +45,8 @@ public class Kinematics {
 
         int maxIter = 100;
         double tol = 1e-3;
-        double alpha = 0.5;
+        double alpha = 0.8; // Khởi đầu với tốc độ học cao hơn để bắt kịp quỹ đạo
+        double prevErrNorm = Double.MAX_VALUE;
 
         double[] minLimRad = new double[NUM_JOINTS];
         double[] maxLimRad = new double[NUM_JOINTS];
@@ -69,6 +70,16 @@ public class Kinematics {
                 bestQ = q.clone();
             }
 
+            // --- CẢI TIẾN 1: ADAPTIVE STEP SIZE (ALPHA ĐỘNG) ---
+            // Nếu sai số tăng hoặc dao động (overshoot), giảm alpha để mịn hóa bước nhảy.
+            // Ngược lại, nếu giảm tốt, tăng nhẹ alpha để tránh trễ pha (Phase Lag).
+            if (errNorm > prevErrNorm) {
+                alpha *= 0.5;
+            } else {
+                alpha = Math.min(0.95, alpha * 1.05);
+            }
+            prevErrNorm = errNorm;
+
             if (errNorm < tol) {
                 return convertToDegreesWrap(q);
             }
@@ -86,9 +97,16 @@ public class Kinematics {
 
             double[] dq = solveDLS(J, e, lambda);
 
+            // --- CẢI TIẾN 2: THUẬT TOÁN KẸP BIÊN GIẢM CHẤN (CLAMPING) ---
             for (int i = 0; i < NUM_JOINTS; i++) {
-                q[i] = wrapToPi(q[i] + alpha * dq[i]);
-                q[i] = Math.max(minLimRad[i], Math.min(maxLimRad[i], q[i]));
+                double nextQ = wrapToPi(q[i] + alpha * dq[i]);
+                
+                // Nếu khớp vi phạm giới hạn, triệt tiêu vận tốc của chính nó thay vì bẻ gãy toán học
+                if (nextQ < minLimRad[i] || nextQ > maxLimRad[i]) {
+                    dq[i] = 0; // Khóa khớp này lại, ép các khớp khác gánh quỹ đạo
+                    nextQ = Math.max(minLimRad[i], Math.min(maxLimRad[i], nextQ));
+                }
+                q[i] = nextQ;
             }
         }
 
