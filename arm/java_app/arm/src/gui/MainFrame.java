@@ -1105,15 +1105,15 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return;
         }
 
-        setTitle("Đang di chuyển tới điểm xuất phát...");
-        setGotoStatus("Đang chuẩn bị " + statusTitle + "...", new Color(0, 90, 180));
+        setTitle("Đang chuẩn bị dữ liệu...");
+        setGotoStatus("Đang tính toán động học ngược (IK) cho quỹ đạo...", new Color(0, 90, 180));
+        
         if (speedSlider.getValue() <= 0) {
             speedSlider.setValue(30);
             speedLabel.setText("30 °/s");
             setGotoStatus("Tốc độ đang là 0, tự tăng lên 30 °/s để chạy quỹ đạo", new Color(180, 110, 0));
         }
 
-        // Tắt hiển thị quỹ đạo cũ và xóa cặn
         showTrailCb.setSelected(false);
         armPanel.trail.clear();
 
@@ -1129,23 +1129,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         trajectoryLastQ = null;
         trajectoryLastAlpha = getInitialTrajectoryAlpha(isRight);
 
-        // Nhảy đến điểm xuất phát
-        double[] startPt = path.get(0);
-        double[] startResult = solveIKForTrajectoryPoint(startPt[0], startPt[1], startPt[2]);
-        if (startResult != null) {
-            if (isRight) {
-                setTargetAnglesRight(startResult);
-            } else {
-                setTargetAnglesLeft(startResult);
-            }
-            trajectoryLastQ = startResult.clone();
-            updateArm();
-        } else {
-            setGotoStatus("Điểm bắt đầu quỹ đạo ngoài tầm!", Color.RED);
-            setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
-            return;
-        }
-
         // Tạm dừng motionTimer để tránh xung đột
         if (motionTimer != null) motionTimer.stop();
 
@@ -1155,77 +1138,110 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (resampled.isEmpty()) {
             resampled = path;
         }
-
         final java.util.List<double[]> finalPath = resampled;
-        final int[] currentIndex = { 0 };
-        final int[] waitMs = { 0 };
 
-        Timer prepareTimer = new Timer(50, evt -> {
-            waitMs[0] += 50;
-            boolean arrived = true;
-            for (int i = 0; i < NUM_JOINTS; i++) {
-                if (Math.abs(armAngles[i] - armTargetAngles[i]) > 0.5)
-                    arrived = false;
-            }
-            if (arrived || waitMs[0] >= 5000) {
-                ((Timer) evt.getSource()).stop();
-                if (!arrived) {
-                    setGotoStatus("Hết thời gian chờ điểm đầu, bắt đầu chạy quỹ đạo từ vị trí hiện tại", new Color(180, 110, 0));
-                }
-                setTitle("Chờ 1 giây...");
-
-                Timer delayTimer = new Timer(1000, evt2 -> {
-                    ((Timer) evt2.getSource()).stop();
-
-                    setTitle(statusTitle + " đang chạy...");
-                    showTrailCb.setSelected(true);
-
-                    trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
-                        if (currentIndex[0] >= finalPath.size()) {
-                            trajectoryTimer.stop();
-                            setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
-                            setGotoStatus("Quỹ đạo hoàn thành!", new Color(0, 140, 0));
-                            // Khôi phục motionTimer
-                            startMotionTimer();
-                            return;
+        // Dùng SwingWorker để tính toán trước (Precompute Trajectory)
+        SwingWorker<java.util.List<double[]>, Void> precomputeWorker = new SwingWorker<java.util.List<double[]>, Void>() {
+            @Override
+            protected java.util.List<double[]> doInBackground() throws Exception {
+                java.util.List<double[]> jointTrajectory = new java.util.ArrayList<>();
+                for (int i = 0; i < finalPath.size(); i++) {
+                    double[] pt = finalPath.get(i);
+                    double[] result = solveIKForTrajectoryPoint(pt[0], pt[1], pt[2]);
+                    if (result != null) {
+                        trajectoryLastQ = result.clone();
+                        jointTrajectory.add(result.clone());
+                    } else {
+                        if (trajectoryLastQ != null) {
+                            jointTrajectory.add(trajectoryLastQ.clone());
                         }
+                    }
+                }
+                return jointTrajectory;
+            }
 
-                        double[] pt = finalPath.get(currentIndex[0]);
-                        double tx = pt[0];
-                        double ty = pt[1];
-                        double tz = pt[2];
-                        currentIndex[0]++;
+            @Override
+            protected void done() {
+                try {
+                    java.util.List<double[]> jointTrajectory = get();
+                    if (jointTrajectory.isEmpty()) {
+                        setGotoStatus("Không thể tính toán quỹ đạo (Ngoài vùng làm việc)!", Color.RED);
+                        setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
+                        startMotionTimer();
+                        return;
+                    }
 
-                        double[] result = solveIKForTrajectoryPoint(tx, ty, tz);
-                        if (result != null) {
-                            trajectoryLastQ = result.clone();
-                            for (int i = 0; i < NUM_JOINTS; i++) {
-                                armTargetAngles[i] = armAngles[i] = result[i];
-                                armSliders[i].removeChangeListener(this);
-                                armSliders[i].setValue((int) Math.round(armAngles[i]));
-                                armSliders[i].addChangeListener(this);
-                                armAngleLbls[i].setText((int) Math.round(armAngles[i]) + "°");
+                    // Nhảy đến điểm xuất phát
+                    double[] startResult = jointTrajectory.get(0);
+                    if (isRight) {
+                        setTargetAnglesRight(startResult);
+                    } else {
+                        setTargetAnglesLeft(startResult);
+                    }
+                    updateArm();
+
+                    setGotoStatus("Tính toán xong. Đang di chuyển đến điểm bắt đầu...", new Color(0, 90, 180));
+
+                    final int[] waitMs = { 0 };
+                    Timer prepareTimer = new Timer(50, evt -> {
+                        waitMs[0] += 50;
+                        boolean arrived = true;
+                        for (int i = 0; i < NUM_JOINTS; i++) {
+                            if (Math.abs(armAngles[i] - armTargetAngles[i]) > 0.5) {
+                                arrived = false;
                             }
-                            updateArm();
-                            // Gửi tín hiệu xuống UART để mạch thật chạy
-                            sendJointsToUart();
-                        } else {
-                            if (trajectoryLastQ != null) {
-                                if (isRight) {
-                                    setTargetAnglesRight(trajectoryLastQ);
-                                } else {
-                                    setTargetAnglesLeft(trajectoryLastQ);
-                                }
+                        }
+                        if (arrived || waitMs[0] >= 5000) {
+                            ((Timer) evt.getSource()).stop();
+                            if (!arrived) {
+                                setGotoStatus("Hết thời gian chờ điểm đầu, chạy quỹ đạo từ vị trí hiện tại", new Color(180, 110, 0));
                             }
-                            setGotoStatus("~ Điểm khó đạt, đang giữ pose gần nhất", new Color(180, 110, 0));
+                            setTitle("Chờ 1 giây...");
+
+                            Timer delayTimer = new Timer(1000, evt2 -> {
+                                ((Timer) evt2.getSource()).stop();
+                                setTitle(statusTitle + " đang chạy...");
+                                showTrailCb.setSelected(true);
+
+                                final int[] currentIndex = { 0 };
+                                trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
+                                    if (currentIndex[0] >= jointTrajectory.size()) {
+                                        trajectoryTimer.stop();
+                                        setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
+                                        setGotoStatus("Quỹ đạo hoàn thành!", new Color(0, 140, 0));
+                                        startMotionTimer();
+                                        return;
+                                    }
+
+                                    double[] q_target = jointTrajectory.get(currentIndex[0]);
+                                    currentIndex[0]++;
+
+                                    for (int i = 0; i < NUM_JOINTS; i++) {
+                                        armTargetAngles[i] = armAngles[i] = q_target[i];
+                                        armSliders[i].removeChangeListener(MainFrame.this);
+                                        armSliders[i].setValue((int) Math.round(armAngles[i]));
+                                        armSliders[i].addChangeListener(MainFrame.this);
+                                        armAngleLbls[i].setText((int) Math.round(armAngles[i]) + "°");
+                                    }
+                                    updateArm();
+                                    sendJointsToUart();
+                                });
+                                trajectoryTimer.start();
+                            });
+                            delayTimer.start();
                         }
                     });
-                    trajectoryTimer.start();
-                });
-                delayTimer.start();
+                    prepareTimer.start();
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    setGotoStatus("Lỗi tính toán quỹ đạo!", Color.RED);
+                    startMotionTimer();
+                }
             }
-        });
-        prepareTimer.start();
+        };
+
+        precomputeWorker.execute();
     }
 
     void runCustomPathTrajectory(java.util.List<double[]> path) {
