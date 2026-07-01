@@ -19,6 +19,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private static final double MAX_IK_POSITION_ERROR = 1.5; // General IK threshold (allow a bit of error)
     private static final double TRAJ_RELAXED_ERROR = 2.50; // Trajectory fallback threshold
+    private static final double TRAJ_STRICT_ERROR = 0.10; // Trajectory strict tracking threshold (1.0 mm)
     double[] anglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] targetAnglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
@@ -1158,7 +1159,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         trajectoryLastQ = result.clone();
                         
                         double posErr = computePositionError(result, pt[0], pt[1], pt[2], isRight);
-                        if (posErr <= MAX_IK_POSITION_ERROR) {
+                        if (posErr <= TRAJ_STRICT_ERROR) {
                             rawJointTrajectory.add(result.clone());
                             
                             if (DEBUG) {
@@ -1172,7 +1173,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                             // Nghiệm vượt quá sai số cho phép, đánh dấu lỗ hổng để vá bằng Cubic Spline
                             rawJointTrajectory.add(null);
                             if (DEBUG) {
-                                System.out.printf("[DEBUG_TRAJ] Point %d Target=[%.2f, %.2f, %.2f] posErr=%.4f mm vượt quá MAX_IK_POSITION_ERROR, đánh dấu lỗ hổng!\n",
+                                System.out.printf("[DEBUG_TRAJ] Point %d Target=[%.2f, %.2f, %.2f] posErr=%.4f mm vượt quá TRAJ_STRICT_ERROR, đánh dấu lỗ hổng!\n",
                                     i + 1, pt[0], pt[1], pt[2], posErr * 10.0);
                             }
                             publish(String.format("Cảnh báo: Điểm %d vượt biên (%.1f mm), đánh dấu lỗ hổng!", i + 1, posErr * 10.0));
@@ -1562,7 +1563,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     if (fixedGround) {
                         c += a * a * 50.0;
                     }
-                    if (posErr <= MAX_IK_POSITION_ERROR && c < bestStrictCost) {
+                    if (posErr <= TRAJ_STRICT_ERROR && c < bestStrictCost) {
                         bestStrictCost = c;
                         bestStrictQ = q;
                         bestStrictAlpha = a;
@@ -1598,7 +1599,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         String actualCfg = getActualConfig(q, isRightArmSelected);
                         if (!actualCfg.equals(cfgTry)) continue;
                         double c = posErr * 220.0 + continuityCost(q, qRef, !isFirstWaypoint) * 0.04;
-                        if (posErr <= MAX_IK_POSITION_ERROR && c < bestStrictCost) {
+                        if (posErr <= TRAJ_STRICT_ERROR && c < bestStrictCost) {
                             bestStrictCost = c;
                             bestStrictQ = q;
                             bestStrictAlpha = a;
