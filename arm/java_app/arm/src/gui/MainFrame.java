@@ -90,13 +90,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     boolean manualMode = false;
     boolean isUpdatingFromFK = false;
 
-    JComboBox<String> trajTypeCombo = new JComboBox<>(new String[] { "Đường thẳng", "Xoắn ốc", "Vẽ bằng chuột", "Công thức toán học" });
-    JTextField txtLStartX = new JTextField("-16.3", 4);
-    JTextField txtLStartY = new JTextField("13.8", 4);
-    JTextField txtLStartZ = new JTextField("20", 4);
-    JTextField txtLEndX = new JTextField("-13.3", 4);
-    JTextField txtLEndY = new JTextField("-5.5", 4);
-    JTextField txtLEndZ = new JTextField("20.1", 4);
+    JComboBox<String> trajTypeCombo = new JComboBox<>(new String[] { "Xoắn ốc", "Vẽ bằng chuột", "Công thức toán học" });
     JTextField txtSStartX = new JTextField("-12", 4);
     JTextField txtSStartY = new JTextField("-5.5", 4);
     JTextField txtSStartZ = new JTextField("15", 4);
@@ -110,7 +104,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     public JButton btnClearMouseDraw = new JButton("Xóa hình vẽ");
 
     // Math Formula UI components
-    public JComboBox<String> comboMathType = new JComboBox<>(new String[] { "Hình tròn (Circle)", "Đường hình Sin (Sine Wave)", "Hình vô cực (Infinity)" });
+    public JComboBox<String> comboMathType = new JComboBox<>(new String[] { "Đường hình Sin (Sine Wave)", "Hình vô cực (Infinity)" });
     public JTextField txtMathX = new JTextField("120", 4);
     public JTextField txtMathY = new JTextField("0", 4);
     public JTextField txtMathZ = new JTextField("20", 4);
@@ -119,7 +113,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     public JTextField txtMathLength = new JTextField("80", 4);
 
     public boolean isDrawingActive() {
-        return trajTypeCombo.getSelectedIndex() == 2 && cbEnableDrawing != null && cbEnableDrawing.isSelected();
+        return trajTypeCombo.getSelectedIndex() == 1 && cbEnableDrawing != null && cbEnableDrawing.isSelected();
     }
     JTabbedPane mainTabs;
 
@@ -387,7 +381,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private JPanel buildTrajectoryPanel() {
         JPanel trajPanel = new JPanel();
-        JButton btnCheckLine = new JButton("Kiểm tra đoạn thẳng");
         trajPanel.setLayout(new BoxLayout(trajPanel, BoxLayout.Y_AXIS));
         trajPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
@@ -411,30 +404,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         trajPanel.add(topP);
         JPanel cards = new JPanel(new CardLayout());
 
-        JPanel pLine = new JPanel(new GridLayout(3, 1, 5, 2));
-        pLine.setBorder(BorderFactory.createTitledBorder("Thông số Đường thẳng"));
-
-        JPanel l1 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        l1.add(new JLabel("Điểm ĐẦU (X,Y,Z):"));
-        l1.add(txtLStartX);
-        l1.add(txtLStartY);
-        l1.add(txtLStartZ);
-
-        JPanel l2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        l2.add(new JLabel("Điểm CUỐI (X,Y,Z):"));
-        l2.add(txtLEndX);
-        l2.add(txtLEndY);
-        l2.add(txtLEndZ);
-
-        JPanel l3 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        l3.add(btnCheckLine);
-
-        pLine.add(l1);
-        pLine.add(l2);
-        pLine.add(l3);
-        cards.add(pLine, "Đường thẳng");
-
-        // --- Card 2: Spiral ---
+        // --- Card 1: Spiral (previously Card 2) ---
         JPanel pSpiral = new JPanel(new GridLayout(4, 1, 5, 2));
         pSpiral.setBorder(BorderFactory.createTitledBorder("Thông số Xoắn ốc"));
 
@@ -535,17 +505,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             isRightArmSelected = (trajArmCombo.getSelectedIndex() == 0);
             int selection = trajTypeCombo.getSelectedIndex();
             try {
-                if (selection == 0) { // Đường thẳng
-                    double sx = Double.parseDouble(txtLStartX.getText());
-                    double sy = Double.parseDouble(txtLStartY.getText());
-                    double sz = Double.parseDouble(txtLStartZ.getText());
-                    double ex = Double.parseDouble(txtLEndX.getText());
-                    double ey = Double.parseDouble(txtLEndY.getText());
-                    double ez = Double.parseDouble(txtLEndZ.getText());
-                    trajDebug("INPUT_LINE", String.format("S=(%.2f,%.2f,%.2f) E=(%.2f,%.2f,%.2f)",
-                            sx, sy, sz, ex, ey, ez));
-                    runLineTrajectory(sx, sy, sz, ex, ey, ez);
-                } else if (selection == 1) { // Xoắn ốc
+                if (selection == 0) { // Xoắn ốc
                     double cx = Double.parseDouble(txtSStartX.getText());
                     double cy = Double.parseDouble(txtSStartY.getText());
                     double cz = Double.parseDouble(txtSStartZ.getText());
@@ -555,10 +515,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     trajDebug("INPUT_SPIRAL", String.format("C=(%.2f,%.2f,%.2f) R=%.2f H=%.2f K=%.2f",
                             cx, cy, cz, r, h, k));
                     runSpiralTrajectoryParam(cx, cy, cz, r, h, k);
-                } else if (selection == 2) { // Vẽ bằng chuột
+                } else if (selection == 1) { // Vẽ bằng chuột
                     trajDebug("INPUT_MOUSE_DRAW", "Running custom mouse drawn trajectory");
                     runCustomPathTrajectory(armPanel.referencePath);
-                } else if (selection == 3) { // Công thức toán học
+                } else if (selection == 2) { // Công thức toán học
                     int mathIdx = comboMathType.getSelectedIndex();
                     double mx = Double.parseDouble(txtMathX.getText());
                     double my = Double.parseDouble(txtMathY.getText());
@@ -568,17 +528,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     double mLen = Double.parseDouble(txtMathLength.getText());
                     
                     ArrayList<double[]> mathPath = new ArrayList<>();
-                    if (mathIdx == 0) { // Circle
-                        int numSteps = (int) (100 * mFreq);
-                        for (int i = 0; i <= numSteps; i++) {
-                            double theta = (i / (double) numSteps) * 2 * Math.PI * mFreq;
-                            mathPath.add(new double[] {
-                                mx + mSize * Math.cos(theta),
-                                my + mSize * Math.sin(theta),
-                                mz
-                            });
-                        }
-                    } else if (mathIdx == 1) { // Sine wave
+                    if (mathIdx == 0) { // Sine wave
                         int numSteps = 100;
                         double direction = isRightArmSelected ? 1.0 : -1.0;
                         for (int i = 0; i <= numSteps; i++) {
@@ -610,31 +560,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 }
             } catch (Exception ex) {
                 trajDebug("INPUT_ERROR", ex.toString());
-                JOptionPane.showMessageDialog(this, "Vui lòng nhập số hợp lệ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            }
-        });
-
-        btnCheckLine.addActionListener(e -> {
-            try {
-                isRightArmSelected = (trajArmCombo.getSelectedIndex() == 0);
-                double sx = Double.parseDouble(txtLStartX.getText());
-                double sy = Double.parseDouble(txtLStartY.getText());
-                double sz = Double.parseDouble(txtLStartZ.getText());
-                double ex = Double.parseDouble(txtLEndX.getText());
-                double ey = Double.parseDouble(txtLEndY.getText());
-                double ez = Double.parseDouble(txtLEndZ.getText());
-
-                String cfg = isRightArmSelected ? (configComboRight.getSelectedIndex() == 0 ? "+" : "-")
-                                                : (configComboLeft.getSelectedIndex() == 0 ? "+" : "-");
-                trajectoryLockedCfg = cfg;
-                trajectoryLastQ = null;
-                trajectoryLastAlpha = getInitialTrajectoryAlpha(isRightArmSelected);
-
-                String report = buildLineFeasibilityReport(sx, sy, sz, ex, ey, ez);
-                trajDebug("LINE_CHECK", report.replace('\n', ' '));
-                JOptionPane.showMessageDialog(this, report, "Kết quả kiểm tra đoạn thẳng",
-                        JOptionPane.INFORMATION_MESSAGE);
-            } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Vui lòng nhập số hợp lệ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
         });
@@ -1345,163 +1270,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     // Trajectory logic methods follow ...
 
-    void runLineTrajectory(double sx, double sy, double sz, double ex, double ey, double ez) {
-        setTitle("Đang di chuyển tới điểm xuất phát...");
-        setGotoStatus("Đang chuẩn bị quỹ đạo thẳng...", new Color(0, 90, 180));
-        trajDebug("LINE_INIT", "Preparing line trajectory");
-        if (speedSlider.getValue() <= 0) {
-            speedSlider.setValue(30);
-            speedLabel.setText("30 °/s");
-            setGotoStatus("Tốc độ đang là 0, tự tăng lên 30 °/s để chạy quỹ đạo", new Color(180, 110, 0));
-            trajDebug("LINE_SPEED_FIX", "Speed was 0, forced to 30");
-        }
 
-        // Tắt hiển thị quỹ đạo cũ và xóa cặn
-        showTrailCb.setSelected(false);
-        armPanel.trail.clear();
-
-        final boolean isRight = isRightArmSelected;
-        final double[] armAngles = isRight ? anglesRight : anglesLeft;
-        final double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
-        final JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
-        final JLabel[] armAngleLbls = isRight ? angleLblsRight : angleLblsLeft;
-        final JComboBox<String> armConfigCombo = isRight ? configComboRight : configComboLeft;
-
-        String cfg = armConfigCombo.getSelectedIndex() == 0 ? "+" : "-";
-        trajectoryLockedCfg = cfg;
-        trajectoryLastQ = null;
-        trajectoryLastAlpha = getInitialTrajectoryAlpha(isRight);
-
-        // Nhảy đến điểm xuất phát
-        double[] startResult = solveIKForTrajectoryPoint(sx, sy, sz);
-        if (startResult != null) {
-            trajDebug("LINE_START_IK_OK", String.format("q=[%.1f, %.1f, %.1f, %.1f, %.1f]",
-                    startResult[0], startResult[1], startResult[2], startResult[3], startResult[4]));
-            if (isRight) {
-                setTargetAnglesRight(startResult);
-            } else {
-                setTargetAnglesLeft(startResult);
-            }
-            trajectoryLastQ = startResult.clone();
-            updateArm();
-        } else {
-            trajDebug("LINE_START_IK_FAIL", "No IK for start point");
-            setGotoStatus("Điểm bắt đầu ngoài tầm!", Color.RED);
-            setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
-            return;
-        }
-
-        // Validate the whole line quickly to avoid "hold pose" for almost entire run.
-        int failCount = 0;
-        String firstFail = null;
-        for (int i = 0; i <= 30; i++) {
-            double r = i / 30.0;
-            double tx = sx + (ex - sx) * r;
-            double ty = sy + (ey - sy) * r;
-            double tz = sz + (ez - sz) * r;
-            if (!hasIKForPoint(tx, ty, tz)) {
-                failCount++;
-                if (firstFail == null) {
-                    firstFail = String.format("(%.2f, %.2f, %.2f)", tx, ty, tz);
-                }
-            }
-        }
-        if (failCount > 8) {
-            trajDebug("LINE_PATH_BLOCKED", "fails=" + failCount + " firstFail=" + firstFail);
-            if (Math.abs(ez - sz) < 1e-6) {
-                Double altZ = findAlternativeFlatLineZ(sx, sy, ex, ey, sz, failCount);
-                if (altZ != null) {
-                    trajDebug("LINE_AUTO_Z", String.format("Auto-adjust Z from %.2f to %.2f", sz, altZ));
-                    txtLStartZ.setText(String.format("%.1f", altZ));
-                    txtLEndZ.setText(String.format("%.1f", altZ));
-                    setGotoStatus(String.format("Tự động đổi Z: %.1f -> %.1f để line khả thi", sz, altZ),
-                            new Color(180, 110, 0));
-                    runLineTrajectory(sx, sy, altZ, ex, ey, altZ);
-                    return;
-                }
-            }
-            setGotoStatus("Đường thẳng đi qua vùng không với tới, thử đổi điểm hoặc giảm Z", Color.RED);
-            setTitle("Mô Phỏng Cánh Tay Robot 5-DOF");
-            return;
-        }
-
-        // Chờ tay máy di chuyển tới điểm xuất phát, sau đó nghỉ 1 giây mới bật quỹ đạo
-        // và vẽ
-        final int[] waitMs = { 0 };
-        Timer prepareTimer = new Timer(50, evt -> {
-            waitMs[0] += 50;
-            boolean arrived = true;
-            for (int i = 0; i < NUM_JOINTS; i++) {
-                if (Math.abs(armAngles[i] - armTargetAngles[i]) > 0.5)
-                    arrived = false;
-            }
-            if (arrived || waitMs[0] >= 5000) {
-                ((Timer) evt.getSource()).stop();
-                trajDebug("LINE_PREPARE_DONE", "arrived=" + arrived + " waitMs=" + waitMs[0]);
-                if (!arrived) {
-                    setGotoStatus("Hết thời gian chờ điểm đầu, bắt đầu quỹ đạo từ vị trí hiện tại", new Color(180, 110, 0));
-                }
-                setTitle("Chờ 1 giây...");
-
-                Timer delayTimer = new Timer(1000, evt2 -> {
-                    ((Timer) evt2.getSource()).stop();
-
-                    setTitle("Đường thẳng đang chạy...");
-                    showTrailCb.setSelected(true); // Chỉ bật bắt đầu từ lúc này
-
-                    final double L = Math.max(0.1,
-                            Math.sqrt(Math.pow(ex - sx, 2) + Math.pow(ey - sy, 2) + Math.pow(ez - sz, 2)));
-                    double[] ratio = { 0.0 };
-
-                    trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
-                        double speed = Math.max(1.0, speedSlider.getValue() / 2.0); // units/sec Cartesian speed
-                                                                                    // approximation
-                        double dt = MOTION_DT_MS / 1000.0;
-                        ratio[0] += (speed * dt) / L;
-
-                        if (ratio[0] >= 1.0) {
-                            ratio[0] = 1.0;
-                            trajectoryTimer.stop();
-                            trajDebug("LINE_DONE", "ratio reached 1.0");
-                            setTitle("Simulation (5-DOF)");
-                        }
-                        double r = ratio[0];
-                        double tx = sx + (ex - sx) * r;
-                        double ty = sy + (ey - sy) * r;
-                        double tz = sz + (ez - sz) * r;
-
-                        double[] result = solveIKForTrajectoryPoint(tx, ty, tz);
-                        if (result != null) {
-                            trajectoryLastQ = result.clone();
-                            for (int i = 0; i < NUM_JOINTS; i++) {
-                                armTargetAngles[i] = armAngles[i] = result[i];
-                                armSliders[i].removeChangeListener(this);
-                                armSliders[i].setValue((int) Math.round(armAngles[i]));
-                                armSliders[i].addChangeListener(this);
-                                armAngleLbls[i].setText((int) Math.round(armAngles[i]) + "°");
-                            }
-                            updateArm();
-                        } else {
-                            trajDebug("LINE_TRACK_HOLD",
-                                    String.format("No IK at p=(%.2f, %.2f, %.2f), hold last pose", tx, ty, tz));
-                            if (trajectoryLastQ != null) {
-                                if (isRight) {
-                                    setTargetAnglesRight(trajectoryLastQ);
-                                } else {
-                                    setTargetAnglesLeft(trajectoryLastQ);
-                                }
-                            }
-                            setGotoStatus("~ Điểm khó đạt, đang giữ pose gần nhất", new Color(180, 110, 0));
-                        }
-                    });
-                                  trajDebug("LINE_TIMER_START", "Trajectory timer started");
-                    trajectoryTimer.start();
-                });
-                delayTimer.start();
-            }
-        });
-        prepareTimer.start();
-    }
 
     void runCustomPathTrajectory(java.util.List<double[]> path) {
         if (path == null || path.isEmpty()) {
@@ -1947,80 +1716,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
     }
 
-    private int countLineIKFails(double sx, double sy, double sz, double ex, double ey, double ez) {
-        int fails = 0;
-        for (int i = 0; i <= 30; i++) {
-            double r = i / 30.0;
-            double tx = sx + (ex - sx) * r;
-            double ty = sy + (ey - sy) * r;
-            double tz = sz + (ez - sz) * r;
-            if (!hasIKForPoint(tx, ty, tz)) {
-                fails++;
-            }
-        }
-        return fails;
-    }
-
-    private String buildLineFeasibilityReport(double sx, double sy, double sz, double ex, double ey, double ez) {
-        int fails = 0;
-        String firstFail = null;
-        for (int i = 0; i <= 30; i++) {
-            double r = i / 30.0;
-            double tx = sx + (ex - sx) * r;
-            double ty = sy + (ey - sy) * r;
-            double tz = sz + (ez - sz) * r;
-            if (!hasIKForPoint(tx, ty, tz)) {
-                fails++;
-                if (firstFail == null) {
-                    firstFail = String.format("(%.2f, %.2f, %.2f)", tx, ty, tz);
-                }
-            }
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format("Đoạn kiểm tra: S(%.1f, %.1f, %.1f) -> E(%.1f, %.1f, %.1f)\n",
-                sx, sy, sz, ex, ey, ez));
-        sb.append(String.format("Số điểm không thỏa IK: %d / 31\n", fails));
-        if (fails == 0) {
-            sb.append("Kết luận: Đoạn thẳng khả thi hoàn toàn.");
-            return sb.toString();
-        }
-
-        sb.append("Điểm lỗi đầu tiên: ").append(firstFail).append('\n');
-        if (Math.abs(ez - sz) < 1e-6) {
-            Double altZ = findAlternativeFlatLineZ(sx, sy, ex, ey, sz, fails);
-            if (altZ != null) {
-                int altFails = countLineIKFails(sx, sy, altZ, ex, ey, altZ);
-                sb.append(String.format("Gợi ý: đổi Z về %.1f (lỗi còn %d / 31).", altZ, altFails));
-            } else {
-                sb.append("Không tìm được Z phẳng tốt hơn trong tập thử.");
-            }
-        } else {
-            sb.append("Đoạn không phẳng theo Z; thử giảm độ dốc hoặc đổi điểm cuối.");
-        }
-        return sb.toString();
-    }
-
-    private Double findAlternativeFlatLineZ(double sx, double sy, double ex, double ey, double currentZ, int baseFails) {
-        double[] candidates = { 18, 16, 14, 12, 10, 8, 6, 4, 22, 24, 26 };
-        double bestZ = Double.NaN;
-        int bestFails = Integer.MAX_VALUE;
-        for (double z : candidates) {
-            if (Math.abs(z - currentZ) < 0.1) {
-                continue;
-            }
-            int fails = countLineIKFails(sx, sy, z, ex, ey, z);
-            if (fails < bestFails) {
-                bestFails = fails;
-                bestZ = z;
-            }
-        }
-        if (!Double.isNaN(bestZ) && bestFails < baseFails) {
-            trajDebug("LINE_AUTO_Z_CANDIDATE", String.format("bestZ=%.2f fails=%d (from %d)", bestZ, bestFails, baseFails));
-            return bestZ;
-        }
-        return null;
-    }
 
     void stopWorkspaceExploration() {
         if (explorationThread != null && explorationThread.isAlive()) {
