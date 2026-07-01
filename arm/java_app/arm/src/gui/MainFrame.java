@@ -90,30 +90,15 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     boolean manualMode = false;
     boolean isUpdatingFromFK = false;
 
-    JComboBox<String> trajTypeCombo = new JComboBox<>(new String[] { "Xoắn ốc", "Vẽ bằng chuột", "Công thức toán học" });
-    JTextField txtSStartX = new JTextField("-12", 4);
-    JTextField txtSStartY = new JTextField("-5.5", 4);
-    JTextField txtSStartZ = new JTextField("15", 4);
-    JTextField txtSR = new JTextField("5", 4);
-    JTextField txtSH = new JTextField("10", 4);
-    JTextField txtSK = new JTextField("3", 4);
+    JComboBox<String> trajTypeCombo = new JComboBox<>(new String[] { "Vẽ bằng chuột" });
 
     // Mouse Draw UI components
     public JCheckBox cbEnableDrawing = new JCheckBox("Bật chế độ vẽ (Kéo chuột trái)", true);
     public JTextField txtMouseZ = new JTextField("20", 4);
     public JButton btnClearMouseDraw = new JButton("Xóa hình vẽ");
 
-    // Math Formula UI components
-    public JComboBox<String> comboMathType = new JComboBox<>(new String[] { "Đường hình Sin (Sine Wave)", "Hình vô cực (Infinity)" });
-    public JTextField txtMathX = new JTextField("120", 4);
-    public JTextField txtMathY = new JTextField("0", 4);
-    public JTextField txtMathZ = new JTextField("20", 4);
-    public JTextField txtMathSize = new JTextField("25", 4);
-    public JTextField txtMathFreq = new JTextField("1", 4);
-    public JTextField txtMathLength = new JTextField("80", 4);
-
     public boolean isDrawingActive() {
-        return trajTypeCombo.getSelectedIndex() == 1 && cbEnableDrawing != null && cbEnableDrawing.isSelected();
+        return trajTypeCombo.getSelectedIndex() == 0 && cbEnableDrawing != null && cbEnableDrawing.isSelected();
     }
     JTabbedPane mainTabs;
 
@@ -392,11 +377,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (isRightArmSelected != right) {
                 isRightArmSelected = right;
                 updateArm();
-                if (right) {
-                    txtMathX.setText("120");
-                } else {
-                    txtMathX.setText("-120");
-                }
             }
         });
         topP.add(new JLabel("  Loại quỹ đạo: "));
@@ -404,32 +384,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         trajPanel.add(topP);
         JPanel cards = new JPanel(new CardLayout());
 
-        // --- Card 1: Spiral (previously Card 2) ---
-        JPanel pSpiral = new JPanel(new GridLayout(4, 1, 5, 2));
-        pSpiral.setBorder(BorderFactory.createTitledBorder("Thông số Xoắn ốc"));
-
-        JPanel s1 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        s1.add(new JLabel("Tâm (X,Y,Z):"));
-        s1.add(txtSStartX);
-        s1.add(txtSStartY);
-        s1.add(txtSStartZ);
-
-        JPanel s2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        s2.add(new JLabel("Bk R:"));
-        s2.add(txtSR);
-        s2.add(new JLabel(" Cao H:"));
-        s2.add(txtSH);
-
-        JPanel s3 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        s3.add(new JLabel("Số vòng K:"));
-        s3.add(txtSK);
-
-        pSpiral.add(s1);
-        pSpiral.add(s2);
-        pSpiral.add(s3);
-        cards.add(pSpiral, "Xoắn ốc");
-
-        // --- Card 3: Mouse Draw ---
+        // --- Card 1: Mouse Draw ---
         JPanel pMouse = new JPanel(new GridLayout(3, 1, 5, 2));
         pMouse.setBorder(BorderFactory.createTitledBorder("Thông số Vẽ bằng chuột"));
 
@@ -450,36 +405,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         pMouse.add(m1);
         pMouse.add(m2);
         cards.add(pMouse, "Vẽ bằng chuột");
-
-        // --- Card 4: Math Formula ---
-        JPanel pFormula = new JPanel(new GridLayout(4, 1, 5, 2));
-        pFormula.setBorder(BorderFactory.createTitledBorder("Thông số Công thức toán học"));
-
-        JPanel f1 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        f1.add(new JLabel("Công thức:"));
-        f1.add(comboMathType);
-
-        JPanel f2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        f2.add(new JLabel("Tâm/Bắt đầu (X,Y,Z):"));
-        f2.add(txtMathX);
-        f2.add(txtMathY);
-        f2.add(txtMathZ);
-
-        JPanel f3 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        f3.add(new JLabel("Biên độ/Bán kính (R/A):"));
-        f3.add(txtMathSize);
-        f3.add(new JLabel(" Số vòng/Tần số (K/f):"));
-        f3.add(txtMathFreq);
-
-        JPanel f4 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        f4.add(new JLabel("Chiều dài Sin (L):"));
-        f4.add(txtMathLength);
-
-        pFormula.add(f1);
-        pFormula.add(f2);
-        pFormula.add(f3);
-        pFormula.add(f4);
-        cards.add(pFormula, "Công thức toán học");
 
         trajPanel.add(cards);
 
@@ -503,61 +428,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (trajectoryTimer != null)
                 trajectoryTimer.stop();
             isRightArmSelected = (trajArmCombo.getSelectedIndex() == 0);
-            int selection = trajTypeCombo.getSelectedIndex();
             try {
-                if (selection == 0) { // Xoắn ốc
-                    double cx = Double.parseDouble(txtSStartX.getText());
-                    double cy = Double.parseDouble(txtSStartY.getText());
-                    double cz = Double.parseDouble(txtSStartZ.getText());
-                    double r = Double.parseDouble(txtSR.getText());
-                    double h = Double.parseDouble(txtSH.getText());
-                    double k = Double.parseDouble(txtSK.getText());
-                    trajDebug("INPUT_SPIRAL", String.format("C=(%.2f,%.2f,%.2f) R=%.2f H=%.2f K=%.2f",
-                            cx, cy, cz, r, h, k));
-                    runSpiralTrajectoryParam(cx, cy, cz, r, h, k);
-                } else if (selection == 1) { // Vẽ bằng chuột
-                    trajDebug("INPUT_MOUSE_DRAW", "Running custom mouse drawn trajectory");
-                    runCustomPathTrajectory(armPanel.referencePath);
-                } else if (selection == 2) { // Công thức toán học
-                    int mathIdx = comboMathType.getSelectedIndex();
-                    double mx = Double.parseDouble(txtMathX.getText());
-                    double my = Double.parseDouble(txtMathY.getText());
-                    double mz = Double.parseDouble(txtMathZ.getText());
-                    double mSize = Double.parseDouble(txtMathSize.getText());
-                    double mFreq = Double.parseDouble(txtMathFreq.getText());
-                    double mLen = Double.parseDouble(txtMathLength.getText());
-                    
-                    ArrayList<double[]> mathPath = new ArrayList<>();
-                    if (mathIdx == 0) { // Sine wave
-                        int numSteps = 100;
-                        double direction = isRightArmSelected ? 1.0 : -1.0;
-                        for (int i = 0; i <= numSteps; i++) {
-                            double ratio = i / (double) numSteps;
-                            double tx = mx + direction * ratio * mLen;
-                            double ty = my + mSize * Math.sin(2 * Math.PI * mFreq * ratio);
-                            double tz = mz;
-                            mathPath.add(new double[] { tx, ty, tz });
-                        }
-                    } else { // Infinity / Lemniscate of Bernoulli
-                        int numSteps = (int) (100 * mFreq);
-                        for (int i = 0; i <= numSteps; i++) {
-                            double t = (i / (double) numSteps) * 2 * Math.PI * mFreq;
-                            double denom = 1 + Math.pow(Math.sin(t), 2);
-                            double tx = mx + (mSize * Math.cos(t)) / denom;
-                            double ty = my + (mSize * Math.sin(t) * Math.cos(t)) / denom;
-                            double tz = mz;
-                            mathPath.add(new double[] { tx, ty, tz });
-                        }
-                    }
-                    
-                    // Show generated path in referencePath
-                    armPanel.referencePath.clear();
-                    armPanel.referencePath.addAll(mathPath);
-                    armPanel.repaint();
-                    
-                    trajDebug("INPUT_MATH_FORMULA", String.format("Math formula type=%d mx=%.2f size=%.2f freq=%.2f", mathIdx, mx, mSize, mFreq));
-                    runCustomPathTrajectory(mathPath);
-                }
+                trajDebug("INPUT_MOUSE_DRAW", "Running custom mouse drawn trajectory");
+                runCustomPathTrajectory(armPanel.referencePath);
             } catch (Exception ex) {
                 trajDebug("INPUT_ERROR", ex.toString());
                 JOptionPane.showMessageDialog(this, "Vui lòng nhập số hợp lệ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
