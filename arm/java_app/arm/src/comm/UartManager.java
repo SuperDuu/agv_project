@@ -45,11 +45,24 @@ public class UartManager {
         }
     }
 
-    public void sendData(String data) {
+    public boolean sendData(String data) {
         if (port != null && port.isOpen()) {
-            byte[] buffer = data.getBytes();
-            port.writeBytes(buffer, buffer.length);
+            try {
+                byte[] buffer = data.getBytes();
+                int written = port.writeBytes(buffer, buffer.length);
+                if (written < 0) {
+                    System.err.println("UART Write Error: Connection lost. Closing port.");
+                    disconnect();
+                    return false;
+                }
+                return written == buffer.length;
+            } catch (Exception e) {
+                System.err.println("UART Write Exception: " + e.getMessage() + ". Closing port.");
+                disconnect();
+                return false;
+            }
         }
+        return false;
     }
 
     public boolean isConnected() {
