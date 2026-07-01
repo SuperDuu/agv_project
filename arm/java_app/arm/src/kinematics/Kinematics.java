@@ -33,12 +33,20 @@ public class Kinematics {
 
     public static double[] solveIK(double px, double py, double pz, double[][] R_target, double[] qInitRad, boolean isRight) {
         double[] q = qInitRad.clone();
+        double[] bestQ = q.clone();
+        double bestErrNorm = Double.MAX_VALUE;
+
+        double[][] T_target = {
+                { R_target[0][0], R_target[0][1], R_target[0][2], px },
+                { R_target[1][0], R_target[1][1], R_target[1][2], py },
+                { R_target[2][0], R_target[2][1], R_target[2][2], pz },
+                { 0, 0, 0, 1 }
+        };
+
         int maxIter = 100;
-        double tolPos = 1.0; 
-        double tolOri = 0.005; 
-        double L_CHAR = (L2 + L3) + L4; 
-        
-        double[] p_d = { px, py, pz };
+        double tol = 1e-3;
+        double alpha = 0.5;
+
         double[] minLimRad = new double[NUM_JOINTS];
         double[] maxLimRad = new double[NUM_JOINTS];
         for (int i = 0; i < NUM_JOINTS; i++) {
@@ -46,133 +54,53 @@ public class Kinematics {
             maxLimRad[i] = Math.toRadians(isRight ? JOINT_MAX_RIGHT[i] : JOINT_MAX_LEFT[i]);
         }
 
-        double[] n_d = { R_target[0][0], R_target[1][0], R_target[2][0] };
-        double[] s_d = { R_target[0][1], R_target[1][1], R_target[2][1] };
-        double[] a_d = { R_target[0][2], R_target[1][2], R_target[2][2] };
-
         for (int iter = 0; iter < maxIter; iter++) {
-            double[][] T_e = computeFKMatrix(q, isRight);
-            double[] p_e = { T_e[0][3], T_e[1][3], T_e[2][3] };
-            double[][] R_e = extractRotation(T_e);
+            double[][] T_curr = computeFKMatrix(q, isRight);
+            double[] e = computeTr2Delta(T_curr, T_target);
 
-            double[] e_p = { p_d[0] - p_e[0], p_d[1] - p_e[1], p_d[2] - p_e[2] };
-            double errPosNorm = Math.sqrt(e_p[0]*e_p[0] + e_p[1]*e_p[1] + e_p[2]*e_p[2]);
+            double errNorm = 0;
+            for (int i = 0; i < 6; i++) {
+                errNorm += e[i] * e[i];
+            }
+            errNorm = Math.sqrt(errNorm);
 
-            double[] n = { R_e[0][0], R_e[1][0], R_e[2][0] };
-            double[] s = { R_e[0][1], R_e[1][1], R_e[2][1] };
-            double[] a_vec = { R_e[0][2], R_e[1][2], R_e[2][2] };
+            if (errNorm < bestErrNorm) {
+                bestErrNorm = errNorm;
+                bestQ = q.clone();
+            }
 
-            double[] crossN = crossProduct(n, n_d);
-            double[] crossS = crossProduct(s, s_d);
-            double[] crossA = crossProduct(a_vec, a_d);
-
-            double[] e_o = {
-                0.5 * (crossN[0] + crossS[0] + crossA[0]),
-                0.5 * (crossN[1] + crossS[1] + crossA[1]),
-                0.5 * (crossN[2] + crossS[2] + crossA[2])
-            };
-            double errOriNorm = Math.sqrt(e_o[0]*e_o[0] + e_o[1]*e_o[1] + e_o[2]*e_o[2]);
-
-            if (errPosNorm < tolPos && errOriNorm < tolOri) {
+            if (errNorm < tol) {
                 return convertToDegreesWrap(q);
             }
 
             double[][] J = computeJacobianEE(q, isRight);
+            
+            // Adaptive DLS (Tự động tăng lambda khi ma trận suy biến để tránh nổ nghiệm)
             double detJ = compute6x6Determinant(J);
             double manipulability = Math.abs(detJ);
-
-            double lambdaBase = 0.01;
-            double lambdaMax = 0.4;
-            double wThresh = 0.008;
-            double lambda = lambdaBase;
-            if (manipulability < wThresh) {
-                double ratio = manipulability / wThresh;
-                lambda = Math.sqrt(lambdaBase * lambdaBase + lambdaMax * lambdaMax * (1.0 - ratio) * (1.0 - ratio));
+            double lambda = 0.01;
+            if (manipulability < 0.008) {
+                double ratio = manipulability / 0.008;
+                lambda = Math.sqrt(0.01*0.01 + 0.4*0.4 * (1 - ratio)*(1 - ratio));
             }
 
-            double[] e_unified = new double[6];
-            System.arraycopy(e_p, 0, e_unified, 0, 3);
-            e_unified[3] = L_CHAR * e_o[0];
-            e_unified[4] = L_CHAR * e_o[1];
-            e_unified[5] = L_CHAR * e_o[2];
+            double[] dq = solveDLS(J, e, lambda);
 
-            double[] dq = solveDLS(J, e_unified, lambda);
-
-            double alphaStep = 1.0;
-            double beta = 0.5;
-            double currentError = errPosNorm + L_CHAR * errOriNorm;
-            boolean stepAccepted = false;
-            double[] q_cand = new double[NUM_JOINTS];
-
-            for (int backstep = 0; backstep < 4; backstep++) {
-                for (int i = 0; i < NUM_JOINTS; i++) {
-                    q_cand[i] = Math.max(minLimRad[i], Math.min(maxLimRad[i], q[i] + alphaStep * dq[i]));
-                }
-
-                double[][] T_cand = computeFKMatrix(q_cand, isRight);
-                double[] p_cand = { T_cand[0][3], T_cand[1][3], T_cand[2][3] };
-                double errPosCand = Math.sqrt(
-                    Math.pow(p_d[0]-p_cand[0], 2) + Math.pow(p_d[1]-p_cand[1], 2) + Math.pow(p_d[2]-p_cand[2], 2)
-                );
-
-                double[][] R_cand = extractRotation(T_cand);
-                double[] n_c = { R_cand[0][0], R_cand[1][0], R_cand[2][0] };
-                double[] s_c = { R_cand[0][1], R_cand[1][1], R_cand[2][1] };
-                double[] a_c = { R_cand[0][2], R_cand[1][2], R_cand[2][2] };
-
-                double[] cN = crossProduct(n_c, n_d);
-                double[] cS = crossProduct(s_c, s_d);
-                double[] cA = crossProduct(a_c, a_d);
-
-                double[] e_o_cand = {
-                    0.5 * (cN[0] + cS[0] + cA[0]),
-                    0.5 * (cN[1] + cS[1] + cA[1]),
-                    0.5 * (cN[2] + cS[2] + cA[2])
-                };
-                double errOriCand = Math.sqrt(e_o_cand[0]*e_o_cand[0] + e_o_cand[1]*e_o_cand[1] + e_o_cand[2]*e_o_cand[2]);
-
-                double candidateError = errPosCand + L_CHAR * errOriCand;
-                if (candidateError < currentError) {
-                    q = q_cand.clone();
-                    stepAccepted = true;
-                    break;
-                }
-                alphaStep *= beta;
-            }
-
-            if (!stepAccepted) {
-                for (int i = 0; i < NUM_JOINTS; i++) {
-                    q[i] = Math.max(minLimRad[i], Math.min(maxLimRad[i], q[i] + 0.05 * dq[i]));
-                }
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                q[i] = wrapToPi(q[i] + alpha * dq[i]);
+                q[i] = Math.max(minLimRad[i], Math.min(maxLimRad[i], q[i]));
             }
         }
 
-        double[][] T_final = computeFKMatrix(q, isRight);
-        double[] p_f = { T_final[0][3], T_final[1][3], T_final[2][3] };
-        double finalPosErr = Math.sqrt(
-            Math.pow(p_d[0]-p_f[0], 2) + Math.pow(p_d[1]-p_f[1], 2) + Math.pow(p_d[2]-p_f[2], 2)
-        );
+        // Constraint Relaxation: Fallback nếu vượt quá số vòng lặp nhưng vị trí đã rất gần đích
+        double[][] T_best = computeFKMatrix(bestQ, isRight);
+        double dx = T_best[0][3] - px;
+        double dy = T_best[1][3] - py;
+        double dz = T_best[2][3] - pz;
+        double posErr = Math.sqrt(dx*dx + dy*dy + dz*dz);
 
-        double[][] R_f = extractRotation(T_final);
-        double[] n_f = { R_f[0][0], R_f[1][0], R_f[2][0] };
-        double[] s_f = { R_f[0][1], R_f[1][1], R_f[2][1] };
-        double[] a_f = { R_f[0][2], R_f[1][2], R_f[2][2] };
-
-        double[] cN_f = crossProduct(n_f, n_d);
-        double[] cS_f = crossProduct(s_f, s_d);
-        double[] cA_f = crossProduct(a_f, a_d);
-
-        double[] final_e_o = {
-            0.5 * (cN_f[0] + cS_f[0] + cA_f[0]),
-            0.5 * (cN_f[1] + cS_f[1] + cA_f[1]),
-            0.5 * (cN_f[2] + cS_f[2] + cA_f[2])
-        };
-        double finalOriErr = Math.sqrt(final_e_o[0]*final_e_o[0] + final_e_o[1]*final_e_o[1] + final_e_o[2]*final_e_o[2]);
-
-        // Constraint Relaxation: accept if position is very close and orientation deviation is within ~5 degrees
-        double maxAllowedOriDeviation = Math.toRadians(5.0);
-        if (finalPosErr < 1.5 && finalOriErr < Math.sin(maxAllowedOriDeviation)) {
-            return convertToDegreesWrap(q);
+        if (posErr <= 1.5) {
+            return convertToDegreesWrap(bestQ);
         }
 
         return null;
