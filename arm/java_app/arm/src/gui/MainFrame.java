@@ -15,7 +15,7 @@ import comm.ControllerReceiver;
 
 public final class MainFrame extends JFrame implements ActionListener, ChangeListener {
     /** Set to false for demos to suppress debug output. Set to true during development. */
-    public static final boolean DEBUG = false;
+    public static final boolean DEBUG = true;
 
     private static final double MAX_IK_POSITION_ERROR = 1.5; // General IK threshold (allow a bit of error)
     private static final double TRAJ_RELAXED_ERROR = 2.50; // Trajectory fallback threshold
@@ -1154,14 +1154,21 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         trajectoryLastQ = result.clone();
                         jointTrajectory.add(result.clone());
                         double posErr = computePositionError(result, pt[0], pt[1], pt[2], isRight);
+                        if (DEBUG) {
+                            System.out.printf("[DEBUG_TRAJ] Point %d Target=[%.2f, %.2f, %.2f] SolvedQ=[%.2f, %.2f, %.2f, %.2f, %.2f, %.2f] posErr=%.4f mm\n",
+                                i + 1, pt[0], pt[1], pt[2], result[0], result[1], result[2], result[3], result[4], result[5], posErr * 10.0);
+                        }
                         if (posErr > TRAJ_RELAXED_ERROR) {
-                            publish(String.format("Cảnh báo: Điểm %d vượt biên (%.1f mm), tự động vươn tối đa!", i + 1, posErr));
+                            publish(String.format("Cảnh báo: Điểm %d vượt biên (%.1f mm), tự động vươn tối đa!", i + 1, posErr * 10.0));
                         } else {
                             if (i % 5 == 0 || i == finalPath.size() - 1) {
                                 publish(String.format("Đang giải IK: %d / %d điểm (OK)", i + 1, finalPath.size()));
                             }
                         }
                     } else {
+                        if (DEBUG) {
+                            System.out.printf("[DEBUG_TRAJ] Point %d FAILED! Target=[%.2f, %.2f, %.2f]\n", i + 1, pt[0], pt[1], pt[2]);
+                        }
                         if (trajectoryLastQ != null) {
                             jointTrajectory.add(trajectoryLastQ.clone());
                         }
