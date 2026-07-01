@@ -1831,8 +1831,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             double[] best = null;
             double bestAlphaGround = 0.0;
             
-            // Try alpha=0 first, then expand outward in small steps
-            for (double a = -90; a <= 30; a += 3.0) {
+            // Try alpha=0 first, then expand outward in larger steps to save CPU
+            for (double a = -90; a <= 30; a += 15.0) {
                 List<double[]> candidates = tryAlpha(px, py, pz, a, isRight);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRight);
@@ -1911,7 +1911,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         // 2. Fallback to global scan if local search fails or is inaccurate
-        for (double a = -90; a <= 30; a += 5.0) {
+        for (double a = -90; a <= 30; a += 15.0) {
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
             List<double[]> candidates = tryAlpha(px, py, pz, a, isRight);
