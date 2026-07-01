@@ -1153,8 +1153,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     if (result != null) {
                         trajectoryLastQ = result.clone();
                         jointTrajectory.add(result.clone());
-                        if (i % 5 == 0 || i == finalPath.size() - 1) {
-                            publish(String.format("Đang giải IK: %d / %d điểm (OK)", i + 1, finalPath.size()));
+                        double posErr = computePositionError(result, pt[0], pt[1], pt[2], isRight);
+                        if (posErr > TRAJ_RELAXED_ERROR) {
+                            publish(String.format("Cảnh báo: Điểm %d vượt biên (%.1f mm), tự động vươn tối đa!", i + 1, posErr));
+                        } else {
+                            if (i % 5 == 0 || i == finalPath.size() - 1) {
+                                publish(String.format("Đang giải IK: %d / %d điểm (OK)", i + 1, finalPath.size()));
+                            }
                         }
                     } else {
                         if (trajectoryLastQ != null) {
@@ -1427,6 +1432,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double bestRelaxedAlpha = trajectoryLastAlpha;
         String bestRelaxedCfg = trajectoryLockedCfg;
 
+        double bestRescueCost = Double.MAX_VALUE;
+        double[] bestRescueQ = null;
+        double bestRescueAlpha = trajectoryLastAlpha;
+        String bestRescueCfg = trajectoryLockedCfg;
+
         JComboBox<String> gCombo = isRightArmSelected ? gripperModeComboRight : gripperModeComboLeft;
         boolean fixedGround = (gCombo.getSelectedIndex() == 0);
 
@@ -1459,6 +1469,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         bestRelaxedAlpha = a;
                         bestRelaxedCfg = cfgTry;
                     }
+                    
+                    double rescueC = posErr * 1000.0 + continuityCost(q, qRef, !isFirstWaypoint) * 0.05;
+                    if (rescueC < bestRescueCost) {
+                        bestRescueCost = rescueC;
+                        bestRescueQ = q;
+                        bestRescueAlpha = a;
+                        bestRescueCfg = cfgTry;
+                    }
                 }
             }
         }
@@ -1487,6 +1505,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                             bestRelaxedAlpha = a;
                             bestRelaxedCfg = cfgTry;
                         }
+                        
+                        double rescueC = posErr * 1000.0 + continuityCost(q, qRef, !isFirstWaypoint) * 0.05;
+                        if (rescueC < bestRescueCost) {
+                            bestRescueCost = rescueC;
+                            bestRescueQ = q;
+                            bestRescueAlpha = a;
+                            bestRescueCfg = cfgTry;
+                        }
                     }
                 }
             }
@@ -1509,6 +1535,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 System.out.printf("[DEBUG_TRAJ_IK] SUCCESS (Relaxed) | Config=%s | Alpha=%.1f | YawOffset=%.1f\n", bestRelaxedCfg, bestRelaxedAlpha, trajectoryLastYawOffset);
             }
             return bestRelaxedQ;
+        }
+        if (bestRescueQ != null) {
+            trajectoryLastAlpha = bestRescueAlpha;
+            trajectoryLockedCfg = bestRescueCfg;
+            trajectoryLastYawOffset = getYawOffsetFromQ(bestRescueQ, px, py, isRightArmSelected);
+            if (DEBUG) {
+                System.out.printf("[DEBUG_TRAJ_IK] RESCUE (Relaxed boundary) | Config=%s | Alpha=%.1f | YawOffset=%.1f | Err=%.2f\n",
+                    bestRescueCfg, bestRescueAlpha, trajectoryLastYawOffset, bestRescueCost / 1000.0);
+            }
+            return bestRescueQ;
         }
         if (DEBUG) {
             System.out.println("[DEBUG_TRAJ_IK] FAILED - No valid IK found!");
