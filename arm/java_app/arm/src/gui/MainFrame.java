@@ -14,6 +14,9 @@ import static kinematics.Kinematics.*;
 import comm.ControllerReceiver;
 
 public final class MainFrame extends JFrame implements ActionListener, ChangeListener {
+    /** Set to false for demos to suppress debug output. Set to true during development. */
+    public static final boolean DEBUG = false;
+
     private static final double MAX_IK_POSITION_ERROR = 1.5; // General IK threshold (allow a bit of error)
     private static final double TRAJ_RELAXED_ERROR = 2.50; // Trajectory fallback threshold
     double[] anglesRight = { 0, 0, 10, -30, 0, 0 };
@@ -138,14 +141,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     double[] trajectoryLastQ = null;
     double trajectoryLastAlpha = 0.0;
     String trajectoryLockedCfg = "+";
-    boolean ikSelectionLogEnabled = true;
+    boolean ikSelectionLogEnabled = false;
 
     comm.UartManager uartManager = new comm.UartManager();
     private ControllerReceiver controllerReceiver;
     private Timer controllerTimer;
 
     private void trajDebug(String phase, String msg) {
-        System.out.println("[TRAJ][" + phase + "] " + msg);
+        if (DEBUG) System.out.println("[TRAJ][" + phase + "] " + msg);
     }
 
     public MainFrame() {
@@ -163,6 +166,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         setLocationRelativeTo(null);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
+        // Emergency Stop: ESC key stops all motion immediately
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+            .put(KeyStroke.getKeyStroke("ESCAPE"), "emergencyStop");
+        getRootPane().getActionMap().put("emergencyStop", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                emergencyStop();
+            }
+        });
+
         startMotionTimer();
         
         // Start PS5 Controller Receiver & Timer
@@ -172,6 +185,32 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         startControllerTimer();
 
         updateArm();
+    }
+
+    /**
+     * Emergency Stop: Immediately halts all motion and freezes the robot in its current position.
+     * Triggered by pressing ESC or clicking the E-STOP button.
+     */
+    public void emergencyStop() {
+        // 1. Stop all timers
+        if (motionTimer != null) motionTimer.stop();
+        if (trajectoryTimer != null) trajectoryTimer.stop();
+
+        // 2. Freeze targets at current position (prevent further movement)
+        System.arraycopy(anglesRight, 0, targetAnglesRight, 0, NUM_JOINTS);
+        System.arraycopy(anglesLeft, 0, targetAnglesLeft, 0, NUM_JOINTS);
+
+        // 3. Send STOP command to STM32
+        if (uartManager != null && uartManager.isConnected()) {
+            uartManager.sendData("ESTOP\n");
+        }
+
+        // 4. Update UI
+        setTitle("⛔ EMERGENCY STOP — Nhấn Reset để tiếp tục");
+        setGotoStatusRight("E-STOP!", Color.RED);
+        setGotoStatusLeft("E-STOP!", Color.RED);
+        armPanel.repaint();
+        System.out.println("[E-STOP] Emergency stop activated!");
     }
 
     public double getFixedHeight() {
@@ -613,6 +652,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private void buildTopPanel() {
         add(BorderLayout.NORTH, topPanel);
 
+        // Emergency Stop Button (prominent red button)
+        JButton btnEStop = new JButton("⛔ E-STOP");
+        btnEStop.setBackground(new Color(220, 30, 30));
+        btnEStop.setForeground(Color.WHITE);
+        btnEStop.setFont(new Font("Arial", Font.BOLD, 13));
+        btnEStop.setFocusPainted(false);
+        btnEStop.setToolTipText("Emergency Stop — Dừng khẩn cấp (ESC)");
+        btnEStop.addActionListener(e -> emergencyStop());
+        topPanel.add(btnEStop);
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
         JButton btnGripper = new JButton("Đóng / Mở Kẹp");
         btnGripper.addActionListener(e -> {
             if (isRightArmSelected) {
@@ -952,7 +1001,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 sb.append("\n");
                 String data = sb.toString();
                 uartManager.sendData(data);
-                if (uartManager.isConnected()) {
+                if (DEBUG && uartManager.isConnected()) {
                     System.out.print("Sent UART: " + data);
                 }
             }
@@ -978,7 +1027,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 sb.append("\n");
                 String data = sb.toString();
                 uartManager.sendData(data);
-                if (uartManager.isConnected()) {
+                if (DEBUG && uartManager.isConnected()) {
                     System.out.print("Sent UART: " + data);
                 }
             }
@@ -1780,8 +1829,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         String[] cfgCandidates = isFirstWaypoint ? new String[] { trajectoryLockedCfg, altCfg }
                 : new String[] { trajectoryLockedCfg };
 
-        System.out.printf("[DEBUG_TRAJ_IK] Target: (X=%.2f, Y=%.2f, Z=%.2f) | Arm=%s | ConfigRef=%s | isFirst=%b\n",
-            px, py, pz, isRightArmSelected ? "RIGHT" : "LEFT", trajectoryLockedCfg, isFirstWaypoint);
+        if (DEBUG) {
+            System.out.printf("[DEBUG_TRAJ_IK] Target: (X=%.2f, Y=%.2f, Z=%.2f) | Arm=%s | ConfigRef=%s | isFirst=%b\n",
+                px, py, pz, isRightArmSelected ? "RIGHT" : "LEFT", trajectoryLockedCfg, isFirstWaypoint);
+        }
 
         double bestStrictCost = Double.MAX_VALUE;
         double[] bestStrictQ = null;
@@ -1861,16 +1912,22 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (bestStrictQ != null) {
             trajectoryLastAlpha = bestStrictAlpha;
             trajectoryLockedCfg = bestStrictCfg;
-            System.out.printf("[DEBUG_TRAJ_IK] SUCCESS (Strict) | Config=%s | Alpha=%.1f\n", bestStrictCfg, bestStrictAlpha);
+            if (DEBUG) {
+                System.out.printf("[DEBUG_TRAJ_IK] SUCCESS (Strict) | Config=%s | Alpha=%.1f\n", bestStrictCfg, bestStrictAlpha);
+            }
             return bestStrictQ;
         }
         if (bestRelaxedQ != null) {
             trajectoryLastAlpha = bestRelaxedAlpha;
             trajectoryLockedCfg = bestRelaxedCfg;
-            System.out.printf("[DEBUG_TRAJ_IK] SUCCESS (Relaxed) | Config=%s | Alpha=%.1f\n", bestRelaxedCfg, bestRelaxedAlpha);
+            if (DEBUG) {
+                System.out.printf("[DEBUG_TRAJ_IK] SUCCESS (Relaxed) | Config=%s | Alpha=%.1f\n", bestRelaxedCfg, bestRelaxedAlpha);
+            }
             return bestRelaxedQ;
         }
-        System.out.println("[DEBUG_TRAJ_IK] FAILED - No valid IK found!");
+        if (DEBUG) {
+            System.out.println("[DEBUG_TRAJ_IK] FAILED - No valid IK found!");
+        }
         return null;
     }
 
@@ -2049,7 +2106,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         long startTime = System.currentTimeMillis();
         double[] result = solveIKSmartInternal(px, py, pz, preferredConfig, true);
         long endTime = System.currentTimeMillis();
-        System.out.println("--- solveIKSmartRight total time: " + (endTime - startTime) + " ms ---");
+        if (DEBUG) {
+            System.out.println("--- solveIKSmartRight total time: " + (endTime - startTime) + " ms ---");
+        }
         return result;
     }
 
@@ -2057,7 +2116,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         long startTime = System.currentTimeMillis();
         double[] result = solveIKSmartInternal(px, py, pz, preferredConfig, false);
         long endTime = System.currentTimeMillis();
-        System.out.println("--- solveIKSmartLeft total time: " + (endTime - startTime) + " ms ---");
+        if (DEBUG) {
+            System.out.println("--- solveIKSmartLeft total time: " + (endTime - startTime) + " ms ---");
+        }
         return result;
     }
 
@@ -2758,7 +2819,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 double[] hoverQ = solveIKSmart(px, py, hoverZ, (String) null);
                 if (hoverQ == null) {
                     System.err.println("[PICK-AND-PLACE] Pre-grasp hover position is out of reach!");
-                    setGotoStatus("Vượt giới hạn!", Color.RED);
+                    SwingUtilities.invokeLater(() -> setGotoStatus("Vượt giới hạn!", Color.RED));
                     return;
                 }
                 
@@ -2766,63 +2827,67 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 double[] graspQ = solveIKSmart(px, py, pz, (String) null);
                 if (graspQ == null) {
                     System.err.println("[PICK-AND-PLACE] Grasp position is out of reach!");
-                    setGotoStatus("Vượt giới hạn!", Color.RED);
+                    SwingUtilities.invokeLater(() -> setGotoStatus("Vượt giới hạn!", Color.RED));
                     return;
                 }
                 
-                setGotoStatus("Gắp: Bắt đầu...", Color.BLUE);
+                SwingUtilities.invokeLater(() -> setGotoStatus("Gắp: Bắt đầu...", Color.BLUE));
                 
                 // Step 1: Open Gripper
-                setGotoStatus("Gắp: Mở kẹp...", Color.BLUE);
-                if (isRight) {
-                    isGrippedRight = false;
-                    if (uartManager != null && uartManager.isConnected()) {
-                        uartManager.sendData("R:RELEASE\n");
+                SwingUtilities.invokeLater(() -> {
+                    setGotoStatus("Gắp: Mở kẹp...", Color.BLUE);
+                    if (isRight) {
+                        isGrippedRight = false;
+                    } else {
+                        isGrippedLeft = false;
                     }
-                } else {
-                    isGrippedLeft = false;
-                    if (uartManager != null && uartManager.isConnected()) {
-                        uartManager.sendData("L:RELEASE\n");
-                    }
+                    armPanel.repaint();
+                });
+                if (uartManager != null && uartManager.isConnected()) {
+                    uartManager.sendData(isRight ? "R:RELEASE\n" : "L:RELEASE\n");
                 }
-                armPanel.repaint();
                 Thread.sleep(800);
                 
                 // Step 2: Move to hover
-                setGotoStatus("Gắp: Di chuyển tới vị trí trên vật...", Color.BLUE);
-                setTargetAngles(hoverQ);
+                SwingUtilities.invokeLater(() -> {
+                    setGotoStatus("Gắp: Di chuyển tới vị trí trên vật...", Color.BLUE);
+                    setTargetAngles(hoverQ);
+                });
                 while (!isArmAtTarget(isRight)) {
                     Thread.sleep(50);
                 }
                 Thread.sleep(300);
                 
                 // Step 3: Descend to grasp
-                setGotoStatus("Gắp: Hạ xuống vật...", Color.BLUE);
-                setTargetAngles(graspQ);
+                SwingUtilities.invokeLater(() -> {
+                    setGotoStatus("Gắp: Hạ xuống vật...", Color.BLUE);
+                    setTargetAngles(graspQ);
+                });
                 while (!isArmAtTarget(isRight)) {
                     Thread.sleep(50);
                 }
                 Thread.sleep(500);
                 
                 // Step 4: Close Gripper
-                setGotoStatus("Gắp: Đóng kẹp...", Color.BLUE);
-                if (isRight) {
-                    isGrippedRight = true;
-                    if (uartManager != null && uartManager.isConnected()) {
-                        uartManager.sendData("R:GRIP\n");
+                SwingUtilities.invokeLater(() -> {
+                    setGotoStatus("Gắp: Đóng kẹp...", Color.BLUE);
+                    if (isRight) {
+                        isGrippedRight = true;
+                    } else {
+                        isGrippedLeft = true;
                     }
-                } else {
-                    isGrippedLeft = true;
-                    if (uartManager != null && uartManager.isConnected()) {
-                        uartManager.sendData("L:GRIP\n");
-                    }
+                    armPanel.repaint();
+                });
+                if (uartManager != null && uartManager.isConnected()) {
+                    uartManager.sendData(isRight ? "R:GRIP\n" : "L:GRIP\n");
                 }
-                armPanel.repaint();
                 Thread.sleep(1000);
                 
                 // Step 5: Ascend back to hover
-                setGotoStatus("Gắp: Nhấc vật lên...", Color.BLUE);
-                setTargetAngles(hoverQ);
+                SwingUtilities.invokeLater(() -> {
+                    setGotoStatus("Gắp: Nhấc vật lên...", Color.BLUE);
+                    setTargetAngles(hoverQ);
+                });
                 while (!isArmAtTarget(isRight)) {
                     Thread.sleep(50);
                 }
@@ -2834,39 +2899,42 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 double dropZ = 80.0;
                 double[] dropQ = solveIKSmart(dropX, dropY, dropZ, (String) null);
                 if (dropQ != null) {
-                    setGotoStatus("Gắp: Di chuyển tới chỗ thả...", Color.BLUE);
-                    setTargetAngles(dropQ);
+                    SwingUtilities.invokeLater(() -> {
+                        setGotoStatus("Gắp: Di chuyển tới chỗ thả...", Color.BLUE);
+                        setTargetAngles(dropQ);
+                    });
                     while (!isArmAtTarget(isRight)) {
                         Thread.sleep(50);
                     }
                     Thread.sleep(500);
                     
                     // Step 7: Open Gripper
-                    setGotoStatus("Gắp: Thả vật...", Color.BLUE);
-                    if (isRight) {
-                        isGrippedRight = false;
-                        if (uartManager != null && uartManager.isConnected()) {
-                            uartManager.sendData("R:RELEASE\n");
+                    SwingUtilities.invokeLater(() -> {
+                        setGotoStatus("Gắp: Thả vật...", Color.BLUE);
+                        if (isRight) {
+                            isGrippedRight = false;
+                        } else {
+                            isGrippedLeft = false;
                         }
-                    } else {
-                        isGrippedLeft = false;
-                        if (uartManager != null && uartManager.isConnected()) {
-                            uartManager.sendData("L:RELEASE\n");
-                        }
+                        armPanel.repaint();
+                    });
+                    if (uartManager != null && uartManager.isConnected()) {
+                        uartManager.sendData(isRight ? "R:RELEASE\n" : "L:RELEASE\n");
                     }
-                    armPanel.repaint();
                     Thread.sleep(800);
                 }
                 
                 // Step 8: Return to Home
-                setGotoStatus("Gắp: Trở về vị trí nghỉ...", Color.BLUE);
-                double[] homeQ = isRight ? new double[]{ 0, 0, 10, -30, 0, 0 } : new double[]{ 0, 0, 10, 30, 0, 0 };
-                setTargetAngles(homeQ);
+                SwingUtilities.invokeLater(() -> {
+                    setGotoStatus("Gắp: Trở về vị trí nghỉ...", Color.BLUE);
+                    double[] homeQ = isRight ? new double[]{ 0, 0, 10, -30, 0, 0 } : new double[]{ 0, 0, 10, 30, 0, 0 };
+                    setTargetAngles(homeQ);
+                });
                 while (!isArmAtTarget(isRight)) {
                     Thread.sleep(50);
                 }
                 
-                setGotoStatus("Hoàn thành!", new Color(0, 140, 0));
+                SwingUtilities.invokeLater(() -> setGotoStatus("Hoàn thành!", new Color(0, 140, 0)));
                 System.out.println("[PICK-AND-PLACE] Sequence completed successfully.");
             } catch (InterruptedException e) {
                 System.err.println("[PICK-AND-PLACE] Sequence interrupted.");
