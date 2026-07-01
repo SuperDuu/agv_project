@@ -26,7 +26,11 @@ void JointControl_Init(void) {
         } else if (i == 1) {
             joint->servo_command_angle = 10.0f;  // 10 deg joint = 14 deg servo
         } else if (i == 2) {
-            joint->servo_command_angle = 192.86f; // 192.86 deg joint = 270 deg servo
+            joint->servo_command_angle = 0.0f;   // Start at 0 deg joint
+        } else if (i == 3 || i == 5) {
+            joint->servo_command_angle = 90.0f;  // Middle of 180-degree servo
+        } else if (i == 4) {
+            joint->servo_command_angle = 60.0f;  // Middle of joint (90 deg servo)
         } else {
             joint->servo_command_angle = 135.0f; 
         }
@@ -54,7 +58,11 @@ void JointControl_Update(float dt) {
         JointController_t *joint = &joints[i];
         
         // 1. Read position feedback (ticks)
-        joint->current_pos = (float)Encoder_Get_Ticks(joint->encoder_idx);
+        float ticks = (float)Encoder_Get_Ticks(joint->encoder_idx);
+        if (i <= 2) {
+            ticks = -ticks;
+        }
+        joint->current_pos = ticks;
         
         // 2. Calculate current velocity (ticks/sec)
         joint->current_vel = (joint->current_pos - joint->last_pos) / dt;
@@ -82,8 +90,17 @@ void JointControl_Update(float dt) {
         // Integrate the rate of change to get absolute command angle
         joint->servo_command_angle += servo_rate * dt;
         
-        // Saturation clamping (limits: 0 to 270 degrees, scaled to 192.86 for 5:7 gearbox)
-        float max_clamp = (i <= 2) ? 192.86f : 270.0f;
+        // Saturation clamping based on physical/gearbox limits
+        float max_clamp;
+        if (i <= 2) {
+            max_clamp = 192.86f; // 5:7 gearbox on 270 deg servo
+        } else if (i == 3 || i == 5) {
+            max_clamp = 180.0f;  // 180 deg servo
+        } else if (i == 4) {
+            max_clamp = 120.0f;  // 2:3 gearbox on 180 deg servo (180 * 2 / 3)
+        } else {
+            max_clamp = 270.0f;  // 270 deg servo
+        }
         if (joint->servo_command_angle > max_clamp) joint->servo_command_angle = max_clamp;
         if (joint->servo_command_angle < 0.0f) joint->servo_command_angle = 0.0f;
         
