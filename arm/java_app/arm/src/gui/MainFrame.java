@@ -1141,7 +1141,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final java.util.List<double[]> finalPath = resampled;
 
         // Dùng SwingWorker để tính toán trước (Precompute Trajectory)
-        SwingWorker<java.util.List<double[]>, Void> precomputeWorker = new SwingWorker<java.util.List<double[]>, Void>() {
+        SwingWorker<java.util.List<double[]>, String> precomputeWorker = new SwingWorker<java.util.List<double[]>, String>() {
             @Override
             protected java.util.List<double[]> doInBackground() throws Exception {
                 java.util.List<double[]> jointTrajectory = new java.util.ArrayList<>();
@@ -1151,13 +1151,26 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     if (result != null) {
                         trajectoryLastQ = result.clone();
                         jointTrajectory.add(result.clone());
+                        if (i % 5 == 0 || i == finalPath.size() - 1) {
+                            publish(String.format("Đang giải IK: %d / %d điểm (OK)", i + 1, finalPath.size()));
+                        }
                     } else {
                         if (trajectoryLastQ != null) {
                             jointTrajectory.add(trajectoryLastQ.clone());
                         }
+                        publish(String.format("Cảnh báo: Điểm %d bị kẹt (Ngoài vùng), dùng pose cũ!", i + 1));
                     }
                 }
                 return jointTrajectory;
+            }
+
+            @Override
+            protected void process(java.util.List<String> chunks) {
+                if (!chunks.isEmpty()) {
+                    String latest = chunks.get(chunks.size() - 1);
+                    Color color = latest.startsWith("Cảnh báo") ? new Color(180, 110, 0) : new Color(0, 90, 180);
+                    setGotoStatus(latest, color);
+                }
             }
 
             @Override
