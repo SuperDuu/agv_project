@@ -16,9 +16,17 @@ public class App {
      * @param args the command line arguments
      */
     public static void main(String[] args) {
+        // Resolve paths relative to the application's working directory (portable)
+        String appDir = System.getProperty("user.dir");
         System.setProperty("os.arch_full", "x86_64");
-        System.setProperty("jSerialComm.library.path", "C:/Users/DELL/Documents/NetBeans/BTL/lib/native");
-        System.setProperty("java.io.tmpdir", "C:/Users/DELL/Documents/NetBeans/BTL/uart_temp");
+        System.setProperty("jSerialComm.library.path", appDir + "/lib/native");
+
+        // Create uart_temp directory if it doesn't exist
+        java.io.File tmpDir = new java.io.File(appDir, "uart_temp");
+        if (!tmpDir.exists()) {
+            tmpDir.mkdirs();
+        }
+        System.setProperty("java.io.tmpdir", tmpDir.getAbsolutePath());
 
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
