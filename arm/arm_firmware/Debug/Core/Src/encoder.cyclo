@@ -1,4 +1,0 @@
-../Core/Src/encoder.c:13:6:Encoder_Init	2
-../Core/Src/encoder.c:36:6:Encoder_Update	3
-../Core/Src/encoder.c:52:9:Encoder_Get_Ticks	2
-../Core/Src/encoder.c:61:6:Encoder_Reset	2
