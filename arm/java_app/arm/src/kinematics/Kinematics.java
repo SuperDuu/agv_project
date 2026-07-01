@@ -269,22 +269,36 @@ public class Kinematics {
         double[][] R1 = extractRotation(T1);
         double[][] R0T = transpose3x3(R0);
 
+        // Relative rotation in local (End-Effector) frame
         double[][] R = multiplyMatrices(R0T, R1);
 
         double dx = T1[0][3] - T0[0][3];
         double dy = T1[1][3] - T0[1][3];
         double dz = T1[2][3] - T0[2][3];
+        
+        // Translate world displacement to local frame
         double[] dp = {
                 R0T[0][0] * dx + R0T[0][1] * dy + R0T[0][2] * dz,
                 R0T[1][0] * dx + R0T[1][1] * dy + R0T[1][2] * dz,
                 R0T[2][0] * dx + R0T[2][1] * dy + R0T[2][2] * dz
         };
 
-        double[] dw = {
-                0.5 * (R[2][1] - R[1][2]),
-                0.5 * (R[0][2] - R[2][0]),
-                0.5 * (R[1][0] - R[0][1])
-        };
+        // Tính toán góc xoay theta từ Trace của ma trận R
+        double trace = R[0][0] + R[1][1] + R[2][2];
+        double cosTheta = 0.5 * (trace - 1.0);
+        cosTheta = Math.max(-1.0, Math.min(1.0, cosTheta)); // Giới hạn chống tràn số thực
+        double theta = Math.acos(cosTheta);
+
+        double[] dw = new double[3];
+        if (theta < 1e-6) {
+            dw[0] = 0; dw[1] = 0; dw[2] = 0;
+        } else {
+            // Chuẩn hóa chính xác vector trục xoay theo toán học lý thuyết
+            double s = 0.5 * theta / Math.sin(theta);
+            dw[0] = (R[2][1] - R[1][2]) * s;
+            dw[1] = (R[0][2] - R[2][0]) * s;
+            dw[2] = (R[1][0] - R[0][1]) * s;
+        }
 
         return new double[] { dp[0], dp[1], dp[2], dw[0], dw[1], dw[2] };
     }

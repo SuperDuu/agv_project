@@ -1163,20 +1163,28 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         publish(String.format("Cảnh báo: Điểm %d bị kẹt (Ngoài vùng), dùng pose cũ!", i + 1));
                     }
                 }
-                // Kinematic Low-pass Filter (Exponential Smoothing) in Joint Space
-                // Giúp loại bỏ hoàn toàn các gai nhọn (Overshoot) và vấp cấu hình
-                double filterAlpha = 0.8; // 0.8 nghĩa là lấy 80% điểm mới, 20% điểm cũ, giúp làm mượt
+                // Joint Velocity Limiter (Bộ giới hạn vận tốc cứng)
+                // Thay thế bộ lọc thông thấp kiểu mũ để triệt tiêu trễ pha và giằng co cơ học
+                double maxVelocityDegPerSec = 150.0; // Giới hạn tốc độ góc thực tế của động cơ (độ/giây)
+                double maxStepDeg = maxVelocityDegPerSec * 0.030; // 30ms cho một bước lệnh (MOTION_DT_MS)
+
                 if (jointTrajectory.size() > 1) {
                     for (int i = 1; i < jointTrajectory.size(); i++) {
                         double[] prev = jointTrajectory.get(i - 1);
                         double[] curr = jointTrajectory.get(i);
+                        
                         for (int j = 0; j < NUM_JOINTS; j++) {
-                            // Nội suy mượt góc khớp (Có bọc góc 180 độ)
                             double diff = wrappedDegDiff(curr[j], prev[j]);
-                            double smoothed = prev[j] + filterAlpha * diff;
-                            while (smoothed > 180) smoothed -= 360;
-                            while (smoothed < -180) smoothed += 360;
-                            curr[j] = smoothed;
+                            
+                            // Nếu bước nhảy vượt quá giới hạn vật lý, kẹp cứng lại thay vì để nó giật vọt
+                            if (Math.abs(diff) > maxStepDeg) {
+                                diff = Math.signum(diff) * maxStepDeg;
+                            }
+                            
+                            curr[j] = prev[j] + diff;
+                            // Chuẩn hóa góc về [-180, 180]
+                            while (curr[j] > 180)  curr[j] -= 360;
+                            while (curr[j] < -180) curr[j] += 360;
                         }
                     }
                 }
