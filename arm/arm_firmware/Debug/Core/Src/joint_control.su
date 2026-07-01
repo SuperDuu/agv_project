@@ -1,5 +1,0 @@
-../Core/Src/joint_control.c:6:6:JointControl_Init	24	static
-../Core/Src/joint_control.c:42:6:JointControl_Update	32	static
-../Core/Src/joint_control.c:86:6:JointControl_SetMode	16	static
-../Core/Src/joint_control.c:98:6:JointControl_SetTarget	16	static
-../Core/Src/joint_control.c:108:6:JointControl_TunePID	32	static
