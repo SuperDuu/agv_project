@@ -1161,6 +1161,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         publish(String.format("Cảnh báo: Điểm %d bị kẹt (Ngoài vùng), dùng pose cũ!", i + 1));
                     }
                 }
+                // Kinematic Low-pass Filter (Exponential Smoothing) in Joint Space
+                // Giúp loại bỏ hoàn toàn các gai nhọn (Overshoot) và vấp cấu hình
+                double filterAlpha = 0.8; // 0.8 nghĩa là lấy 80% điểm mới, 20% điểm cũ, giúp làm mượt
+                if (jointTrajectory.size() > 1) {
+                    for (int i = 1; i < jointTrajectory.size(); i++) {
+                        double[] prev = jointTrajectory.get(i - 1);
+                        double[] curr = jointTrajectory.get(i);
+                        for (int j = 0; j < NUM_JOINTS; j++) {
+                            // Nội suy mượt góc khớp
+                            curr[j] = prev[j] + filterAlpha * (curr[j] - prev[j]);
+                        }
+                    }
+                }
                 return jointTrajectory;
             }
 
@@ -1403,7 +1416,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double aEnd = fixedGround ? 30 : (trajectoryLastAlpha + 12);
         double aStep = fixedGround ? 3.0 : 1.0;
         for (double a = aStart; a <= aEnd; a += aStep) {
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRightArmSelected);
                 for (String cfgTry : cfgCandidates) {
@@ -1435,7 +1448,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (bestStrictQ == null && bestRelaxedQ == null && !fixedGround) {
             String[] cfgFallback = isFirstWaypoint ? cfgCandidates : new String[] { trajectoryLockedCfg, altCfg };
             for (double a = -90; a <= 30; a += 1.5) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected);
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRightArmSelected);
                     for (String cfgTry : cfgFallback) {
@@ -1614,7 +1627,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             
             // Try alpha=0 first, then expand outward in larger steps to save CPU
             for (double a = -90; a <= 30; a += 15.0) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight);
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRight);
                     if (posErr > MAX_IK_POSITION_ERROR) {
@@ -1659,7 +1672,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         for (double a = currentAlpha - 15; a <= currentAlpha + 15; a += 5.0) {
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr > MAX_IK_POSITION_ERROR) {
@@ -1695,7 +1708,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         for (double a = -90; a <= 30; a += 15.0) {
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr > MAX_IK_POSITION_ERROR) {
@@ -1840,7 +1853,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
     }
 
-    private List<double[]> tryAlpha(double px, double py, double pz, double alphaDeg, boolean isRight) {
+    private List<double[]> tryAlpha(double px, double py, double pz, double alphaDeg, boolean isRight, double[] qRef) {
         List<double[]> validSolutions = new ArrayList<>();
         double alpha_rad = Math.toRadians(alphaDeg);
         double q1_min = isRight ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
@@ -1852,7 +1865,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
 
         double[] yawOffsets = { 0.0, -15.0, 15.0, -30.0, 30.0 };
-        double[] activeAngles = isRight ? anglesRight : anglesLeft;
+        double[] activeAngles = qRef;
 
         for (double offsetDeg : yawOffsets) {
             double yaw = q1_base + Math.toRadians(offsetDeg);
