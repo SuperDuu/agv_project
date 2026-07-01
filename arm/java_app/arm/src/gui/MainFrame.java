@@ -1274,6 +1274,29 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             result.add(lastTarget.clone());
         }
 
+        // --- Lọc là phẳng quỹ đạo (Moving Average Smoothing) ---
+        // Giúp các điểm vẽ bằng chuột không bị gấp khúc, loại bỏ hiện tượng giật cục
+        int windowSize = 15;
+        if (result.size() > windowSize) {
+            java.util.List<double[]> smoothed = new java.util.ArrayList<>();
+            for (int i = 0; i < result.size(); i++) {
+                int start = Math.max(0, i - windowSize / 2);
+                int end = Math.min(result.size() - 1, i + windowSize / 2);
+                double sumX = 0, sumY = 0, sumZ = 0;
+                int count = end - start + 1;
+                for (int j = start; j <= end; j++) {
+                    sumX += result.get(j)[0];
+                    sumY += result.get(j)[1];
+                    sumZ += result.get(j)[2];
+                }
+                smoothed.add(new double[] { sumX / count, sumY / count, sumZ / count });
+            }
+            // Giữ nguyên điểm đầu và cuối để không bị lệch đích
+            smoothed.set(0, result.get(0));
+            smoothed.set(smoothed.size() - 1, result.get(result.size() - 1));
+            return smoothed;
+        }
+
         return result;
     }
 
