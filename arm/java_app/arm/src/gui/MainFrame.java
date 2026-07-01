@@ -1146,33 +1146,104 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         SwingWorker<java.util.List<double[]>, String> precomputeWorker = new SwingWorker<java.util.List<double[]>, String>() {
             @Override
             protected java.util.List<double[]> doInBackground() throws Exception {
-                java.util.List<double[]> jointTrajectory = new java.util.ArrayList<>();
+                // BƯỚC 1: FORWARD PASS (QUÉT GIẢI VÀ ĐÁNH DẤU LỖ HỔNG)
+                java.util.List<double[]> rawJointTrajectory = new java.util.ArrayList<>();
                 for (int i = 0; i < finalPath.size(); i++) {
                     double[] pt = finalPath.get(i);
                     double[] result = solveIKForTrajectoryPoint(pt[0], pt[1], pt[2]);
+                    
                     if (result != null) {
-                        trajectoryLastQ = result.clone();
-                        jointTrajectory.add(result.clone());
                         double posErr = computePositionError(result, pt[0], pt[1], pt[2], isRight);
-                        if (DEBUG) {
-                            System.out.printf("[DEBUG_TRAJ] Point %d Target=[%.2f, %.2f, %.2f] SolvedQ=[%.2f, %.2f, %.2f, %.2f, %.2f, %.2f] posErr=%.4f mm\n",
-                                i + 1, pt[0], pt[1], pt[2], result[0], result[1], result[2], result[3], result[4], result[5], posErr * 10.0);
-                        }
-                        if (posErr > TRAJ_RELAXED_ERROR) {
-                            publish(String.format("Cảnh báo: Điểm %d vượt biên (%.1f mm), tự động vươn tối đa!", i + 1, posErr * 10.0));
-                        } else {
+                        if (posErr <= MAX_IK_POSITION_ERROR) {
+                            // Lưu mảng góc khớp (nghiệm chuẩn) này vào rawJointTrajectory
+                            trajectoryLastQ = result.clone();
+                            rawJointTrajectory.add(result.clone());
+                            
+                            if (DEBUG) {
+                                System.out.printf("[DEBUG_TRAJ] Point %d Target=[%.2f, %.2f, %.2f] SolvedQ=[%.2f, %.2f, %.2f, %.2f, %.2f, %.2f] posErr=%.4f mm\n",
+                                    i + 1, pt[0], pt[1], pt[2], result[0], result[1], result[2], result[3], result[4], result[5], posErr * 10.0);
+                            }
                             if (i % 5 == 0 || i == finalPath.size() - 1) {
                                 publish(String.format("Đang giải IK: %d / %d điểm (OK)", i + 1, finalPath.size()));
                             }
+                        } else {
+                            // Nghiệm vượt quá sai số cho phép, đánh dấu lỗ hổng
+                            rawJointTrajectory.add(null);
+                            if (DEBUG) {
+                                System.out.printf("[DEBUG_TRAJ] Point %d Target=[%.2f, %.2f, %.2f] posErr=%.4f mm vượt quá MAX_IK_POSITION_ERROR, đánh dấu lỗ hổng!\n",
+                                    i + 1, pt[0], pt[1], pt[2], posErr * 10.0);
+                            }
+                            publish(String.format("Cảnh báo: Điểm %d vượt biên (%.1f mm), đánh dấu lỗ hổng!", i + 1, posErr * 10.0));
                         }
                     } else {
+                        // IK thất bại hoàn toàn, đánh dấu lỗ hổng
+                        rawJointTrajectory.add(null);
                         if (DEBUG) {
-                            System.out.printf("[DEBUG_TRAJ] Point %d FAILED! Target=[%.2f, %.2f, %.2f]\n", i + 1, pt[0], pt[1], pt[2]);
+                            System.out.printf("[DEBUG_TRAJ] Point %d FAILED! Target=[%.2f, %.2f, %.2f], đánh dấu lỗ hổng!\n", i + 1, pt[0], pt[1], pt[2]);
                         }
-                        if (trajectoryLastQ != null) {
-                            jointTrajectory.add(trajectoryLastQ.clone());
+                        publish(String.format("Cảnh báo: Điểm %d bị kẹt (Ngoài vùng), đánh dấu lỗ hổng!", i + 1));
+                    }
+                }
+
+                // BƯỚC 2: BACKWARD PATCHING PASS (VÁ LỖ HỔNG BẰNG CUBIC SPLINE)
+                java.util.List<double[]> jointTrajectory = new java.util.ArrayList<>();
+                for (int i = 0; i < rawJointTrajectory.size(); i++) {
+                    double[] rawQ = rawJointTrajectory.get(i);
+                    if (rawQ != null) {
+                        jointTrajectory.add(rawQ);
+                    } else {
+                        // Tìm điểm hợp lệ gần nhất phía trước
+                        int prevIdx = -1;
+                        for (int k = i - 1; k >= 0; k--) {
+                            if (rawJointTrajectory.get(k) != null) {
+                                prevIdx = k;
+                                break;
+                            }
                         }
-                        publish(String.format("Cảnh báo: Điểm %d bị kẹt (Ngoài vùng), dùng pose cũ!", i + 1));
+                        
+                        // Tìm điểm hợp lệ gần nhất phía sau
+                        int nextIdx = -1;
+                        for (int k = i + 1; k < rawJointTrajectory.size(); k++) {
+                            if (rawJointTrajectory.get(k) != null) {
+                                nextIdx = k;
+                                break;
+                            }
+                        }
+                        
+                        if (prevIdx != -1 && nextIdx != -1) {
+                            // Thực hiện nội suy đa thức bậc 3 (Cubic Spline) cho cả 6 khớp
+                            double[] q_prev = rawJointTrajectory.get(prevIdx);
+                            double[] q_next = rawJointTrajectory.get(nextIdx);
+                            double[] q_interp = new double[NUM_JOINTS];
+                            
+                            int N = nextIdx - prevIdx;
+                            double t = (double) (i - prevIdx) / N;
+                            // Công thức đa thức bậc 3 cho t chạy từ 0 đến 1: s = 3*t^2 - 2*t^3
+                            double factor = 3.0 * t * t - 2.0 * t * t * t;
+                            
+                            for (int j = 0; j < NUM_JOINTS; j++) {
+                                double deltaQ = wrappedDegDiff(q_next[j], q_prev[j]);
+                                double q_val = q_prev[j] + deltaQ * factor;
+                                
+                                // Chuẩn hóa góc về [-180.0, 180.0]
+                                while (q_val > 180.0)  q_val -= 360.0;
+                                while (q_val < -180.0) q_val += 360.0;
+                                
+                                q_interp[j] = q_val;
+                            }
+                            jointTrajectory.add(q_interp);
+                        } else {
+                            // Vướng biên: Lấy cấu hình hợp lệ gần nhất
+                            double[] fallbackQ = null;
+                            if (prevIdx != -1) {
+                                fallbackQ = rawJointTrajectory.get(prevIdx).clone();
+                            } else if (nextIdx != -1) {
+                                fallbackQ = rawJointTrajectory.get(nextIdx).clone();
+                            } else {
+                                fallbackQ = armAngles.clone();
+                            }
+                            jointTrajectory.add(fallbackQ);
+                        }
                     }
                 }
                 // Joint Velocity Limiter (Bộ giới hạn vận tốc cứng)
