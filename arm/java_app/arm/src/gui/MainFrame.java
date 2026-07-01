@@ -1169,8 +1169,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         double[] prev = jointTrajectory.get(i - 1);
                         double[] curr = jointTrajectory.get(i);
                         for (int j = 0; j < NUM_JOINTS; j++) {
-                            // Nội suy mượt góc khớp
-                            curr[j] = prev[j] + filterAlpha * (curr[j] - prev[j]);
+                            // Nội suy mượt góc khớp (Có bọc góc 180 độ)
+                            double diff = wrappedDegDiff(curr[j], prev[j]);
+                            double smoothed = prev[j] + filterAlpha * diff;
+                            while (smoothed > 180) smoothed -= 360;
+                            while (smoothed < -180) smoothed += 360;
+                            curr[j] = smoothed;
                         }
                     }
                 }
@@ -1366,10 +1370,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return d;
     }
 
-    private double continuityCost(double[] q, double[] qPrev) {
+    private double continuityCost(double[] q, double[] qPrev, boolean enforceVelocityLimit) {
         double s = 0.0;
+        double maxDeltaDeg = 15.0; // ~0.26 rad per step safety limit
         for (int i = 0; i < NUM_JOINTS; i++) {
             double d = wrappedDegDiff(q[i], qPrev[i]);
+            if (enforceVelocityLimit && Math.abs(d) > maxDeltaDeg) {
+                s += 100000.0; // Heavy penalty for velocity violation (Configuration Flipping)
+            }
             s += d * d;
         }
         return s;
@@ -1422,7 +1430,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 for (String cfgTry : cfgCandidates) {
                     String actualCfg = getActualConfig(q, isRightArmSelected);
                     if (!actualCfg.equals(cfgTry)) continue;
-                    double c = posErr * 220.0 + continuityCost(q, qRef) * 0.04;
+                    double c = posErr * 220.0 + continuityCost(q, qRef, !isFirstWaypoint) * 0.04;
                     // Heavy alpha penalty for fixedGround mode
                     if (fixedGround) {
                         c += a * a * 50.0;
@@ -1454,7 +1462,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     for (String cfgTry : cfgFallback) {
                         String actualCfg = getActualConfig(q, isRightArmSelected);
                         if (!actualCfg.equals(cfgTry)) continue;
-                        double c = posErr * 220.0 + continuityCost(q, qRef) * 0.04;
+                        double c = posErr * 220.0 + continuityCost(q, qRef, !isFirstWaypoint) * 0.04;
                         if (posErr <= MAX_IK_POSITION_ERROR && c < bestStrictCost) {
                             bestStrictCost = c;
                             bestStrictQ = q;
@@ -1640,7 +1648,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     if (!actualCfg.equals(userPref)) {
                         cost += 10000.0;
                     }
-                    cost += continuityCost(q, activeAngles) * 0.02;
+                    cost += continuityCost(q, activeAngles, false) * 0.02;
                     if (cost < minCost) {
                         minCost = cost;
                         best = q;
