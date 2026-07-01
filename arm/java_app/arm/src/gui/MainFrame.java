@@ -1153,10 +1153,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     double[] result = solveIKForTrajectoryPoint(pt[0], pt[1], pt[2]);
                     
                     if (result != null) {
+                        // Cập nhật Warm Start liên tục bằng kết quả giải IK (bao gồm cả relaxed/rescue)
+                        // để tránh sụp đổ dây chuyền (Cascade Null Failure)
+                        trajectoryLastQ = result.clone();
+                        
                         double posErr = computePositionError(result, pt[0], pt[1], pt[2], isRight);
                         if (posErr <= MAX_IK_POSITION_ERROR) {
-                            // Lưu mảng góc khớp (nghiệm chuẩn) này vào rawJointTrajectory
-                            trajectoryLastQ = result.clone();
                             rawJointTrajectory.add(result.clone());
                             
                             if (DEBUG) {
@@ -1167,7 +1169,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                                 publish(String.format("Đang giải IK: %d / %d điểm (OK)", i + 1, finalPath.size()));
                             }
                         } else {
-                            // Nghiệm vượt quá sai số cho phép, đánh dấu lỗ hổng
+                            // Nghiệm vượt quá sai số cho phép, đánh dấu lỗ hổng để vá bằng Cubic Spline
                             rawJointTrajectory.add(null);
                             if (DEBUG) {
                                 System.out.printf("[DEBUG_TRAJ] Point %d Target=[%.2f, %.2f, %.2f] posErr=%.4f mm vượt quá MAX_IK_POSITION_ERROR, đánh dấu lỗ hổng!\n",
@@ -1176,12 +1178,29 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                             publish(String.format("Cảnh báo: Điểm %d vượt biên (%.1f mm), đánh dấu lỗ hổng!", i + 1, posErr * 10.0));
                         }
                     } else {
-                        // IK thất bại hoàn toàn, đánh dấu lỗ hổng
+                        // IK thất bại hoàn toàn, đánh dấu lỗ hổng, giữ nguyên trajectoryLastQ cũ làm mốc gần nhất
                         rawJointTrajectory.add(null);
                         if (DEBUG) {
                             System.out.printf("[DEBUG_TRAJ] Point %d FAILED! Target=[%.2f, %.2f, %.2f], đánh dấu lỗ hổng!\n", i + 1, pt[0], pt[1], pt[2]);
                         }
                         publish(String.format("Cảnh báo: Điểm %d bị kẹt (Ngoài vùng), đánh dấu lỗ hổng!", i + 1));
+                    }
+                }
+
+                // THÊM BỘ KHỐNG CHẾ KHOẢNG CÁCH VÁ (GAP LIMITER)
+                int consecutiveNulls = 0;
+                for (int i = 0; i < rawJointTrajectory.size(); i++) {
+                    if (rawJointTrajectory.get(i) == null) {
+                        consecutiveNulls++;
+                        if (consecutiveNulls > 5) {
+                            publish("Lỗi: Quỹ đạo vượt ngoài tầm với (Trajectory Out of Reach)!");
+                            if (DEBUG) {
+                                System.out.println("[DEBUG_TRAJ] FAILED: Consecutive nulls > 5 at point " + (i + 1));
+                            }
+                            return new java.util.ArrayList<>();
+                        }
+                    } else {
+                        consecutiveNulls = 0;
                     }
                 }
 
@@ -1278,7 +1297,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             protected void process(java.util.List<String> chunks) {
                 if (!chunks.isEmpty()) {
                     String latest = chunks.get(chunks.size() - 1);
-                    Color color = latest.startsWith("Cảnh báo") ? new Color(180, 110, 0) : new Color(0, 90, 180);
+                    Color color = new Color(0, 90, 180);
+                    if (latest.startsWith("Cảnh báo")) {
+                        color = new Color(180, 110, 0);
+                    } else if (latest.startsWith("Lỗi")) {
+                        color = Color.RED;
+                    }
                     setGotoStatus(latest, color);
                 }
             }
@@ -1288,7 +1312,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 try {
                     java.util.List<double[]> jointTrajectory = get();
                     if (jointTrajectory.isEmpty()) {
-                        setGotoStatus("Không thể tính toán quỹ đạo (Ngoài vùng làm việc)!", Color.RED);
+                        String currentTxt = isRight ? gotoStatusRight.getText() : gotoStatusLeft.getText();
+                        if (!currentTxt.startsWith("Lỗi")) {
+                            setGotoStatus("Không thể tính toán quỹ đạo (Ngoài vùng làm việc)!", Color.RED);
+                        }
                         setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
                         startMotionTimer();
                         return;
