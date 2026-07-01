@@ -1940,7 +1940,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
         double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
 
-        Double[] yawOffsets = { 0.0, -15.0, 15.0, -30.0, 30.0 };
+        Double[] yawOffsets = { 0.0, -15.0, 15.0, -30.0, 30.0, -45.0, 45.0, -60.0, 60.0, -75.0, 75.0, -90.0, 90.0 };
         if (!Double.isNaN(preferredYaw)) {
             java.util.Arrays.sort(yawOffsets, (a, b) -> Double.compare(Math.abs(a - preferredYaw), Math.abs(b - preferredYaw)));
         }
