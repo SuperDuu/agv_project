@@ -292,15 +292,19 @@ public class Kinematics {
         double[] dw = new double[3];
         if (theta < 1e-6) {
             dw[0] = 0; dw[1] = 0; dw[2] = 0;
+        } else if (theta > 3.0) {
+            // Tìm trục xoay dựa trên đường chéo chính của ma trận R khi theta -> pi
+            dw[0] = theta * Math.sqrt(Math.max(0.0, 0.5 * (R[0][0] + 1.0)));
+            dw[1] = theta * Math.sqrt(Math.max(0.0, 0.5 * (R[1][1] + 1.0)));
+            dw[2] = theta * Math.sqrt(Math.max(0.0, 0.5 * (R[2][2] + 1.0)));
+            
+            // Khôi phục dấu từ các phần tử chéo phụ
+            if (R[2][1] - R[1][2] < 0) dw[0] = -dw[0];
+            if (R[0][2] - R[2][0] < 0) dw[1] = -dw[1];
+            if (R[1][0] - R[0][1] < 0) dw[2] = -dw[2];
         } else {
             double sinTheta = Math.sin(theta);
-            double s = 0.5;
-            if (Math.abs(sinTheta) > 1e-4) {
-                s = 0.5 * theta / sinTheta;
-            }
-            // Cap s to avoid numerical explosion near pi (singularity at 180 degrees)
-            if (s > 2.5) s = 2.5;
-
+            double s = (Math.abs(sinTheta) > 1e-4) ? (0.5 * theta / sinTheta) : 0.5;
             dw[0] = (R[2][1] - R[1][2]) * s;
             dw[1] = (R[0][2] - R[2][0]) * s;
             dw[2] = (R[1][0] - R[0][1]) * s;
