@@ -114,6 +114,7 @@ int main(void)
 
   /* USER CODE END SysInit */
 
+
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
@@ -132,7 +133,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   Servo_Init();
 
-//  Encoder_Init();
+  Encoder_Init();
 //  JointControl_Init();
   /* USER CODE END 2 */
 
@@ -147,6 +148,7 @@ int main(void)
     // JointControl_Update(0.010f);
 //    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_12);
 //    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    Encoder_Update();
   	Set_Servo_Angle(index,angle);
      HAL_Delay(500);
 
