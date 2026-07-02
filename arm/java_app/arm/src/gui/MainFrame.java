@@ -459,6 +459,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         topPanel.add(new JLabel("Z:"));
         fixedHeightSpinner.setPreferredSize(new Dimension(55, 22));
         topPanel.add(fixedHeightSpinner);
+        fixedHeightSpinner.addChangeListener(ev -> {
+            if (showWorkspaceSlice) {
+                updateWorkspaceSlice();
+            }
+            armPanel.repaint();
+        });
         
         fixedHeightCb.addActionListener(ev -> {
             fixedHeightMode = fixedHeightCb.isSelected();
@@ -1937,7 +1943,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         armPanel.clearWorkspaceSlice();
         armPanel.repaint();
 
-        final double fixedZ = getActiveArmZ();
+        final double fixedZ = getFixedHeight();
 
         sliceExplorationThread = new Thread(() -> {
             boolean[] arms = { true, false }; // Scan both Right (true) and Left (false) arms
