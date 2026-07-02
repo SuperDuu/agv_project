@@ -27,8 +27,10 @@ void JointControl_Init(void) {
             joint->servo_command_angle = 10.0f;  // 10 deg joint = 14 deg servo
         } else if (i == 2) {
             joint->servo_command_angle = 0.0f;   // Start at 0 deg joint
-        } else if (i == 3 || i == 5) {
+        } else if (i == 3) {
             joint->servo_command_angle = 90.0f;  // Middle of 180-degree servo
+        } else if (i == 5) {
+            joint->servo_command_angle = 0.0f;   // Default to 0 degrees as requested
         } else if (i == 4) {
             joint->servo_command_angle = 60.0f;  // Middle of joint (90 deg servo)
         } else {
