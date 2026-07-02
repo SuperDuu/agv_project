@@ -1691,8 +1691,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // 1) Search near previous alpha to avoid branch jumping
         // For fixedGround: scan full range but add alpha² penalty to prefer alpha=0
-        double aStart = fixedGround ? -90 : (trajectoryLastAlpha - 12);
-        double aEnd = fixedGround ? 30 : (trajectoryLastAlpha + 12);
+        double aStart = fixedGround ? -90 : (trajectoryLastAlpha - 18);
+        double aEnd = fixedGround ? 30 : (trajectoryLastAlpha + 18);
         double aStep = fixedGround ? 3.0 : 1.0;
         for (double a = aStart; a <= aEnd; a += aStep) {
             List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw);
@@ -1732,7 +1732,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // 2) Fallback to global scan if local search fails or is inaccurate
         // For fixedGround, step 1 already scanned full range, so only fallback for free mode
-        if (bestStrictQ == null && bestRelaxedQ == null && !fixedGround) {
+        if (bestStrictQ == null && !fixedGround) {
             String[] cfgFallback = isFirstWaypoint ? cfgCandidates : new String[] { trajectoryLockedCfg, altCfg };
             for (double a = -90; a <= 30; a += 1.5) {
                 List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw);
@@ -2432,15 +2432,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             boolean localSearchOk = false;
             if (q != null && isWithinLimits(q, isRight)) {
                 addUniqueSolution(validSolutions, q);
-                if (!Double.isNaN(preferredYaw) && Math.abs(offsetDeg - preferredYaw) < 1.0) {
-                    return validSolutions; // Dừng quét, giữ nguyên cấu hình yaw!
-                }
                 double err = computePositionError(q, px, py, pz, isRight);
                 if (err < 0.1) {
                     localSearchOk = true;
-                    if (offsetDeg == 0.0) {
-                        return validSolutions;
-                    }
                 }
             }
 
