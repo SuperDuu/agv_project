@@ -59,6 +59,7 @@ UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
+extern Encoder_t encoders[NUM_ENCODERS];
 int index,angle=0;
 /* USER CODE END PV */
 
@@ -132,7 +133,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   Servo_Init();
 
-//  Encoder_Init();
+  Encoder_Init();
 //  JointControl_Init();
   /* USER CODE END 2 */
 
@@ -147,8 +148,9 @@ int main(void)
     // JointControl_Update(0.010f);
 //    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_12);
 //    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-  	Set_Servo_Angle(index,angle);
-     HAL_Delay(500);
+    Encoder_Update();
+//  	Set_Servo_Angle(index,angle);
+     HAL_Delay(10);
 
     // Call test pattern for PWM output testing
 //    Servo_Test_Patterns();
