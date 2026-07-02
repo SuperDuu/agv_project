@@ -123,6 +123,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     double trajectoryLastYawOffset = 0.0;
     String trajectoryLockedCfg = "+";
     boolean ikSelectionLogEnabled = false;
+    boolean useGlobalC2 = true;
+
 
     comm.UartManager uartManager = new comm.UartManager();
     private ControllerReceiver controllerReceiver;
@@ -665,8 +667,15 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 updateArm(); // Sync immediately
         });
 
+        JCheckBoxMenuItem c2SplineItem = new JCheckBoxMenuItem("Mượt C2 toàn cục (Quintic Spline)", useGlobalC2);
+        c2SplineItem.addItemListener(e -> {
+            useGlobalC2 = c2SplineItem.isSelected();
+        });
+
         chedoMenu.add(clickModeItem);
         chedoMenu.add(manualModeItem);
+        chedoMenu.add(c2SplineItem);
+
 
         // Add menus to bar
         menuBar.add(dieukhienMenu);
@@ -1355,125 +1364,24 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     System.out.printf("[DEBUG_TRAJ] WARNING: Max gap = %d points (will be interpolated by cubic spline)\n", maxConsecutiveNulls);
                 }
 
-                // BƯỚC 2: BACKWARD PATCHING PASS (VÁ LỖ HỔNG BẰNG CUBIC SPLINE)
-                java.util.List<double[]> jointTrajectory = new java.util.ArrayList<>();
-                for (int i = 0; i < rawJointTrajectory.size(); i++) {
-                    double[] rawQ = rawJointTrajectory.get(i);
-                    if (rawQ != null) {
-                        jointTrajectory.add(rawQ);
-                    } else {
-                        // Tìm điểm hợp lệ gần nhất phía trước
-                        int prevIdx = -1;
-                        for (int k = i - 1; k >= 0; k--) {
-                            if (rawJointTrajectory.get(k) != null) {
-                                prevIdx = k;
-                                break;
-                            }
-                        }
-                        
-                        // Tìm điểm hợp lệ gần nhất phía sau
-                        int nextIdx = -1;
-                        for (int k = i + 1; k < rawJointTrajectory.size(); k++) {
-                            if (rawJointTrajectory.get(k) != null) {
-                                nextIdx = k;
-                                break;
-                            }
-                        }
-                        
-                        if (prevIdx != -1 && nextIdx != -1) {
-                            double[] q_prev = rawJointTrajectory.get(prevIdx);
-                            double[] q_next = rawJointTrajectory.get(nextIdx);
-                            
-                            // Kiểm tra tương thích cấu hình: nếu có bất kỳ khớp nào nhảy > 30°, KHÔNG nội suy spline
-                            boolean compatible = true;
-                            for (int j = 0; j < NUM_JOINTS; j++) {
-                                if (Math.abs(wrappedDegDiff(q_next[j], q_prev[j])) > 30.0) {
-                                    compatible = false;
-                                    break;
-                                }
-                            }
-                            
-                            if (compatible) {
-                                // Thực hiện nội suy đa thức bậc 3 (Cubic Spline) cho cả 6 khớp
-                                double[] q_interp = new double[NUM_JOINTS];
-                                int N = nextIdx - prevIdx;
-                                double t = (double) (i - prevIdx) / N;
-                                // Công thức đa thức bậc 3 cho t chạy từ 0 đến 1: s = 3*t^2 - 2*t^3
-                                double factor = 3.0 * t * t - 2.0 * t * t * t;
-                                
-                                for (int j = 0; j < NUM_JOINTS; j++) {
-                                    double deltaQ = wrappedDegDiff(q_next[j], q_prev[j]);
-                                    double q_val = q_prev[j] + deltaQ * factor;
-                                    
-                                    // Chuẩn hóa góc về [-180.0, 180.0]
-                                    while (q_val > 180.0)  q_val -= 360.0;
-                                    while (q_val < -180.0) q_val += 360.0;
-                                    
-                                    q_interp[j] = q_val;
-                                }
-                                jointTrajectory.add(q_interp);
-                            } else {
-                                // Giữ nguyên cấu hình hợp lệ gần nhất
-                                double[] fallbackQ = ((i - prevIdx) <= (nextIdx - i)) ? q_prev.clone() : q_next.clone();
-                                jointTrajectory.add(fallbackQ);
-                            }
-                        } else {
-                            // Vướng biên: Lấy cấu hình hợp lệ gần nhất
-                            double[] fallbackQ = null;
-                            if (prevIdx != -1) {
-                                fallbackQ = rawJointTrajectory.get(prevIdx).clone();
-                            } else if (nextIdx != -1) {
-                                fallbackQ = rawJointTrajectory.get(nextIdx).clone();
-                            } else {
-                                fallbackQ = armAngles.clone();
-                            }
-                            jointTrajectory.add(fallbackQ);
-                        }
-                    }
-                }
-                // Joint Velocity Limiter (Synchronized Time Expansion)
-                // Thay thế bộ giới hạn độc lập để tránh lệch pha giữa các khớp làm méo quỹ đạo (nguệch ngoạc)
-                double maxVelocityDegPerSec = 180.0; // Giới hạn tốc độ góc thực tế của động cơ (độ/giây)
-                double maxStepDeg = maxVelocityDegPerSec * 0.030; // 30ms cho một bước lệnh (MOTION_DT_MS)
+                // BƯỚC 2: VÁ LỖ HỔNG VÀ LẬP KẾ HOẠCH QUỸ ĐẠO BẰNG QUINTIC SPLINE
+                publish("Đang tối ưu quỹ đạo mượt mà C2 bằng Quintic Spline...");
+                double maxVelocity = 180.0;
+                double maxAcceleration = 360.0;
+                double dtSec = (double) MOTION_DT_MS / 1000.0;
 
-                java.util.List<double[]> expandedTrajectory = new java.util.ArrayList<>();
-                if (!jointTrajectory.isEmpty()) {
-                    expandedTrajectory.add(jointTrajectory.get(0).clone());
-                }
-                
-                for (int i = 1; i < jointTrajectory.size(); i++) {
-                    double[] prev = expandedTrajectory.get(expandedTrajectory.size() - 1);
-                    double[] curr = jointTrajectory.get(i);
-                    
-                    double maxDiff = 0.0;
-                    for (int j = 0; j < NUM_JOINTS; j++) {
-                        double diff = Math.abs(wrappedDegDiff(curr[j], prev[j]));
-                        if (diff > maxDiff) {
-                            maxDiff = diff;
-                        }
-                    }
-                    
-                    if (maxDiff > maxStepDeg) {
-                        int steps = (int) Math.ceil(maxDiff / maxStepDeg);
-                        if (steps > 30) steps = 30; // Giới hạn an toàn tránh bùng nổ quỹ đạo
-                        
-                        for (int k = 1; k <= steps; k++) {
-                            double factor = (double) k / steps;
-                            double[] interp = new double[NUM_JOINTS];
-                            for (int j = 0; j < NUM_JOINTS; j++) {
-                                double diff = wrappedDegDiff(curr[j], prev[j]);
-                                double q_val = prev[j] + diff * factor;
-                                while (q_val > 180)  q_val -= 360;
-                                while (q_val < -180) q_val += 360;
-                                interp[j] = q_val;
-                            }
-                            expandedTrajectory.add(interp);
-                        }
-                    } else {
-                        expandedTrajectory.add(curr.clone());
-                    }
-                }
-                jointTrajectory = expandedTrajectory;
+                // Điền đầy các điểm neo trống bằng các điểm neo gần nhất hoặc nội suy cục bộ tương thích
+                java.util.List<double[]> filledJoints = kinematics.TrajectoryPlanner.fillGaps(rawJointTrajectory, armAngles);
+
+                // Lập kế hoạch quỹ đạo không gian khớp qua Quintic Spline & co giãn thời gian (retiming loop)
+                java.util.List<double[]> jointTrajectory = kinematics.TrajectoryPlanner.planTrajectory(
+                        filledJoints,
+                        maxVelocity,
+                        maxAcceleration,
+                        useGlobalC2,
+                        dtSec
+                );
+
                 return jointTrajectory;
             }
 
