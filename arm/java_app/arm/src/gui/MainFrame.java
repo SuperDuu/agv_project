@@ -2502,40 +2502,45 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
 
             // --- Strategy 2: ALWAYS try diverse cold-start initial guesses ---
-            // Use geometric q1 = yaw angle to help IK reach solutions far from warm start
+            // Try both configurations (+ and -) for the cold start to enable configuration flipping
+            double[] q3_options = isRight ? new double[] { 0.3, -0.3 } : new double[] { -0.3, 0.3 };
+            double[] q4_options = isRight ? new double[] { -35.0, 35.0 } : new double[] { 35.0, -35.0 };
+            
             double[] q2_guesses = { 1.2, 0.6, 0.0, -0.6, -1.2 };
-            for (double q2_val : q2_guesses) {
-                double[] qHome = new double[NUM_JOINTS];
-                qHome[0] = yaw;  // Use geometric yaw angle, NOT qRef[0]
-                qHome[1] = q2_val;
-                qHome[2] = isRight ? 0.3 : -0.3;
-                qHome[3] = isRight ? Math.toRadians(-35.0) : Math.toRadians(35.0);
-                
-                double[] q2 = solveIK(px, py, pz, R_target, qHome, isRight);
-                if (!isRight) {
-                    System.out.printf("  [DEBUG_FALLBACK] q2_val=%.2f solveIK=%s limits=%s\n",
-                        q2_val,
-                        q2 == null ? "NULL" : String.format("[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f]", q2[0], q2[1], q2[2], q2[3], q2[4], q2[5]),
-                        q2 == null ? "N/A" : isWithinLimits(q2, isRight));
-                }
-                if (q2 != null && isWithinLimits(q2, isRight)) {
-                    addUniqueSolution(validSolutions, q2);
+            for (int cfgIdx = 0; cfgIdx < 2; cfgIdx++) {
+                double q3_val = q3_options[cfgIdx];
+                double q4_val = Math.toRadians(q4_options[cfgIdx]);
+                for (double q2_val : q2_guesses) {
+                    double[] qHome = new double[NUM_JOINTS];
+                    qHome[0] = yaw;  // Use geometric yaw angle, NOT qRef[0]
+                    qHome[1] = q2_val;
+                    qHome[2] = q3_val;
+                    qHome[3] = q4_val;
+                    
+                    double[] q2 = solveIK(px, py, pz, R_target, qHome, isRight);
+                    if (q2 != null && isWithinLimits(q2, isRight)) {
+                        addUniqueSolution(validSolutions, q2);
+                    }
                 }
             }
             
             // --- Strategy 3: Try with qRef[0] as q1 (original fallback behavior) ---
             // This covers cases where warm-start q1 is actually correct
             if (Math.abs(qInit[0] - yaw) > 0.15) { // Only if different from Strategy 2
-                for (double q2_val : new double[]{ 0.6, 0.0, -0.6 }) {
-                    double[] qAlt = new double[NUM_JOINTS];
-                    qAlt[0] = qInit[0];
-                    qAlt[1] = q2_val;
-                    qAlt[2] = isRight ? 0.3 : -0.3;
-                    qAlt[3] = isRight ? Math.toRadians(-35.0) : Math.toRadians(35.0);
-                    
-                    double[] q3 = solveIK(px, py, pz, R_target, qAlt, isRight);
-                    if (q3 != null && isWithinLimits(q3, isRight)) {
-                        addUniqueSolution(validSolutions, q3);
+                for (int cfgIdx = 0; cfgIdx < 2; cfgIdx++) {
+                    double q3_val = q3_options[cfgIdx];
+                    double q4_val = Math.toRadians(q4_options[cfgIdx]);
+                    for (double q2_val : new double[]{ 0.6, 0.0, -0.6 }) {
+                        double[] qAlt = new double[NUM_JOINTS];
+                        qAlt[0] = qInit[0];
+                        qAlt[1] = q2_val;
+                        qAlt[2] = q3_val;
+                        qAlt[3] = q4_val;
+                        
+                        double[] q3 = solveIK(px, py, pz, R_target, qAlt, isRight);
+                        if (q3 != null && isWithinLimits(q3, isRight)) {
+                            addUniqueSolution(validSolutions, q3);
+                        }
                     }
                 }
             }
@@ -2567,20 +2572,27 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return q;
         }
         
+        double[] q3_options = isRightArmSelected ? new double[] { 0.3, -0.3 } : new double[] { -0.3, 0.3 };
+        double[] q4_options = isRightArmSelected ? new double[] { -35.0, 35.0 } : new double[] { 35.0, -35.0 };
         double[] q2_guesses = { 1.2, 0.8, 0.4, 0.0, -0.4, -0.8, -1.2 };
-        for (double q2_val : q2_guesses) {
-            double[] qHome = new double[NUM_JOINTS];
-            double q1_min = isRightArmSelected ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
-            double q1_max = isRightArmSelected ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
-            double q1_base = isRightArmSelected ? Math.atan2(py, px) : -Math.atan2(py, -px);
-            qHome[0] = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), q1_base));
-            qHome[1] = q2_val;
-            qHome[2] = isRightArmSelected ? 0.3 : -0.3;
-            qHome[3] = isRightArmSelected ? Math.toRadians(-35.0) : Math.toRadians(35.0);
-            
-            q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
-            if (q != null && isWithinLimits(q, isRightArmSelected)) {
-                return q;
+        
+        for (int cfgIdx = 0; cfgIdx < 2; cfgIdx++) {
+            double q3_val = q3_options[cfgIdx];
+            double q4_val = Math.toRadians(q4_options[cfgIdx]);
+            for (double q2_val : q2_guesses) {
+                double[] qHome = new double[NUM_JOINTS];
+                double q1_min = isRightArmSelected ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
+                double q1_max = isRightArmSelected ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
+                double q1_base = isRightArmSelected ? Math.atan2(py, px) : -Math.atan2(py, -px);
+                qHome[0] = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), q1_base));
+                qHome[1] = q2_val;
+                qHome[2] = q3_val;
+                qHome[3] = q4_val;
+                
+                q = solveIK(px, py, pz, R_target, qHome, isRightArmSelected);
+                if (q != null && isWithinLimits(q, isRightArmSelected)) {
+                    return q;
+                }
             }
         }
         return null;
