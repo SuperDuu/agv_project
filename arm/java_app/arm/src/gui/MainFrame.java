@@ -19,7 +19,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private static final double MAX_IK_POSITION_ERROR = 1.5; // General IK threshold (allow a bit of error)
     private static final double TRAJ_RELAXED_ERROR = 2.50; // Trajectory fallback threshold
-    private static final double TRAJ_STRICT_ERROR = 0.10; // Trajectory strict tracking threshold (1.0 mm)
+    private static final double TRAJ_STRICT_ERROR = 0.15; // Trajectory strict tracking threshold (1.5 mm)
     double[] anglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] targetAnglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
@@ -1333,19 +1333,26 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
                 // THÊM BỘ KHỐNG CHẾ KHOẢNG CÁCH VÁ (GAP LIMITER)
                 int consecutiveNulls = 0;
+                int maxConsecutiveNulls = 0;
                 for (int i = 0; i < rawJointTrajectory.size(); i++) {
                     if (rawJointTrajectory.get(i) == null) {
                         consecutiveNulls++;
-                        if (consecutiveNulls > 5) {
+                        if (consecutiveNulls > maxConsecutiveNulls) {
+                            maxConsecutiveNulls = consecutiveNulls;
+                        }
+                        if (consecutiveNulls > 15) {
                             publish("Lỗi: Quỹ đạo vượt ngoài tầm với (Trajectory Out of Reach)!");
                             if (DEBUG) {
-                                System.out.println("[DEBUG_TRAJ] FAILED: Consecutive nulls > 5 at point " + (i + 1));
+                                System.out.println("[DEBUG_TRAJ] FAILED: Consecutive nulls > 15 at point " + (i + 1));
                             }
                             return new java.util.ArrayList<>();
                         }
                     } else {
                         consecutiveNulls = 0;
                     }
+                }
+                if (maxConsecutiveNulls > 3 && DEBUG) {
+                    System.out.printf("[DEBUG_TRAJ] WARNING: Max gap = %d points (will be interpolated by cubic spline)\n", maxConsecutiveNulls);
                 }
 
                 // BƯỚC 2: BACKWARD PATCHING PASS (VÁ LỖ HỔNG BẰNG CUBIC SPLINE)
