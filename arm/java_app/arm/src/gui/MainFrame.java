@@ -1701,8 +1701,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] currentAngles = isRightArmSelected ? anglesRight : anglesLeft;
         double[] qRef = isFirstWaypoint ? currentAngles : trajectoryLastQ;
         String altCfg = trajectoryLockedCfg.equals("+") ? "-" : "+";
-        String[] cfgCandidates = isFirstWaypoint ? new String[] { trajectoryLockedCfg, altCfg }
-                : new String[] { trajectoryLockedCfg };
+        String[] cfgCandidates = new String[] { trajectoryLockedCfg, altCfg }; // Luôn thử cả 2 cấu hình để bám được quỹ đạo
 
         double preferredYaw = isFirstWaypoint ? Double.NaN : trajectoryLastYawOffset;
 
@@ -1773,7 +1772,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // 2) Fallback to global scan if local search fails or is inaccurate
         // For fixedGround, step 1 already scanned full range, so only fallback for free mode
         if (bestStrictQ == null && !fixedGround) {
-            String[] cfgFallback = isFirstWaypoint ? cfgCandidates : new String[] { trajectoryLockedCfg, altCfg };
+            String[] cfgFallback = cfgCandidates;
             for (double a = -90; a <= 30; a += 1.5) {
                 List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw);
                 for (double[] q : candidates) {
