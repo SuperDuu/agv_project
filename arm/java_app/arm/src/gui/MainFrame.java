@@ -2415,6 +2415,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 };
             }
 
+            // --- Strategy 1: Warm start from qRef (previous trajectory point) ---
             double[] qInit = new double[NUM_JOINTS];
             for (int i = 0; i < NUM_JOINTS; i++) {
                 qInit[i] = Math.toRadians(activeAngles[i]);
@@ -2429,33 +2430,45 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     q == null ? "NULL" : String.format("[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f]", q[0], q[1], q[2], q[3], q[4], q[5]),
                     q == null ? "N/A" : isWithinLimits(q, isRight));
             }
-            boolean localSearchOk = false;
             if (q != null && isWithinLimits(q, isRight)) {
                 addUniqueSolution(validSolutions, q);
-                double err = computePositionError(q, px, py, pz, isRight);
-                if (err < 0.1) {
-                    localSearchOk = true;
-                }
             }
 
-            if (!localSearchOk) {
-                double[] q2_guesses = { 1.2, 0.6, 0.0, -0.6, -1.2 };
-                for (double q2_val : q2_guesses) {
-                    double[] qHome = new double[NUM_JOINTS];
-                    qHome[0] = qInit[0];
-                    qHome[1] = q2_val;
-                    qHome[2] = isRight ? 0.3 : -0.3;
-                    qHome[3] = isRight ? Math.toRadians(-35.0) : Math.toRadians(35.0);
+            // --- Strategy 2: ALWAYS try diverse cold-start initial guesses ---
+            // Use geometric q1 = yaw angle to help IK reach solutions far from warm start
+            double[] q2_guesses = { 1.2, 0.6, 0.0, -0.6, -1.2 };
+            for (double q2_val : q2_guesses) {
+                double[] qHome = new double[NUM_JOINTS];
+                qHome[0] = yaw;  // Use geometric yaw angle, NOT qRef[0]
+                qHome[1] = q2_val;
+                qHome[2] = isRight ? 0.3 : -0.3;
+                qHome[3] = isRight ? Math.toRadians(-35.0) : Math.toRadians(35.0);
+                
+                double[] q2 = solveIK(px, py, pz, R_target, qHome, isRight);
+                if (!isRight) {
+                    System.out.printf("  [DEBUG_FALLBACK] q2_val=%.2f solveIK=%s limits=%s\n",
+                        q2_val,
+                        q2 == null ? "NULL" : String.format("[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f]", q2[0], q2[1], q2[2], q2[3], q2[4], q2[5]),
+                        q2 == null ? "N/A" : isWithinLimits(q2, isRight));
+                }
+                if (q2 != null && isWithinLimits(q2, isRight)) {
+                    addUniqueSolution(validSolutions, q2);
+                }
+            }
+            
+            // --- Strategy 3: Try with qRef[0] as q1 (original fallback behavior) ---
+            // This covers cases where warm-start q1 is actually correct
+            if (Math.abs(qInit[0] - yaw) > 0.15) { // Only if different from Strategy 2
+                for (double q2_val : new double[]{ 0.6, 0.0, -0.6 }) {
+                    double[] qAlt = new double[NUM_JOINTS];
+                    qAlt[0] = qInit[0];
+                    qAlt[1] = q2_val;
+                    qAlt[2] = isRight ? 0.3 : -0.3;
+                    qAlt[3] = isRight ? Math.toRadians(-35.0) : Math.toRadians(35.0);
                     
-                    double[] q2 = solveIK(px, py, pz, R_target, qHome, isRight);
-                    if (!isRight) {
-                        System.out.printf("  [DEBUG_FALLBACK] q2_val=%.2f solveIK=%s limits=%s\n",
-                            q2_val,
-                            q2 == null ? "NULL" : String.format("[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f]", q2[0], q2[1], q2[2], q2[3], q2[4], q2[5]),
-                            q2 == null ? "N/A" : isWithinLimits(q2, isRight));
-                    }
-                    if (q2 != null && isWithinLimits(q2, isRight)) {
-                        addUniqueSolution(validSolutions, q2);
+                    double[] q3 = solveIK(px, py, pz, R_target, qAlt, isRight);
+                    if (q3 != null && isWithinLimits(q3, isRight)) {
+                        addUniqueSolution(validSolutions, q3);
                     }
                 }
             }
