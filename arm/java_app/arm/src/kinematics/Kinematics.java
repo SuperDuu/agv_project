@@ -44,7 +44,7 @@ public class Kinematics {
         };
 
         int maxIter = 100;
-        double tol = 1e-3;
+        double tol = 1e-5;
         double alpha = 0.8; // Khởi đầu với tốc độ học cao hơn để bắt kịp quỹ đạo
         double prevErrNorm = Double.MAX_VALUE;
 
