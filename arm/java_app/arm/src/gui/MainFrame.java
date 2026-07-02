@@ -19,7 +19,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private static final double MAX_IK_POSITION_ERROR = 1.5; // General IK threshold (allow a bit of error)
     private static final double TRAJ_RELAXED_ERROR = 2.50; // Trajectory fallback threshold
-    private static final double TRAJ_STRICT_ERROR = 0.15; // Trajectory strict tracking threshold (1.5 mm)
+    private static final double TRAJ_STRICT_ERROR = 0.50; // Trajectory strict tracking threshold (5.0 mm)
     double[] anglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] targetAnglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
