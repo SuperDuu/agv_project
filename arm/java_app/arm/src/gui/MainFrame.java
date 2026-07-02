@@ -575,9 +575,49 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         });
 
+        final boolean[] isInternalChanging = { false };
         workspaceSliceItem.addItemListener(e -> {
+            if (isInternalChanging[0]) return;
             showWorkspaceSlice = workspaceSliceItem.isSelected();
             if (showWorkspaceSlice) {
+                String input = JOptionPane.showInputDialog(MainFrame.this, 
+                        "Nhập chiều cao Z mong muốn quét (mm):", 
+                        String.valueOf(getFixedHeight()));
+                if (input == null) {
+                    isInternalChanging[0] = true;
+                    workspaceSliceItem.setSelected(false);
+                    isInternalChanging[0] = false;
+                    
+                    showWorkspaceSlice = false;
+                    stopWorkspaceSliceExploration();
+                    armPanel.clearWorkspaceSlice();
+                    armPanel.workspaceStatus = "";
+                    armPanel.repaint();
+                    return;
+                }
+                
+                double enteredZ;
+                try {
+                    enteredZ = Double.parseDouble(input.trim());
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(MainFrame.this, 
+                            "Vui lòng nhập một số thực hợp lệ!", 
+                            "Lỗi định dạng", 
+                            JOptionPane.ERROR_MESSAGE);
+                    isInternalChanging[0] = true;
+                    workspaceSliceItem.setSelected(false);
+                    isInternalChanging[0] = false;
+                    
+                    showWorkspaceSlice = false;
+                    stopWorkspaceSliceExploration();
+                    armPanel.clearWorkspaceSlice();
+                    armPanel.workspaceStatus = "";
+                    armPanel.repaint();
+                    return;
+                }
+
+                fixedHeightSpinner.setValue(enteredZ);
+
                 workspaceItem.setSelected(false);
                 showWorkspace = false;
                 stopWorkspaceExploration();
