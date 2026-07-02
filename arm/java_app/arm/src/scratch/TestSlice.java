@@ -6,7 +6,7 @@ public class TestSlice {
     public static void main(String[] args) {
         System.out.println("Running joint-space slice scan with optimized steps...");
         double fixedZ = 100.0;
-        double tolerance = 2.0;
+        double tolerance = 0.3;
         boolean isRight = true;
         
         double[] minLim = Kinematics.JOINT_MIN_RIGHT;
@@ -25,8 +25,8 @@ public class TestSlice {
         
         for (double q4 : q4_samples) {
             for (double q5 : q5_samples) {
-                for (double q3 = minLim[2]; q3 <= maxLim[2]; q3 += 4.0) {
-                    for (double q2 = minLim[1]; q2 <= maxLim[1]; q2 += 4.0) {
+                for (double q3 = minLim[2]; q3 <= maxLim[2]; q3 += 3.0) {
+                    for (double q2 = minLim[1]; q2 <= maxLim[1]; q2 += 3.0) {
                         double[] q = { 0, q2, q3, q4, q5, 0 };
                         double[] qRad = new double[6];
                         for (int i = 0; i < 6; i++) qRad[i] = Math.toRadians(q[i]);

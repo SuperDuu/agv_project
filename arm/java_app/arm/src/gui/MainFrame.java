@@ -2022,7 +2022,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                                 double[][] T = kinematics.Kinematics.computeFKMatrix(qRad, isRight);
                                 double z = T[2][3];
 
-                                if (Math.abs(z - fixedZ) < 2.0) { // Tolerance of 2.0 cm
+                                if (Math.abs(z - fixedZ) < 0.3) { // Tolerance of 0.3 cm (3.0 mm)
                                     double r = Math.sqrt(T[0][3] * T[0][3] + T[1][3] * T[1][3]);
                                     reachableRadii.add(r);
                                 }
