@@ -1736,6 +1736,20 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         for (double a = aStart; a <= aEnd; a += aStep) {
             List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw);
             for (double[] q : candidates) {
+                // Reject candidates with a huge joint jump (> 30 degrees) to prevent wild/erratic movements
+                boolean hasHugeJump = false;
+                if (!isFirstWaypoint) {
+                    for (int i = 0; i < NUM_JOINTS; i++) {
+                        if (Math.abs(wrappedDegDiff(q[i], qRef[i])) > 30.0) {
+                            hasHugeJump = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasHugeJump) {
+                    continue;
+                }
+                
                 double posErr = computePositionError(q, px, py, pz, isRightArmSelected);
                 for (String cfgTry : cfgCandidates) {
                     String actualCfg = getActualConfig(q, isRightArmSelected);
@@ -1776,6 +1790,20 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             for (double a = -90; a <= 30; a += 1.5) {
                 List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw);
                 for (double[] q : candidates) {
+                    // Reject candidates with a huge joint jump (> 30 degrees) to prevent wild/erratic movements
+                    boolean hasHugeJump = false;
+                    if (!isFirstWaypoint) {
+                        for (int i = 0; i < NUM_JOINTS; i++) {
+                            if (Math.abs(wrappedDegDiff(q[i], qRef[i])) > 30.0) {
+                                hasHugeJump = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (hasHugeJump) {
+                        continue;
+                    }
+                    
                     double posErr = computePositionError(q, px, py, pz, isRightArmSelected);
                     for (String cfgTry : cfgFallback) {
                         String actualCfg = getActualConfig(q, isRightArmSelected);
