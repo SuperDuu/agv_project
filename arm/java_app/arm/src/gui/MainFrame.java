@@ -1381,27 +1381,42 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         }
                         
                         if (prevIdx != -1 && nextIdx != -1) {
-                            // Thực hiện nội suy đa thức bậc 3 (Cubic Spline) cho cả 6 khớp
                             double[] q_prev = rawJointTrajectory.get(prevIdx);
                             double[] q_next = rawJointTrajectory.get(nextIdx);
-                            double[] q_interp = new double[NUM_JOINTS];
                             
-                            int N = nextIdx - prevIdx;
-                            double t = (double) (i - prevIdx) / N;
-                            // Công thức đa thức bậc 3 cho t chạy từ 0 đến 1: s = 3*t^2 - 2*t^3
-                            double factor = 3.0 * t * t - 2.0 * t * t * t;
-                            
+                            // Kiểm tra tương thích cấu hình: nếu có bất kỳ khớp nào nhảy > 30°, KHÔNG nội suy spline
+                            boolean compatible = true;
                             for (int j = 0; j < NUM_JOINTS; j++) {
-                                double deltaQ = wrappedDegDiff(q_next[j], q_prev[j]);
-                                double q_val = q_prev[j] + deltaQ * factor;
-                                
-                                // Chuẩn hóa góc về [-180.0, 180.0]
-                                while (q_val > 180.0)  q_val -= 360.0;
-                                while (q_val < -180.0) q_val += 360.0;
-                                
-                                q_interp[j] = q_val;
+                                if (Math.abs(wrappedDegDiff(q_next[j], q_prev[j])) > 30.0) {
+                                    compatible = false;
+                                    break;
+                                }
                             }
-                            jointTrajectory.add(q_interp);
+                            
+                            if (compatible) {
+                                // Thực hiện nội suy đa thức bậc 3 (Cubic Spline) cho cả 6 khớp
+                                double[] q_interp = new double[NUM_JOINTS];
+                                int N = nextIdx - prevIdx;
+                                double t = (double) (i - prevIdx) / N;
+                                // Công thức đa thức bậc 3 cho t chạy từ 0 đến 1: s = 3*t^2 - 2*t^3
+                                double factor = 3.0 * t * t - 2.0 * t * t * t;
+                                
+                                for (int j = 0; j < NUM_JOINTS; j++) {
+                                    double deltaQ = wrappedDegDiff(q_next[j], q_prev[j]);
+                                    double q_val = q_prev[j] + deltaQ * factor;
+                                    
+                                    // Chuẩn hóa góc về [-180.0, 180.0]
+                                    while (q_val > 180.0)  q_val -= 360.0;
+                                    while (q_val < -180.0) q_val += 360.0;
+                                    
+                                    q_interp[j] = q_val;
+                                }
+                                jointTrajectory.add(q_interp);
+                            } else {
+                                // Giữ nguyên cấu hình hợp lệ gần nhất
+                                double[] fallbackQ = ((i - prevIdx) <= (nextIdx - i)) ? q_prev.clone() : q_next.clone();
+                                jointTrajectory.add(fallbackQ);
+                            }
                         } else {
                             // Vướng biên: Lấy cấu hình hợp lệ gần nhất
                             double[] fallbackQ = null;
@@ -1416,31 +1431,49 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         }
                     }
                 }
-                // Joint Velocity Limiter (Bộ giới hạn vận tốc cứng)
-                // Thay thế bộ lọc thông thấp kiểu mũ để triệt tiêu trễ pha và giằng co cơ học
+                // Joint Velocity Limiter (Synchronized Time Expansion)
+                // Thay thế bộ giới hạn độc lập để tránh lệch pha giữa các khớp làm méo quỹ đạo (nguệch ngoạc)
                 double maxVelocityDegPerSec = 180.0; // Giới hạn tốc độ góc thực tế của động cơ (độ/giây)
                 double maxStepDeg = maxVelocityDegPerSec * 0.030; // 30ms cho một bước lệnh (MOTION_DT_MS)
 
-                if (jointTrajectory.size() > 1) {
-                    for (int i = 1; i < jointTrajectory.size(); i++) {
-                        double[] prev = jointTrajectory.get(i - 1);
-                        double[] curr = jointTrajectory.get(i);
-                        
-                        for (int j = 0; j < NUM_JOINTS; j++) {
-                            double diff = wrappedDegDiff(curr[j], prev[j]);
-                            
-                            // Nếu bước nhảy vượt quá giới hạn vật lý, kẹp cứng lại thay vì để nó giật vọt
-                            if (Math.abs(diff) > maxStepDeg) {
-                                diff = Math.signum(diff) * maxStepDeg;
-                            }
-                            
-                            curr[j] = prev[j] + diff;
-                            // Chuẩn hóa góc về [-180, 180]
-                            while (curr[j] > 180)  curr[j] -= 360;
-                            while (curr[j] < -180) curr[j] += 360;
+                java.util.List<double[]> expandedTrajectory = new java.util.ArrayList<>();
+                if (!jointTrajectory.isEmpty()) {
+                    expandedTrajectory.add(jointTrajectory.get(0).clone());
+                }
+                
+                for (int i = 1; i < jointTrajectory.size(); i++) {
+                    double[] prev = expandedTrajectory.get(expandedTrajectory.size() - 1);
+                    double[] curr = jointTrajectory.get(i);
+                    
+                    double maxDiff = 0.0;
+                    for (int j = 0; j < NUM_JOINTS; j++) {
+                        double diff = Math.abs(wrappedDegDiff(curr[j], prev[j]));
+                        if (diff > maxDiff) {
+                            maxDiff = diff;
                         }
                     }
+                    
+                    if (maxDiff > maxStepDeg) {
+                        int steps = (int) Math.ceil(maxDiff / maxStepDeg);
+                        if (steps > 30) steps = 30; // Giới hạn an toàn tránh bùng nổ quỹ đạo
+                        
+                        for (int k = 1; k <= steps; k++) {
+                            double factor = (double) k / steps;
+                            double[] interp = new double[NUM_JOINTS];
+                            for (int j = 0; j < NUM_JOINTS; j++) {
+                                double diff = wrappedDegDiff(curr[j], prev[j]);
+                                double q_val = prev[j] + diff * factor;
+                                while (q_val > 180)  q_val -= 360;
+                                while (q_val < -180) q_val += 360;
+                                interp[j] = q_val;
+                            }
+                            expandedTrajectory.add(interp);
+                        }
+                    } else {
+                        expandedTrajectory.add(curr.clone());
+                    }
                 }
+                jointTrajectory = expandedTrajectory;
                 return jointTrajectory;
             }
 
@@ -1983,6 +2016,44 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return false;
     }
 
+    private boolean hasIKForWorkspaceScan(double px, double py, double pz, boolean isRight, boolean fixedGround, String prefCfg, double[] activeAngles) {
+        double activeAlpha = isRight ? activeAlphaRight : activeAlphaLeft;
+        
+        if (fixedGround) {
+            for (double a = -90; a <= 30; a += 5.0) {
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN);
+                for (double[] q : candidates) {
+                    double posErr = computePositionError(q, px, py, pz, isRight);
+                    if (posErr <= MAX_IK_POSITION_ERROR) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Chế độ tự do: tìm xung quanh alpha hiện tại trước, sau đó tìm toàn cục
+        for (double a = activeAlpha - 15; a <= activeAlpha + 15; a += 5.0) {
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN);
+            for (double[] q : candidates) {
+                double posErr = computePositionError(q, px, py, pz, isRight);
+                if (posErr <= MAX_IK_POSITION_ERROR) {
+                    return true;
+                }
+            }
+        }
+        for (double a = -90; a <= 30; a += 10.0) {
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN);
+            for (double[] q : candidates) {
+                double posErr = computePositionError(q, px, py, pz, isRight);
+                if (posErr <= MAX_IK_POSITION_ERROR) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public void updateWorkspaceSlice() {
         if (!showWorkspaceSlice) return;
 
@@ -1991,6 +2062,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         armPanel.repaint();
 
         final double fixedZ = getFixedHeight();
+
+        final boolean fixedGroundRight = (gripperModeComboRight.getSelectedIndex() == 0);
+        final boolean fixedGroundLeft = (gripperModeComboLeft.getSelectedIndex() == 0);
+        final String prefCfgRight = configComboRight.getSelectedIndex() == 0 ? "+" : "-";
+        final String prefCfgLeft = configComboLeft.getSelectedIndex() == 0 ? "+" : "-";
+        final double[] activeAnglesRight = anglesRight.clone();
+        final double[] activeAnglesLeft = anglesLeft.clone();
 
         sliceExplorationThread = new Thread(() -> {
             boolean[] arms = { true, false }; // Scan both Right (true) and Left (false) arms
@@ -2005,36 +2083,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 double q1_min = minLim[0];
                 double q1_max = maxLim[0];
 
-                double q4_min = minLim[3];
-                double q4_max = maxLim[3];
-                double[] q4_samples = { q4_min, (q4_min + q4_max) / 2.0, q4_max };
-
-                double q5_min = minLim[4];
-                double q5_max = maxLim[4];
-                double[] q5_samples = { q5_min + 30.0, (q5_min + q5_max) / 2.0, q5_max - 30.0 };
+                boolean fixedGround = isRight ? fixedGroundRight : fixedGroundLeft;
+                String prefCfg = isRight ? prefCfgRight : prefCfgLeft;
+                double[] activeAngles = isRight ? activeAnglesRight : activeAnglesLeft;
 
                 java.util.TreeSet<Double> reachableRadii = new java.util.TreeSet<>();
 
-                // Scan in joint space for reachable radii
-                double step = 3.0; // High resolution
-                for (double q4 : q4_samples) {
-                    for (double q5 : q5_samples) {
-                        for (double q3 = minLim[2]; q3 <= maxLim[2]; q3 += step) {
-                            for (double q2 = minLim[1]; q2 <= maxLim[1]; q2 += step) {
-                                if (Thread.interrupted()) return;
-
-                                double[] q = { 0, q2, q3, q4, q5, 0 };
-                                double[] qRad = new double[6];
-                                for (int i = 0; i < 6; i++) qRad[i] = Math.toRadians(q[i]);
-                                double[][] T = kinematics.Kinematics.computeFKMatrix(qRad, isRight);
-                                double z = T[2][3];
-
-                                if (Math.abs(z - fixedZ) < 0.3) { // Tolerance of 0.3 cm (3.0 mm)
-                                    double r = Math.sqrt(T[0][3] * T[0][3] + T[1][3] * T[1][3]);
-                                    reachableRadii.add(r);
-                                }
-                            }
-                        }
+                // Quét trực tiếp bán kính r và kiểm tra bằng bộ giải IK thực tế.
+                // Điều này đảm bảo lát cắt vùng làm việc khớp chính xác với vùng có thể vẽ được của quỹ đạo.
+                for (double r = 15.0; r <= 70.0; r += 0.2) {
+                    if (Thread.interrupted()) return;
+                    double px = isRight ? r : -r;
+                    if (hasIKForWorkspaceScan(px, 0, fixedZ, isRight, fixedGround, prefCfg, activeAngles)) {
+                        reachableRadii.add(r);
                     }
                 }
 
@@ -2042,7 +2103,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     double rMin = reachableRadii.first();
                     double rMax = reachableRadii.last();
 
-                    // Generate boundary polygons
+                    // Tạo các đa giác biên
                     for (double theta = q1_min; theta <= q1_max; theta += 2.0) {
                         double rad = Math.toRadians(theta);
                         double cos = Math.cos(rad);
@@ -2065,10 +2126,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         outer.add(new double[] { pxMax, pyMax, fixedZ });
                     }
 
-                    // Generate detailed dots inside the slice
+                    // Tạo các điểm chi tiết bên trong lát cắt
                     double lastRAdded = -100;
                     for (double r : reachableRadii) {
-                        if (r - lastRAdded >= 1.5) { // Spatial filtering
+                        if (r - lastRAdded >= 1.5) { // Lọc không gian
                             lastRAdded = r;
                             for (double theta = q1_min; theta <= q1_max; theta += 4.0) {
                                 double rad = Math.toRadians(theta);
