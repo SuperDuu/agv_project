@@ -166,6 +166,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         startControllerTimer();
 
         updateArm();
+        syncGuiCoordsFromFK();
     }
 
     /**
@@ -548,9 +549,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         });
 
         JCheckBoxMenuItem workspaceItem = new JCheckBoxMenuItem("Hiện Vùng Làm Việc", showWorkspace);
+        JCheckBoxMenuItem workspaceSliceItem = new JCheckBoxMenuItem("Hiện Lát Cắt Vùng Làm Việc (Fixed Z)", showWorkspaceSlice);
+
         workspaceItem.addItemListener(e -> {
             showWorkspace = workspaceItem.isSelected();
             if (showWorkspace) {
+                workspaceSliceItem.setSelected(false);
+                showWorkspaceSlice = false;
+                stopWorkspaceSliceExploration();
+                armPanel.clearWorkspaceSlice();
+                
                 armPanel.clearWorkspace();
                 armPanel.workspaceStatus = "";
                 runWorkspaceExploration();
@@ -561,14 +569,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         });
 
-        JCheckBoxMenuItem workspaceSliceItem = new JCheckBoxMenuItem("Hiện Lát Cắt Vùng Làm Việc (Fixed Z)", showWorkspaceSlice);
         workspaceSliceItem.addItemListener(e -> {
             showWorkspaceSlice = workspaceSliceItem.isSelected();
             if (showWorkspaceSlice) {
+                workspaceItem.setSelected(false);
+                showWorkspace = false;
+                stopWorkspaceExploration();
+                armPanel.clearWorkspace();
+                
                 updateWorkspaceSlice();
             } else {
                 stopWorkspaceSliceExploration();
                 armPanel.clearWorkspaceSlice();
+                armPanel.workspaceStatus = "";
                 armPanel.repaint();
             }
         });
@@ -894,12 +907,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     setGotoStatusLeft("OK", new Color(0, 140, 0));
                     setGotoStatusRight("Về Home", Color.BLUE);
                 }
-                if (showWorkspaceSlice) {
-                    updateWorkspaceSlice();
-                }
             } else {
                 if (isRight) setGotoStatusRight("Ngoài tầm/Góc!", Color.RED);
                 else setGotoStatusLeft("Ngoài tầm/Góc!", Color.RED);
+            }
+
+            // Sync Z slider anyway
+            JSlider sZ = isRight ? slZRight : slZLeft;
+            isUpdatingFromFK = true;
+            sZ.setValue((int) Math.round(pz));
+            isUpdatingFromFK = false;
+
+            if (showWorkspaceSlice) {
+                updateWorkspaceSlice();
             }
         } catch (NumberFormatException ex) {
             if (isRight) gotoStatusRight.setText("Sai định dạng");
@@ -1019,6 +1039,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     double px = slXRight.getValue();
                     double py = slYRight.getValue();
                     double pz = slZRight.getValue();
+                    
+                    if (i == 2) {
+                        txZRight.setText(String.valueOf((int) pz));
+                        if (showWorkspaceSlice) {
+                            updateWorkspaceSlice();
+                        }
+                    }
+
                     String prefCfg = configComboRight.getSelectedIndex() == 0 ? "+" : "-";
                     double[] res = solveIKSmartRight(px, py, pz, prefCfg);
                     if (res != null) {
@@ -1027,9 +1055,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         txYRight.setText(String.valueOf((int) py));
                         txZRight.setText(String.valueOf((int) pz));
                         setGotoStatusRight("OK", new Color(0, 140, 0));
-                        if (i == 2 && showWorkspaceSlice) {
-                            updateWorkspaceSlice();
-                        }
+                    } else {
+                        setGotoStatusRight("Ngoài tầm/Góc", Color.RED);
                     }
                 } catch (Exception ex) {
                 }
@@ -1045,6 +1072,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     double px = slXLeft.getValue();
                     double py = slYLeft.getValue();
                     double pz = slZLeft.getValue();
+                    
+                    if (i == 2) {
+                        txZLeft.setText(String.valueOf((int) pz));
+                        if (showWorkspaceSlice) {
+                            updateWorkspaceSlice();
+                        }
+                    }
+
                     String prefCfg = configComboLeft.getSelectedIndex() == 0 ? "+" : "-";
                     double[] res = solveIKSmartLeft(px, py, pz, prefCfg);
                     if (res != null) {
@@ -1053,9 +1088,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         txYLeft.setText(String.valueOf((int) py));
                         txZLeft.setText(String.valueOf((int) pz));
                         setGotoStatusLeft("OK", new Color(0, 140, 0));
-                        if (i == 2 && showWorkspaceSlice) {
-                            updateWorkspaceSlice();
-                        }
+                    } else {
+                        setGotoStatusLeft("Ngoài tầm/Góc", Color.RED);
                     }
                 } catch (Exception ex) {
                 }
@@ -1122,6 +1156,42 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] defaultPoseLeft = { 0, 0, -10.0, 30.0, 0, 0 };
         setTargetAnglesRight(defaultPoseRight);
         setTargetAnglesLeft(defaultPoseLeft);
+        syncGuiCoordsFromFK();
+        if (showWorkspaceSlice) {
+            updateWorkspaceSlice();
+        }
+    }
+
+    public void syncGuiCoordsFromFK() {
+        double[] eeR = armPanel.getRightEndEffectorPosition();
+        txXRight.setText(String.format("%.1f", eeR[0]));
+        txYRight.setText(String.format("%.1f", eeR[1]));
+        txZRight.setText(String.format("%.1f", eeR[2]));
+        
+        slXRight.removeChangeListener(this);
+        slYRight.removeChangeListener(this);
+        slZRight.removeChangeListener(this);
+        slXRight.setValue((int) Math.round(eeR[0]));
+        slYRight.setValue((int) Math.round(eeR[1]));
+        slZRight.setValue((int) Math.round(eeR[2]));
+        slXRight.addChangeListener(this);
+        slYRight.addChangeListener(this);
+        slZRight.addChangeListener(this);
+
+        double[] eeL = armPanel.getLeftEndEffectorPosition();
+        txXLeft.setText(String.format("%.1f", eeL[0]));
+        txYLeft.setText(String.format("%.1f", eeL[1]));
+        txZLeft.setText(String.format("%.1f", eeL[2]));
+        
+        slXLeft.removeChangeListener(this);
+        slYLeft.removeChangeListener(this);
+        slZLeft.removeChangeListener(this);
+        slXLeft.setValue((int) Math.round(eeL[0]));
+        slYLeft.setValue((int) Math.round(eeL[1]));
+        slZLeft.setValue((int) Math.round(eeL[2]));
+        slXLeft.addChangeListener(this);
+        slYLeft.addChangeListener(this);
+        slZLeft.addChangeListener(this);
     }
 
     // Trajectory logic methods follow ...
@@ -1864,78 +1934,112 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (!showWorkspaceSlice) return;
 
         stopWorkspaceSliceExploration();
+        armPanel.clearWorkspaceSlice();
+        armPanel.repaint();
 
         final double fixedZ = getActiveArmZ();
-        final boolean isRight = isRightArmSelected;
 
         sliceExplorationThread = new Thread(() -> {
-            java.util.List<double[]> dots = new java.util.ArrayList<>();
-            java.util.List<double[]> outer = new java.util.ArrayList<>();
-            java.util.List<double[]> inner = new java.util.ArrayList<>();
+            boolean[] arms = { true, false }; // Scan both Right (true) and Left (false) arms
+            for (boolean isRight : arms) {
+                java.util.List<double[]> dots = new java.util.ArrayList<>();
+                java.util.List<double[]> outer = new java.util.ArrayList<>();
+                java.util.List<double[]> inner = new java.util.ArrayList<>();
 
-            double[] qWarmStart = (isRight ? anglesRight : anglesLeft).clone();
+                double[] minLim = isRight ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
+                double[] maxLim = isRight ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
 
-            double q1_min = isRight ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
-            double q1_max = isRight ? JOINT_MAX_RIGHT[0] : JOINT_MAX_LEFT[0];
+                double q1_min = minLim[0];
+                double q1_max = maxLim[0];
 
-            for (double theta = q1_min; theta <= q1_max; theta += 1.0) {
-                if (Thread.interrupted()) return;
+                double q4_min = minLim[3];
+                double q4_max = maxLim[3];
+                double[] q4_samples = { q4_min, (q4_min + q4_max) / 2.0, q4_max };
 
-                double rad = Math.toRadians(theta);
-                double cos = Math.cos(rad);
-                double sin = Math.sin(rad);
+                double q5_min = minLim[4];
+                double q5_max = maxLim[4];
+                double[] q5_samples = { q5_min + 30.0, (q5_min + q5_max) / 2.0, q5_max - 30.0 };
 
-                double rMinFound = -1;
-                double rMaxFound = -1;
+                java.util.TreeSet<Double> reachableRadii = new java.util.TreeSet<>();
 
-                int stepIndex = 0;
-                for (double r = 10.0; r <= 80.0; r += 0.8) {
-                    double px, py;
-                    if (isRight) {
-                        px = r * cos;
-                        py = r * sin;
-                    } else {
-                        px = -r * cos;
-                        py = -r * sin;
-                    }
+                // Scan in joint space for reachable radii
+                double step = 3.0; // High resolution
+                for (double q4 : q4_samples) {
+                    for (double q5 : q5_samples) {
+                        for (double q3 = minLim[2]; q3 <= maxLim[2]; q3 += step) {
+                            for (double q2 = minLim[1]; q2 <= maxLim[1]; q2 += step) {
+                                if (Thread.interrupted()) return;
 
-                    boolean ok = checkPointReachableFast(px, py, fixedZ, isRight, qWarmStart);
-                    if (ok) {
-                        if (rMinFound < 0) {
-                            rMinFound = r;
+                                double[] q = { 0, q2, q3, q4, q5, 0 };
+                                double[] qRad = new double[6];
+                                for (int i = 0; i < 6; i++) qRad[i] = Math.toRadians(q[i]);
+                                double[][] T = kinematics.Kinematics.computeFKMatrix(qRad, isRight);
+                                double z = T[2][3];
+
+                                if (Math.abs(z - fixedZ) < 2.0) { // Tolerance of 2.0 cm
+                                    double r = Math.sqrt(T[0][3] * T[0][3] + T[1][3] * T[1][3]);
+                                    reachableRadii.add(r);
+                                }
+                            }
                         }
-                        rMaxFound = r;
-
-                        if (stepIndex % 2 == 0) {
-                            dots.add(new double[] { px, py, fixedZ });
-                        }
                     }
-                    stepIndex++;
                 }
 
-                if (rMinFound > 0 && rMaxFound > 0) {
-                    double pxMin, pyMin, pxMax, pyMax;
-                    if (isRight) {
-                        pxMin = rMinFound * cos;
-                        pyMin = rMinFound * sin;
-                        pxMax = rMaxFound * cos;
-                        pyMax = rMaxFound * sin;
-                    } else {
-                        pxMin = -rMinFound * cos;
-                        pyMin = -rMinFound * sin;
-                        pxMax = -rMaxFound * cos;
-                        pyMax = -rMaxFound * sin;
+                if (!reachableRadii.isEmpty()) {
+                    double rMin = reachableRadii.first();
+                    double rMax = reachableRadii.last();
+
+                    // Generate boundary polygons
+                    for (double theta = q1_min; theta <= q1_max; theta += 2.0) {
+                        double rad = Math.toRadians(theta);
+                        double cos = Math.cos(rad);
+                        double sin = Math.sin(rad);
+
+                        double pxMin, pyMin, pxMax, pyMax;
+                        if (isRight) {
+                            pxMin = rMin * cos;
+                            pyMin = rMin * sin;
+                            pxMax = rMax * cos;
+                            pyMax = rMax * sin;
+                        } else {
+                            pxMin = -rMin * cos;
+                            pyMin = -rMin * sin;
+                            pxMax = -rMax * cos;
+                            pyMax = -rMax * sin;
+                        }
+
+                        inner.add(new double[] { pxMin, pyMin, fixedZ });
+                        outer.add(new double[] { pxMax, pyMax, fixedZ });
                     }
-                    inner.add(new double[] { pxMin, pyMin, fixedZ });
-                    outer.add(new double[] { pxMax, pyMax, fixedZ });
+
+                    // Generate detailed dots inside the slice
+                    double lastRAdded = -100;
+                    for (double r : reachableRadii) {
+                        if (r - lastRAdded >= 1.5) { // Spatial filtering
+                            lastRAdded = r;
+                            for (double theta = q1_min; theta <= q1_max; theta += 4.0) {
+                                double rad = Math.toRadians(theta);
+                                double px, py;
+                                if (isRight) {
+                                    px = r * Math.cos(rad);
+                                    py = r * Math.sin(rad);
+                                } else {
+                                    px = -r * Math.cos(rad);
+                                    py = -r * Math.sin(rad);
+                                }
+                                dots.add(new double[] { px, py, fixedZ });
+                            }
+                        }
+                    }
                 }
+
+                armPanel.setWorkspaceSliceData(dots, outer, inner, isRight);
+
+                SwingUtilities.invokeLater(() -> {
+                    armPanel.workspaceStatus = String.format("LÁT CẮT Z = %.1f", fixedZ);
+                    armPanel.repaint();
+                });
             }
-
-            armPanel.setWorkspaceSliceData(dots, outer, inner, isRight);
-
-            SwingUtilities.invokeLater(() -> {
-                armPanel.repaint();
-            });
         });
 
         sliceExplorationThread.setPriority(Thread.MIN_PRIORITY);
