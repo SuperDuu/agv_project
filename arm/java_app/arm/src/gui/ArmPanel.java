@@ -12,6 +12,7 @@ public class ArmPanel extends JPanel
     ArrayList<double[]> trail = new ArrayList<>();
     public ArrayList<double[]> referencePath = new ArrayList<>();
     private boolean isDrawingPath = false;
+    private boolean hasDragged = false;
     double camAz = -30, camEl = 25, scale = 5.0;
     private double cAz = 1.0, sAz = 0.0, cEl = 1.0, sEl = 0.0;
     int lastX, lastY;
@@ -48,6 +49,7 @@ public class ArmPanel extends JPanel
     public void mousePressed(MouseEvent e) {
         lastX = e.getX();
         lastY = e.getY();
+        hasDragged = false;
         if (robot.isDrawingActive() && SwingUtilities.isLeftMouseButton(e)) {
             isDrawingPath = true;
             referencePath.clear();
@@ -63,9 +65,9 @@ public class ArmPanel extends JPanel
 
     @Override
     public void mouseClicked(MouseEvent e) {
-        // Fixed-height click-to-move: only when fixedHeightMode is enabled and
-        // right-click
-        if (robot.fixedHeightMode && SwingUtilities.isRightMouseButton(e)) {
+        // Fixed-height click-to-move: only when fixedHeightMode is enabled,
+        // right-click, and not dragged
+        if (!hasDragged && robot.fixedHeightMode && SwingUtilities.isRightMouseButton(e)) {
             clickTarget = moveToScreenPoint(e.getX(), e.getY());
         }
     }
@@ -89,6 +91,7 @@ public class ArmPanel extends JPanel
     // --- MouseMotionListener ---
     @Override
     public void mouseDragged(MouseEvent e) {
+        hasDragged = true;
         if (isDrawingPath) {
             double zDraw = robot.getFixedHeight();
             if (e.isShiftDown()) {
