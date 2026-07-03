@@ -13,6 +13,7 @@ public class ArmPanel extends JPanel
     public ArrayList<double[]> referencePath = new ArrayList<>();
     private boolean isDrawingPath = false;
     double camAz = -30, camEl = 25, scale = 5.0;
+    private double cAz = 1.0, sAz = 0.0, cEl = 1.0, sEl = 0.0;
     int lastX, lastY;
     int demoStep = 0;
     double[] clickTarget = null; // To draw where we clicked
@@ -135,7 +136,7 @@ public class ArmPanel extends JPanel
     // --- MouseWheelListener ---
     @Override
     public void mouseWheelMoved(MouseWheelEvent e) {
-        if (robot.isDrawingActive()) {
+        if (robot.isDrawingActive() && e.isShiftDown()) {
             double currentZ = robot.getFixedHeight();
             double newZ = currentZ - e.getWheelRotation() * 5.0; // 5mm step
             newZ = Math.max(0.0, Math.min(300.0, newZ));
@@ -310,6 +311,12 @@ public class ArmPanel extends JPanel
 
     @Override
     protected void paintComponent(Graphics g) {
+        double az = Math.toRadians(camAz), el = Math.toRadians(camEl);
+        this.cAz = Math.cos(az);
+        this.sAz = Math.sin(az);
+        this.cEl = Math.cos(el);
+        this.sEl = Math.sin(el);
+
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g;
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -745,8 +752,6 @@ public class ArmPanel extends JPanel
     }
 
     private double getVz(double[] p) {
-        double az = Math.toRadians(camAz), el = Math.toRadians(camEl);
-        double cAz = Math.cos(az), sAz = Math.sin(az), cEl = Math.cos(el), sEl = Math.sin(el);
         return p[0] * cAz * cEl + p[1] * sAz * cEl + p[2] * sEl;
     }
 
@@ -891,8 +896,6 @@ public class ArmPanel extends JPanel
     }
 
     int[] project(double[] p, int cx, int cy) {
-        double az = Math.toRadians(camAz), el = Math.toRadians(camEl);
-        double cAz = Math.cos(az), sAz = Math.sin(az), cEl = Math.cos(el), sEl = Math.sin(el);
         double vx = -p[0] * sAz + p[1] * cAz;
         double vy = -p[0] * cAz * sEl - p[1] * sAz * sEl + p[2] * cEl;
         double vz = p[0] * cAz * cEl + p[1] * sAz * cEl + p[2] * sEl;
