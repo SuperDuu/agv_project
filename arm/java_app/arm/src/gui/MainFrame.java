@@ -1789,7 +1789,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                                          : new double[]{activeAlpha - 15, activeAlpha, activeAlpha + 15};
         
         for (double alphaDeg : alphaGrid) {
-            java.util.List<double[]> sols = tryAlpha(px, py, pz, alphaDeg, isRight, isRight ? anglesRight : anglesLeft, Double.NaN, true);
+            java.util.List<double[]> sols = tryAlpha(px, py, pz, alphaDeg, isRight, isRight ? anglesRight : anglesLeft, Double.NaN, false);
             for (double[] q : sols) {
                 // Ensure unique solutions roughly
                 boolean isDuplicate = false;
@@ -2042,7 +2042,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double aEnd = fixedGround ? 30 : (trajectoryLastAlpha + 18);
         double aStep = fixedGround ? 3.0 : 1.0;
         for (double a = aStart; a <= aEnd; a += aStep) {
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw, true);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw, false);
             for (double[] q : candidates) {
                 // Reject candidates with a huge joint jump (> 30 degrees) to prevent wild/erratic movements
                 boolean hasHugeJump = false;
@@ -2096,7 +2096,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (bestStrictQ == null && !fixedGround) {
             String[] cfgFallback = cfgCandidates;
             for (double a = -90; a <= 30; a += 1.5) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw, true);
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw, false);
                 for (double[] q : candidates) {
                     // Reject candidates with a huge joint jump (> 30 degrees) to prevent wild/erratic movements
                     boolean hasHugeJump = false;
@@ -2359,7 +2359,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double aEnd = fixedGround ? 30 : (activeAlpha + 18);
         double aStep = fixedGround ? 3.0 : 1.0;
         for (double a = aStart; a <= aEnd; a += aStep) {
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, false);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr <= TRAJ_STRICT_ERROR) {
@@ -2380,7 +2380,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // 2. Fallback to basic geometric IK with 15mm tolerance (class 1)
         if (fixedGround) {
             for (double a = -90; a <= 30; a += 5.0) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, false);
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRight);
                     if (posErr <= MAX_IK_POSITION_ERROR) {
@@ -2393,7 +2393,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // Chế độ tự do: tìm xung quanh alpha hiện tại trước, sau đó tìm toàn cục
         for (double a = activeAlpha - 15; a <= activeAlpha + 15; a += 5.0) {
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, false);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr <= MAX_IK_POSITION_ERROR) {
@@ -2402,7 +2402,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         }
         for (double a = -90; a <= 30; a += 10.0) {
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, false);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr <= MAX_IK_POSITION_ERROR) {
@@ -2576,7 +2576,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             
             // Try alpha=0 first, then expand outward in larger steps to save CPU
             for (double a = -90; a <= 30; a += 15.0) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, false);
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRight);
                     if (posErr > MAX_IK_POSITION_ERROR) {
@@ -2621,7 +2621,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         for (double a = currentAlpha - 15; a <= currentAlpha + 15; a += 5.0) {
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, false);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr > MAX_IK_POSITION_ERROR) {
@@ -2657,7 +2657,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         for (double a = -90; a <= 30; a += 15.0) {
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, false);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr > MAX_IK_POSITION_ERROR) {
@@ -2813,7 +2813,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return diff;
     }
 
-    private List<double[]> tryAlpha(double px, double py, double pz, double alphaDeg, boolean isRight, double[] qRef, double preferredYaw, boolean allOffsets) {
+    private List<double[]> tryAlpha(double px, double py, double pz, double alphaDeg, boolean isRight, double[] qRef, double preferredYaw, boolean findOneOnly) {
         List<double[]> validSolutions = new ArrayList<>();
         double alpha_rad = Math.toRadians(alphaDeg);
         double q1_min = isRight ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];
@@ -2824,14 +2824,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
         double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
 
-        Double[] yawOffsets;
-        if (allOffsets) {
-            yawOffsets = new Double[]{ 0.0, -15.0, 15.0, -30.0, 30.0, -45.0, 45.0, -60.0, 60.0, -75.0, 75.0, -90.0, 90.0 };
-            if (!Double.isNaN(preferredYaw)) {
-                java.util.Arrays.sort(yawOffsets, (a, b) -> Double.compare(Math.abs(a - preferredYaw), Math.abs(b - preferredYaw)));
-            }
-        } else {
-            yawOffsets = new Double[]{ Double.isNaN(preferredYaw) ? 0.0 : preferredYaw };
+        Double[] yawOffsets = { 0.0, -15.0, 15.0, -30.0, 30.0, -45.0, 45.0, -60.0, 60.0, -75.0, 75.0, -90.0, 90.0 };
+        if (!Double.isNaN(preferredYaw)) {
+            java.util.Arrays.sort(yawOffsets, (a, b) -> Double.compare(Math.abs(a - preferredYaw), Math.abs(b - preferredYaw)));
         }
 
         double[] activeAngles = qRef;
@@ -2862,13 +2857,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
             
             double[] q = solveIK(px, py, pz, R_target, qInit, isRight);
-            // Debug prints removed to prevent console flood and performance lag
             if (q != null && isWithinLimits(q, isRight)) {
                 addUniqueSolution(validSolutions, q);
+                if (findOneOnly) return validSolutions;
             }
 
             // --- Strategy 2: ALWAYS try diverse cold-start initial guesses ---
-            // Try both configurations (+ and -) for the cold start to enable configuration flipping
             double[] q3_options = isRight ? new double[] { 0.3, -0.3 } : new double[] { -0.3, 0.3 };
             double[] q4_options = isRight ? new double[] { -35.0, 35.0 } : new double[] { 35.0, -35.0 };
             
@@ -2878,7 +2872,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 double q4_val = Math.toRadians(q4_options[cfgIdx]);
                 for (double q2_val : q2_guesses) {
                     double[] qHome = new double[NUM_JOINTS];
-                    qHome[0] = yaw;  // Use geometric yaw angle, NOT qRef[0]
+                    qHome[0] = yaw;
                     qHome[1] = q2_val;
                     qHome[2] = q3_val;
                     qHome[3] = q4_val;
@@ -2886,13 +2880,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     double[] q2 = solveIK(px, py, pz, R_target, qHome, isRight);
                     if (q2 != null && isWithinLimits(q2, isRight)) {
                         addUniqueSolution(validSolutions, q2);
+                        if (findOneOnly) return validSolutions;
                     }
                 }
             }
             
-            // --- Strategy 3: Try with qRef[0] as q1 (original fallback behavior) ---
-            // This covers cases where warm-start q1 is actually correct
-            if (Math.abs(qInit[0] - yaw) > 0.15) { // Only if different from Strategy 2
+            // --- Strategy 3: Try with qRef[0] as q1 ---
+            if (Math.abs(qInit[0] - yaw) > 0.15) {
                 for (int cfgIdx = 0; cfgIdx < 2; cfgIdx++) {
                     double q3_val = q3_options[cfgIdx];
                     double q4_val = Math.toRadians(q4_options[cfgIdx]);
@@ -2906,6 +2900,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         double[] q3 = solveIK(px, py, pz, R_target, qAlt, isRight);
                         if (q3 != null && isWithinLimits(q3, isRight)) {
                             addUniqueSolution(validSolutions, q3);
+                            if (findOneOnly) return validSolutions;
                         }
                     }
                 }
