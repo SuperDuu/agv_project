@@ -2,7 +2,7 @@ package kinematics;
 
 public class Kinematics {
     public static final boolean IK_AUDIT_ENABLED = false;
-    public static boolean useJni = false;
+    public static int solverMode = 0; // 0 = Java Numerical, 1 = C++ JNI Numerical, 2 = C++ JNI IKFast
 
     // Các thông số của Robot 6DOF từ ARM.m
     public static final int NUM_JOINTS = 6;
@@ -33,8 +33,8 @@ public class Kinematics {
     }
 
     public static double[] solveIK(double px, double py, double pz, double[][] R_target, double[] qInitRad, boolean isRight) {
-        if (useJni && JniKinematics.isLoaded()) {
-            double[] sol = JniKinematics.solveIKNative(px, py, pz, R_target, qInitRad, isRight);
+        if (solverMode > 0 && JniKinematics.isLoaded()) {
+            double[] sol = JniKinematics.solveIKNative(px, py, pz, R_target, qInitRad, isRight, solverMode);
             if (sol != null) {
                 return sol;
             }

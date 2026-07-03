@@ -10,10 +10,10 @@ extern "C" {
 /*
  * Class:     kinematics_JniKinematics
  * Method:    solveIKNative
- * Signature: (DDD[[D[DZ)[D
+ * Signature: (DDD[[D[DZI)[D
  */
 JNIEXPORT jdoubleArray JNICALL Java_kinematics_JniKinematics_solveIKNative
-  (JNIEnv *, jclass, jdouble, jdouble, jdouble, jobjectArray, jdoubleArray, jboolean);
+  (JNIEnv *, jclass, jdouble, jdouble, jdouble, jobjectArray, jdoubleArray, jboolean, jint);
 
 #ifdef __cplusplus
 }

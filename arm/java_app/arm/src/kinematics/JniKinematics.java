@@ -35,8 +35,7 @@ public class JniKinematics {
 
     /**
      * Native IK Solver.
-     * Calls C++ JNI library which executes IKFast / Orocos KDL.
-     * Returns double[6] angles in degrees, or null if no solution.
+     * mode: 1 = C++ Numerical (DLS), 2 = C++ Analytical (IKFast Approximation)
      */
-    public static native double[] solveIKNative(double px, double py, double pz, double[][] R_target, double[] qInitRad, boolean isRight);
+    public static native double[] solveIKNative(double px, double py, double pz, double[][] R_target, double[] qInitRad, boolean isRight, int mode);
 }

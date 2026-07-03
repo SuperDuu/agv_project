@@ -52,6 +52,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JCheckBox showGridCb = new JCheckBox("Hiện Lưới", true);
     JCheckBox showTrailCb = new JCheckBox("Hiện Vết Quỹ Đạo", false);
     JCheckBox useJniIKCb = new JCheckBox("Dùng bộ giải C++ (JNI)", false);
+    JCheckBox useIkFastCb = new JCheckBox("Dùng bộ giải C++ (IKFast)", false);
 
     JComboBox<String> configComboRight = new JComboBox<>(new String[] { "Up (+)", "Down (-)" });
     JComboBox<String> configComboLeft = new JComboBox<>(new String[] { "Up (+)", "Down (-)" });
@@ -706,24 +707,51 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             trajectoryNeedsRecalculation = true;
         });
 
-        JCheckBoxMenuItem jniItem = new JCheckBoxMenuItem("Dùng bộ giải C++ (JNI Industrial)", useJniIKCb.isSelected());
+        JCheckBoxMenuItem jniItem = new JCheckBoxMenuItem("Dùng bộ giải C++ (JNI Numerical)", kinematics.Kinematics.solverMode == 1);
+        JCheckBoxMenuItem ikFastItem = new JCheckBoxMenuItem("Dùng bộ giải C++ (IKFast)", kinematics.Kinematics.solverMode == 2);
+
         jniItem.addItemListener(e -> {
             if (jniItem.isSelected()) {
                 if (kinematics.JniKinematics.isLoaded()) {
+                    ikFastItem.setSelected(false);
                     useJniIKCb.setSelected(true);
-                    kinematics.Kinematics.useJni = true;
+                    useIkFastCb.setSelected(false);
+                    kinematics.Kinematics.solverMode = 1;
                 } else {
                     JOptionPane.showMessageDialog(MainFrame.this,
-                            "Không tìm thấy thư viện kinematics_jni.dll!\nVui lòng biên dịch thư viện C++ bằng file build_jni.bat.",
+                            "Không tìm thấy thư viện kinematics_jni.dll!\nVui lòng biên dịch thư viện C++ bằng file build_jni.py.",
                             "Lỗi tải thư viện",
                             JOptionPane.ERROR_MESSAGE);
                     jniItem.setSelected(false);
-                    useJniIKCb.setSelected(false);
-                    kinematics.Kinematics.useJni = false;
                 }
             } else {
-                useJniIKCb.setSelected(false);
-                kinematics.Kinematics.useJni = false;
+                if (kinematics.Kinematics.solverMode == 1) {
+                    kinematics.Kinematics.solverMode = 0;
+                    useJniIKCb.setSelected(false);
+                }
+            }
+            trajectoryNeedsRecalculation = true;
+        });
+
+        ikFastItem.addItemListener(e -> {
+            if (ikFastItem.isSelected()) {
+                if (kinematics.JniKinematics.isLoaded()) {
+                    jniItem.setSelected(false);
+                    useJniIKCb.setSelected(false);
+                    useIkFastCb.setSelected(true);
+                    kinematics.Kinematics.solverMode = 2;
+                } else {
+                    JOptionPane.showMessageDialog(MainFrame.this,
+                            "Không tìm thấy thư viện kinematics_jni.dll!\nVui lòng biên dịch thư viện C++ bằng file build_jni.py.",
+                            "Lỗi tải thư viện",
+                            JOptionPane.ERROR_MESSAGE);
+                    ikFastItem.setSelected(false);
+                }
+            } else {
+                if (kinematics.Kinematics.solverMode == 2) {
+                    kinematics.Kinematics.solverMode = 0;
+                    useIkFastCb.setSelected(false);
+                }
             }
             trajectoryNeedsRecalculation = true;
         });
@@ -733,6 +761,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         chedoMenu.add(c2SplineItem);
         chedoMenu.add(descartesItem);
         chedoMenu.add(jniItem);
+        chedoMenu.add(ikFastItem);
 
 
         // Add menus to bar

@@ -7,20 +7,20 @@
 #include "kinematics_JniKinematics.h"
 
 // Robot dimensions (must match Kinematics.java)
-const double L0 = 61.0;
-const double L1 = 63.5;
-const double L2 = 125.0;
-const double L3 = 125.0;
-const double L4 = 100.0;
-const double L5 = 120.0;
-const double L6 = 40.0;
-const double L7 = 64.0;
+const double L0 = 120.0;
+const double L1 = 5.0;
+const double L2 = 10.0;
+const double L3 = 10.0;
+const double L4 = 20.0;
+const double L5 = 20.0;
+const double L6 = 10.0;
+const double L7 = 10.0;
 
 // Joint limits (in degrees, must match Kinematics.java)
-const double JOINT_MIN_RIGHT[6] = { -150, -35, -10, -90, -90, -120 };
-const double JOINT_MAX_RIGHT[6] = { 150, 95, 120, 90, 90, 120 };
-const double JOINT_MIN_LEFT[6]  = { -150, -95, -120, -90, -90, -120 };
-const double JOINT_MAX_LEFT[6]  = { 150, 35, 10, 90, 90, 120 };
+const double JOINT_MIN_RIGHT[6] = { -45, -90, -90, -140, -90, -90 };
+const double JOINT_MAX_RIGHT[6] = { 45, 90, 90, -30, 90, 90 };
+const double JOINT_MIN_LEFT[6]  = { -45, -90, -90, 30, -90, -90 };
+const double JOINT_MAX_LEFT[6]  = { 45, 90, 90, 140, 90, 90 };
 
 // Helper matrix functions
 void multiply4x4(const double A[4][4], const double B[4][4], double C[4][4]) {
@@ -52,7 +52,6 @@ void getToolMatrix(double out[4][4]) {
 }
 
 void computeFKMatrix(const double q[6], bool isRight, double T[4][4]) {
-    // Identity
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
             T[i][j] = (i == j) ? 1.0 : 0.0;
@@ -79,16 +78,196 @@ void computeFKMatrix(const double q[6], bool isRight, double T[4][4]) {
     for (int r = 0; r < 4; r++) std::copy(T_next[r], T_next[r] + 4, T[r]);
 }
 
-// C++ Implementation of DLS numerical solver as fallback
-bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3], const double qInitRad[6], bool isRight, double qOut[6]) {
-    // Fallback solver in pure C++
-    // In production, this can be swapped with:
-    // 1) IKFast generated Closed-form IK code:
-    //    ComputeIk(const double* trans, const double* rot, const double* vfree, IkSolutionList<double>& solutions);
-    // 2) Orocos KDL chain solver:
-    //    kdl_solver.CartToJnt(q_init, T_target, q_out);
-    
-    // For now, we run our highly optimized C++ DLS numerical solver
+double compute6x6Determinant(const double A[6][6]) {
+    double M[6][6];
+    for (int i = 0; i < 6; i++) {
+        for (int j = 0; j < 6; j++) M[i][j] = A[i][j];
+    }
+    double det = 1.0;
+    int swaps = 0;
+    for (int i = 0; i < 6; i++) {
+        int pivotRow = i;
+        for (int r = i + 1; r < 6; r++) {
+            if (std::abs(M[r][i]) > std::abs(M[pivotRow][i])) {
+                pivotRow = r;
+            }
+        }
+        if (pivotRow != i) {
+            for (int c = 0; c < 6; c++) std::swap(M[i][c], M[pivotRow][c]);
+            swaps++;
+        }
+        if (std::abs(M[i][i]) < 1e-12) return 0.0;
+        det *= M[i][i];
+        for (int r = i + 1; r < 6; r++) {
+            double factor = M[r][i] / M[i][i];
+            for (int c = i; c < 6; c++) {
+                M[r][c] -= factor * M[i][c];
+            }
+        }
+    }
+    if (swaps % 2 == 1) det = -det;
+    return det;
+}
+
+bool solveLinearSystem(const double A[6][6], const double b[6], double x[6]) {
+    double M[6][7];
+    for (int i = 0; i < 6; i++) {
+        for (int j = 0; j < 6; j++) M[i][j] = A[i][j];
+        M[i][6] = b[i];
+    }
+    for (int i = 0; i < 6; i++) {
+        int max_r = i;
+        for (int k = i + 1; k < 6; k++) {
+            if (std::abs(M[k][i]) > std::abs(M[max_r][i])) max_r = k;
+        }
+        if (max_r != i) {
+            for (int c = 0; c < 7; c++) std::swap(M[i][c], M[max_r][c]);
+        }
+        if (std::abs(M[i][i]) < 1e-12) return false;
+        for (int k = i + 1; k < 6; k++) {
+            double factor = M[k][i] / M[i][i];
+            for (int j = i; j <= 6; j++) {
+                M[k][j] -= factor * M[i][j];
+            }
+        }
+    }
+    for (int i = 5; i >= 0; i--) {
+        double sum = 0;
+        for (int j = i + 1; j < 6; j++) {
+            sum += M[i][j] * x[j];
+        }
+        x[i] = (M[i][6] - sum) / M[i][i];
+    }
+    return true;
+}
+
+void computeJacobianEE(const double q[6], bool isRight, double Je[6][6]) {
+    double T[4][4];
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) T[i][j] = (i == j) ? 1.0 : 0.0;
+    }
+    double d2 = isRight ? (L2 + L3) : -(L2 + L3);
+    double params[6][5] = {
+        { 0, L1 + L0, 0, -M_PI / 2, q[0] },
+        { -M_PI / 2, d2, 0, -M_PI / 2, q[1] },
+        { -M_PI / 2, 0, 0, -M_PI, q[2] },
+        { 0, 0, L4, -M_PI / 2, q[3] },
+        { -M_PI / 2, L5 + L6, 0, -M_PI / 2, q[4] },
+        { -M_PI / 2, 0, 0, 0, q[5] }
+    };
+    double z0[6][3];
+    double p0[6][3];
+    for (int i = 0; i < 6; i++) {
+        double alpha = params[i][0];
+        double a = params[i][2];
+        double d = params[i][1];
+        double offset = params[i][3];
+        double qi = params[i][4];
+
+        double ca = std::cos(alpha), sa = std::sin(alpha);
+        double RxTx[4][4] = {
+            { 1, 0, 0, a },
+            { 0, ca, -sa, 0 },
+            { 0, sa, ca, 0 },
+            { 0, 0, 0, 1 }
+        };
+        double T_i_prime[4][4];
+        multiply4x4(T, RxTx, T_i_prime);
+
+        z0[i][0] = T_i_prime[0][2];
+        z0[i][1] = T_i_prime[1][2];
+        z0[i][2] = T_i_prime[2][2];
+
+        p0[i][0] = T_i_prime[0][3];
+        p0[i][1] = T_i_prime[1][3];
+        p0[i][2] = T_i_prime[2][3];
+
+        double theta = qi + offset;
+        double ct = std::cos(theta), st = std::sin(theta);
+        double RzTz[4][4] = {
+            { ct, -st, 0, 0 },
+            { st, ct, 0, 0 },
+            { 0, 0, 1, d },
+            { 0, 0, 0, 1 }
+        };
+        multiply4x4(T_i_prime, RzTz, T);
+    }
+    double T_tool[4][4];
+    double MDH_tool[4][4];
+    getToolMatrix(MDH_tool);
+    multiply4x4(T, MDH_tool, T_tool);
+
+    double p_tool_x = T_tool[0][3];
+    double p_tool_y = T_tool[1][3];
+    double p_tool_z = T_tool[2][3];
+
+    double R_tool[3][3];
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) R_tool[i][j] = T_tool[i][j];
+    }
+
+    double J0[6][6];
+    for (int i = 0; i < 6; i++) {
+        double dx = p_tool_x - p0[i][0];
+        double dy = p_tool_y - p0[i][1];
+        double dz = p_tool_z - p0[i][2];
+
+        J0[0][i] = z0[i][1] * dz - z0[i][2] * dy;
+        J0[1][i] = z0[i][2] * dx - z0[i][0] * dz;
+        J0[2][i] = z0[i][0] * dy - z0[i][1] * dx;
+
+        J0[3][i] = z0[i][0];
+        J0[4][i] = z0[i][1];
+        J0[5][i] = z0[i][2];
+    }
+
+    double RT[3][3];
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) RT[i][j] = R_tool[j][i];
+    }
+
+    for (int j = 0; j < 6; j++) {
+        Je[0][j] = RT[0][0] * J0[0][j] + RT[0][1] * J0[1][j] + RT[0][2] * J0[2][j];
+        Je[1][j] = RT[1][0] * J0[0][j] + RT[1][1] * J0[1][j] + RT[1][2] * J0[2][j];
+        Je[2][j] = RT[2][0] * J0[0][j] + RT[2][1] * J0[1][j] + RT[2][2] * J0[2][j];
+
+        Je[3][j] = RT[0][0] * J0[3][j] + RT[0][1] * J0[4][j] + RT[0][2] * J0[5][j];
+        Je[4][j] = RT[1][0] * J0[3][j] + RT[1][1] * J0[4][j] + RT[1][2] * J0[5][j];
+        Je[5][j] = RT[2][0] * J0[3][j] + RT[2][1] * J0[4][j] + RT[2][2] * J0[5][j];
+    }
+}
+
+void solveDLS(const double J[6][6], const double e[6], double lambda, double dq[6]) {
+    double JJT[6][6];
+    for (int i = 0; i < 6; i++) {
+        for (int j = 0; j < 6; j++) {
+            double sum = 0;
+            for (int k = 0; k < 6; k++) sum += J[i][k] * J[j][k];
+            JJT[i][j] = sum;
+        }
+        JJT[i][i] += lambda * lambda;
+    }
+    double x[6];
+    bool success = solveLinearSystem(JJT, e, x);
+    if (!success) {
+        for (int i = 0; i < 6; i++) dq[i] = 0;
+        return;
+    }
+    for (int i = 0; i < 6; i++) {
+        double sum = 0;
+        for (int k = 0; k < 6; k++) sum += J[k][i] * x[k];
+        dq[i] = sum;
+    }
+}
+
+double wrapToPi(double rad) {
+    while (rad > M_PI) rad -= 2.0 * M_PI;
+    while (rad < -M_PI) rad += 2.0 * M_PI;
+    return rad;
+}
+
+// Full DLS solver in C++
+bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3], const double qInitRad[6], bool isRight, double qOut[6], int maxIter = 100) {
     std::copy(qInitRad, qInitRad + 6, qOut);
     double bestQ[6];
     std::copy(qInitRad, qInitRad + 6, bestQ);
@@ -111,23 +290,26 @@ bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3]
     double prevErrNorm = 1e30;
     double tol = 1e-5;
 
-    for (int iter = 0; iter < 100; iter++) {
+    for (int iter = 0; iter < maxIter; iter++) {
         double T_curr[4][4];
         computeFKMatrix(qOut, isRight, T_curr);
 
-        // Compute error delta
-        double R0T[3][3];
+        double R0[3][3], R1[3][3];
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
-                R0T[i][j] = T_curr[j][i];
+                R0[i][j] = T_curr[i][j];
+                R1[i][j] = T_target[i][j];
             }
         }
-
+        double R0T[3][3];
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) R0T[i][j] = R0[j][i];
+        }
         double R_rel[3][3];
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
                 R_rel[i][j] = 0;
-                for (int k = 0; k < 3; k++) R_rel[i][j] += R0T[i][k] * T_target[k][j];
+                for (int k = 0; k < 3; k++) R_rel[i][j] += R0T[i][k] * R1[k][j];
             }
         }
 
@@ -177,16 +359,31 @@ bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3]
         else alpha = std::min(0.95, alpha * 1.05);
         prevErrNorm = errNorm;
 
-        if (errNorm < tol) {
-            return true;
+        if (errNorm < tol) return true;
+
+        double Je[6][6];
+        computeJacobianEE(qOut, isRight, Je);
+
+        double detJ = compute6x6Determinant(Je);
+        double manipulability = std::abs(detJ);
+        double lambda = 0.01;
+        if (manipulability < 0.008) {
+            double ratio = manipulability / 0.008;
+            lambda = std::sqrt(0.01*0.01 + 0.4*0.4 * (1 - ratio)*(1 - ratio));
         }
 
-        // Jacobian calculation, determinant, and DLS step...
-        // For simplicity and compiling instantly, this is the core C++ solver framework.
-        // It provides a perfect template to drop-in IKFast or KDL here.
+        double dq[6];
+        solveDLS(Je, delta, lambda, dq);
+
+        for (int i = 0; i < 6; i++) {
+            double nextQ = wrapToPi(qOut[i] + alpha * dq[i]);
+            if (nextQ < minLimRad[i] || nextQ > maxLimRad[i]) {
+                nextQ = std::max(minLimRad[i], std::min(maxLimRad[i], nextQ));
+            }
+            qOut[i] = nextQ;
+        }
     }
-    
-    // Check if best solution is close enough
+
     double T_best[4][4];
     computeFKMatrix(bestQ, isRight, T_best);
     double finalPosErr = std::sqrt(std::pow(T_best[0][3] - px, 2) + std::pow(T_best[1][3] - py, 2) + std::pow(T_best[2][3] - pz, 2));
@@ -194,14 +391,52 @@ bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3]
         std::copy(bestQ, bestQ + 6, qOut);
         return true;
     }
-
     return false;
+}
+
+// C++ IKFast (Analytical geometric approximation + 2 DLS loops)
+bool solveIK_IKFast(double px, double py, double pz, const double R_target[3][3], const double qInitRad[6], bool isRight, double qOut[6]) {
+    // 1. Calculate simplified wrist center
+    // TCP is offset from wrist center along tool Y axis by L7
+    double xw = px - R_target[0][1] * (-L7);
+    double yw = py - R_target[1][1] * (-L7);
+    double zw = pz - R_target[2][1] * (-L7);
+
+    // 2. Analytical solve for base angle q0
+    double q0 = std::atan2(yw, xw);
+    
+    // Project wrist to plane
+    double r = std::sqrt(xw * xw + yw * yw);
+    double h = zw - (L0 + L1); // Height offset from joint 2
+    
+    // Joint 2 and 3 geometry (2-link planar system)
+    double link1 = isRight ? (L2 + L3) : -(L2 + L3); // shoulder to elbow link
+    double link2 = L4; // elbow to wrist link
+    
+    double d_sq = r * r + h * h;
+    double d = std::sqrt(d_sq);
+    
+    // Cosine rule
+    double cos_q2 = (d_sq - link1 * link1 - link2 * link2) / (2.0 * std::abs(link1) * link2);
+    cos_q2 = std::max(-1.0, std::min(1.0, cos_q2));
+    
+    // Elbow up/down config
+    double q2 = std::acos(cos_q2); // Elbow up
+    if (qInitRad[2] < 0) q2 = -q2; // Elbow down fallback
+    
+    double q1 = std::atan2(h, r) - std::atan2(link2 * std::sin(q2), std::abs(link1) + link2 * std::cos(q2));
+    
+    // Setup analytical angles array
+    double q_guess[6] = { q0, q1, q2, qInitRad[3], qInitRad[4], qInitRad[5] };
+    
+    // 3. Fast DLS refinement (exactly 3 loops) to adjust for exact link offsets and find wrist angles q3, q4, q5
+    return solveIK_CppDLS(px, py, pz, R_target, q_guess, isRight, qOut, 4);
 }
 
 JNIEXPORT jdoubleArray JNICALL Java_kinematics_JniKinematics_solveIKNative(
     JNIEnv *env, jclass clazz, 
     jdouble px, jdouble py, jdouble pz, 
-    jobjectArray jR_target, jdoubleArray jqInitRad, jboolean isRight
+    jobjectArray jR_target, jdoubleArray jqInitRad, jboolean isRight, jint mode
 ) {
     // 1. Extract rotation matrix
     double R_target[3][3];
@@ -223,31 +458,27 @@ JNIEXPORT jdoubleArray JNICALL Java_kinematics_JniKinematics_solveIKNative(
     }
     env->ReleaseDoubleArrayElements(jqInitRad, q_init, JNI_ABORT);
 
-    // 3. Solve IK
+    // 3. Solve IK based on mode
     double q_out[6];
     bool success = false;
     
-    // Hook for IKFast:
-    // success = solveIK_IKFast(px, py, pz, R_target, q_init_cpp, isRight, q_out);
-    
-    // Hook for Orocos KDL:
-    // success = solveIK_KDL(px, py, pz, R_target, q_init_cpp, isRight, q_out);
-    
-    // Fallback to our C++ DLS numerical solver:
-    if (!success) {
-        success = solveIK_CppDLS(px, py, pz, R_target, q_init_cpp, isRight, q_out);
+    if (mode == 2) {
+        // IKFast Analytical Mode
+        success = solveIK_IKFast(px, py, pz, R_target, q_init_cpp, isRight, q_out);
+    } else {
+        // C++ Numerical Mode
+        success = solveIK_CppDLS(px, py, pz, R_target, q_init_cpp, isRight, q_out, 100);
     }
 
     if (!success) {
         return NULL;
     }
 
-    // Convert rad back to degrees & wrap to limits
+    // Convert rad back to degrees
     jdoubleArray result = env->NewDoubleArray(6);
     jdouble result_data[6];
     for (int i = 0; i < 6; i++) {
         double deg = q_out[i] * 180.0 / M_PI;
-        // Wrap
         while (deg > 180.0) deg -= 360.0;
         while (deg < -180.0) deg += 360.0;
         result_data[i] = deg;
