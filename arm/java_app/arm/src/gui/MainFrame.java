@@ -125,6 +125,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     boolean ikSelectionLogEnabled = false;
     boolean useGlobalC2 = true;
     boolean useDescartesIK = true;
+    private java.util.List<double[]> lastJointTrajectory = null;
+    private java.util.List<double[]> lastCartesianPath = null;
+    private java.util.List<java.util.List<double[]>> lastCandidatesPerStep = null;
+    private int[] lastSelectedIndices = null;
 
 
     comm.UartManager uartManager = new comm.UartManager();
@@ -635,6 +639,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         });
 
+        JMenuItem analyticsItem = new JMenuItem("Phân Tích Đồ Thị Quỹ Đạo");
+        analyticsItem.setActionCommand("ShowAnalytics");
+        analyticsItem.addActionListener(menuItemListener);
+
         JMenuItem topViewItem = new JMenuItem("Hệ Trục (Top View)");
         topViewItem.setActionCommand("TopView");
         topViewItem.addActionListener(menuItemListener);
@@ -647,6 +655,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         hienthiMenu.add(trailItem);
         hienthiMenu.add(workspaceItem);
         hienthiMenu.add(workspaceSliceItem);
+        hienthiMenu.addSeparator();
+        hienthiMenu.add(analyticsItem);
         hienthiMenu.addSeparator();
         hienthiMenu.add(topViewItem);
         hienthiMenu.add(perspItem);
@@ -698,6 +708,23 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         public void actionPerformed(ActionEvent e) {
             switch (e.getActionCommand()) {
                 case "Reset" -> resetAngles();
+
+                case "ShowAnalytics" -> {
+                    if (lastJointTrajectory == null) {
+                        JOptionPane.showMessageDialog(MainFrame.this,
+                            "Chưa có quỹ đạo nào được chạy để phân tích!",
+                            "Cảnh báo", JOptionPane.WARNING_MESSAGE);
+                    } else {
+                        TrajectoryAnalyticsWindow analytics = new TrajectoryAnalyticsWindow(
+                            lastJointTrajectory,
+                            lastCartesianPath,
+                            lastCandidatesPerStep,
+                            lastSelectedIndices,
+                            isRightArmSelected
+                        );
+                        analytics.setVisible(true);
+                    }
+                }
 
                 case "TopView" -> {
                     armPanel.camAz = 0;
@@ -1313,104 +1340,96 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     rawJointTrajectory = planDescartesTrajectory(finalPath, isRight);
                 } else {
                     // BƯỚC 1: FORWARD PASS (QUÉT GIẢI VÀ ĐÁNH DẤU LỖ HỔNG) TUẦN TỰ (Greedy Warm-Start)
+                    // BƯỚC 1: FORWARD PASS (QUÉT GIẢI VÀ ĐÁNH DẤU LỖ HỔNG) TUẦN TỰ (Greedy Warm-Start)
                     rawJointTrajectory = new java.util.ArrayList<>();
+                    lastCartesianPath = finalPath;
+                    lastCandidatesPerStep = new java.util.ArrayList<>();
+                    lastSelectedIndices = new int[finalPath.size()];
+                    java.util.Arrays.fill(lastSelectedIndices, -1);
+
                     for (int i = 0; i < finalPath.size(); i++) {
                         double[] pt = finalPath.get(i);
-                    double[] result = solveIKForTrajectoryPoint(pt[0], pt[1], pt[2], true);
-                    
-                    if (result != null) {
-                        // Cập nhật Warm Start liên tục bằng kết quả giải IK (bao gồm cả relaxed/rescue)
-                        // để tránh sụp đổ dây chuyền (Cascade Null Failure)
-                        trajectoryLastQ = result.clone();
+                        double[] result = solveIKForTrajectoryPoint(pt[0], pt[1], pt[2], true);
                         
-                        double posErr = computePositionError(result, pt[0], pt[1], pt[2], isRight);
-                        if (posErr <= TRAJ_STRICT_ERROR) {
-                            rawJointTrajectory.add(result.clone());
+                        java.util.List<double[]> stepCandidates = new java.util.ArrayList<>();
+                        
+                        if (result != null) {
+                            stepCandidates.add(result.clone());
+                            lastSelectedIndices[i] = 0;
+                            lastCandidatesPerStep.add(stepCandidates);
+
+                            // Cập nhật Warm Start liên tục bằng kết quả giải IK (bao gồm cả relaxed/rescue)
+                            // để tránh sụp đổ dây chuyền (Cascade Null Failure)
+                            trajectoryLastQ = result.clone();
                             
-                            if (DEBUG) {
-                                System.out.printf("[DEBUG_TRAJ] Point %d Target=[%.2f, %.2f, %.2f] SolvedQ=[%.2f, %.2f, %.2f, %.2f, %.2f, %.2f] posErr=%.4f mm\n",
-                                    i + 1, pt[0], pt[1], pt[2], result[0], result[1], result[2], result[3], result[4], result[5], posErr * 10.0);
-                            }
-                            if (i % 5 == 0 || i == finalPath.size() - 1) {
-                                publish(String.format("Đang giải IK: %d / %d điểm (OK)", i + 1, finalPath.size()));
+                            double posErr = computePositionError(result, pt[0], pt[1], pt[2], isRight);
+                            if (posErr <= TRAJ_STRICT_ERROR) {
+                                rawJointTrajectory.add(result.clone());
+                                
+                                if (DEBUG) {
+                                    System.out.printf("[DEBUG_TRAJ] Point %d Target=[%.2f, %.2f, %.2f] SolvedQ=[%.2f, %.2f, %.2f, %.2f, %.2f, %.2f] posErr=%.4f mm\n",
+                                        i + 1, pt[0], pt[1], pt[2], result[0], result[1], result[2], result[3], result[4], result[5], posErr * 10.0);
+                                }
+                                if (i % 5 == 0 || i == finalPath.size() - 1) {
+                                    publish(String.format("Đang giải IK: %d / %d điểm (OK)", i + 1, finalPath.size()));
+                                }
+                            } else {
+                                // Nghiệm vượt quá sai số cho phép, đánh dấu lỗ hổng để vá bằng Cubic Spline
+                                rawJointTrajectory.add(null);
+                                lastSelectedIndices[i] = -1; // reset to invalid if error is too large
+                                if (DEBUG) {
+                                    System.out.printf("[DEBUG_TRAJ] Point %d Target=[%.2f, %.2f, %.2f] posErr=%.4f mm vượt quá TRAJ_STRICT_ERROR, đánh dấu lỗ hổng!\n",
+                                        i + 1, pt[0], pt[1], pt[2], posErr * 10.0);
+                                }
+                                publish(String.format("Cảnh báo: Điểm %d vượt biên (%.1f mm), đánh dấu lỗ hổng!", i + 1, posErr * 10.0));
                             }
                         } else {
-                            // Nghiệm vượt quá sai số cho phép, đánh dấu lỗ hổng để vá bằng Cubic Spline
+                            // Thử nghiệm nhánh khác (KHÔNG áp hasHugeJump ở bước tìm kiếm này)
+                            double savedAlpha = trajectoryLastAlpha;
+                            String savedCfg = trajectoryLockedCfg;
+                            double savedYawOffset = trajectoryLastYawOffset;
+
+                            double[] jumpResult = solveIKForTrajectoryPoint(pt[0], pt[1], pt[2], false);
+                            if (jumpResult != null && trajectoryLastQ != null) {
+                                // Tính toán bước nhảy lớn nhất giữa các khớp
+                                double maxJointJump = 0.0;
+                                for (int j = 0; j < NUM_JOINTS; j++) {
+                                    double diff = Math.abs(wrappedDegDiff(jumpResult[j], trajectoryLastQ[j]));
+                                    if (diff > maxJointJump) {
+                                        maxJointJump = diff;
+                                    }
+                                }
+
+                                java.util.List<double[]> transitionPoints = generateBranchTransition(trajectoryLastQ, jumpResult, isRight, i + 1);
+
+                                if (transitionPoints != null) {
+                                    publish(String.format("Chuyển nhánh tại điểm %d: chèn %d điểm thuần khớp (Cảnh báo: Lệch đường vẽ, khuyên dùng Pen-Up)", i + 1, transitionPoints.size()));
+                                    
+                                    stepCandidates.add(jumpResult.clone());
+                                    lastSelectedIndices[i] = 0;
+                                    lastCandidatesPerStep.add(stepCandidates);
+
+                                    // Chèn tất cả các điểm quá độ vào quỹ đạo
+                                    rawJointTrajectory.addAll(transitionPoints);
+                                    trajectoryLastQ = jumpResult.clone();
+                                    continue; // Bỏ qua phần ghi nhận lỗi, tiếp tục vòng lặp sang điểm tiếp theo
+                                }
+                            }
+
+                            // Nếu không thể chuyển nhánh hoặc chuyển nhánh không hợp lệ, phục hồi trạng thái cũ và coi như FAILED
+                            trajectoryLastAlpha = savedAlpha;
+                            trajectoryLockedCfg = savedCfg;
+                            trajectoryLastYawOffset = savedYawOffset;
+
+                            // IK thất bại hoàn toàn, đánh dấu lỗ hổng, giữ nguyên trajectoryLastQ cũ làm mốc gần nhất
+                            lastCandidatesPerStep.add(stepCandidates); // empty list
                             rawJointTrajectory.add(null);
                             if (DEBUG) {
-                                System.out.printf("[DEBUG_TRAJ] Point %d Target=[%.2f, %.2f, %.2f] posErr=%.4f mm vượt quá TRAJ_STRICT_ERROR, đánh dấu lỗ hổng!\n",
-                                    i + 1, pt[0], pt[1], pt[2], posErr * 10.0);
+                                System.out.printf("[DEBUG_TRAJ] Point %d FAILED! Target=[%.2f, %.2f, %.2f], đánh dấu lỗ hổng!\n", i + 1, pt[0], pt[1], pt[2]);
                             }
-                            publish(String.format("Cảnh báo: Điểm %d vượt biên (%.1f mm), đánh dấu lỗ hổng!", i + 1, posErr * 10.0));
+                            publish(String.format("Cảnh báo: Điểm %d bị kẹt (Ngoài vùng), đánh dấu lỗ hổng!", i + 1));
                         }
-                    } else {
-                        // Thử nghiệm nhánh khác (KHÔNG áp hasHugeJump ở bước tìm kiếm này)
-                        double savedAlpha = trajectoryLastAlpha;
-                        String savedCfg = trajectoryLockedCfg;
-                        double savedYawOffset = trajectoryLastYawOffset;
-
-                        double[] jumpResult = solveIKForTrajectoryPoint(pt[0], pt[1], pt[2], false);
-                        if (jumpResult != null && trajectoryLastQ != null) {
-                            // Tính toán bước nhảy lớn nhất giữa các khớp
-                            double maxJointJump = 0.0;
-                            for (int j = 0; j < NUM_JOINTS; j++) {
-                                double diff = Math.abs(wrappedDegDiff(jumpResult[j], trajectoryLastQ[j]));
-                                if (diff > maxJointJump) {
-                                    maxJointJump = diff;
-                                }
-                            }
-
-                            // Chèn đoạn quá độ N điểm phụ, mỗi bước không quá 15°
-                            int N = (int) Math.ceil(maxJointJump / 15.0);
-                            if (N < 1) N = 1;
-                            
-                            boolean transitionValid = true;
-                            java.util.List<double[]> transitionPoints = new java.util.ArrayList<>();
-                            for (int step = 1; step <= N; step++) {
-                                double factor = (double) step / N;
-                                double[] interp = new double[NUM_JOINTS];
-                                for (int j = 0; j < NUM_JOINTS; j++) {
-                                    double diff = wrappedDegDiff(jumpResult[j], trajectoryLastQ[j]);
-                                    double q_val = trajectoryLastQ[j] + diff * factor;
-                                    while (q_val > 180.0)  q_val -= 360.0;
-                                    while (q_val < -180.0) q_val += 360.0;
-                                    interp[j] = q_val;
-                                }
-                                if (!isWithinLimits(interp, isRight)) {
-                                    transitionValid = false;
-                                    break;
-                                }
-                                transitionPoints.add(interp);
-                            }
-
-                            if (transitionValid) {
-                                if (DEBUG) {
-                                    System.out.printf("[DEBUG_TRAJ] Point %d: PHÁT HIỆN CẦN CHUYỂN NHÁNH! Chèn %d điểm quá độ thuần khớp (bước nhảy tối đa %.2f độ).\n", 
-                                        i + 1, N, maxJointJump);
-                                    System.out.println("[DEBUG_TRAJ] CẢNH BÁO: Đoạn chuyển tiếp là nội suy thuần khớp (joint-space). Đầu công cụ sẽ lệch khỏi mặt phẳng Cartesian/đường vẽ. Cần nhấc bút (pen-up) nếu đang vẽ!");
-                                }
-                                publish(String.format("Chuyển nhánh tại điểm %d: chèn %d điểm thuần khớp (Cảnh báo: Lệch đường vẽ, khuyên dùng Pen-Up)", i + 1, N));
-                                
-                                // Chèn tất cả các điểm quá độ vào quỹ đạo
-                                rawJointTrajectory.addAll(transitionPoints);
-                                trajectoryLastQ = jumpResult.clone();
-                                continue; // Bỏ qua phần ghi nhận lỗi, tiếp tục vòng lặp sang điểm tiếp theo
-                            }
-                        }
-
-                        // Nếu không thể chuyển nhánh hoặc chuyển nhánh không hợp lệ, phục hồi trạng thái cũ và coi như FAILED
-                        trajectoryLastAlpha = savedAlpha;
-                        trajectoryLockedCfg = savedCfg;
-                        trajectoryLastYawOffset = savedYawOffset;
-
-                        // IK thất bại hoàn toàn, đánh dấu lỗ hổng, giữ nguyên trajectoryLastQ cũ làm mốc gần nhất
-                        rawJointTrajectory.add(null);
-                        if (DEBUG) {
-                            System.out.printf("[DEBUG_TRAJ] Point %d FAILED! Target=[%.2f, %.2f, %.2f], đánh dấu lỗ hổng!\n", i + 1, pt[0], pt[1], pt[2]);
-                        }
-                        publish(String.format("Cảnh báo: Điểm %d bị kẹt (Ngoài vùng), đánh dấu lỗ hổng!", i + 1));
                     }
-                }
                 } // End of else block (Sequential Warm-Start)
 
                 // THÊM BỘ KHỐNG CHẾ KHOẢNG CÁCH VÁ (GAP LIMITER)
@@ -1494,6 +1513,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         setTargetAnglesLeft(startResult);
                     }
                     updateArm();
+
+                    lastJointTrajectory = jointTrajectory;
+                    SwingUtilities.invokeLater(() -> {
+                        TrajectoryAnalyticsWindow analytics = new TrajectoryAnalyticsWindow(
+                            lastJointTrajectory,
+                            lastCartesianPath,
+                            lastCandidatesPerStep,
+                            lastSelectedIndices,
+                            isRight
+                        );
+                        analytics.setVisible(true);
+                    });
 
                     setGotoStatus("Tính toán xong. Đang di chuyển đến điểm bắt đầu...", new Color(0, 90, 180));
 
@@ -1691,8 +1722,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return cost;
     }
 
-    private java.util.List<double[]> generateAllValidIK(double px, double py, double pz, boolean isRight) {
-        java.util.List<double[]> allSolutions = new java.util.ArrayList<>();
+    private static class DescartesNode {
+        double[] q;
+        double alphaDeg;
+        double yawOffsetDeg;
+        public DescartesNode(double[] q, double alpha, double yaw) {
+            this.q = q;
+            this.alphaDeg = alpha;
+            this.yawOffsetDeg = yaw;
+        }
+    }
+
+    private java.util.List<DescartesNode> generateAllValidIK(double px, double py, double pz, boolean isRight) {
+        java.util.List<DescartesNode> allSolutions = new java.util.ArrayList<>();
         double activeAlpha = isRight ? activeAlphaRight : activeAlphaLeft;
         
         JComboBox<String> gCombo = isRight ? gripperModeComboRight : gripperModeComboLeft;
@@ -1707,10 +1749,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             for (double[] q : sols) {
                 // Ensure unique solutions roughly
                 boolean isDuplicate = false;
-                for (double[] existing : allSolutions) {
+                for (DescartesNode existing : allSolutions) {
                     double diff = 0;
                     for (int j = 0; j < 6; j++) {
-                        diff += Math.abs(wrappedDegDiff(q[j], existing[j]));
+                        diff += Math.abs(wrappedDegDiff(q[j], existing.q[j]));
                     }
                     if (diff < 1.0) {
                         isDuplicate = true;
@@ -1718,7 +1760,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     }
                 }
                 if (!isDuplicate && isWithinLimits(q, isRight)) {
-                    allSolutions.add(q);
+                    double posErr = computePositionError(q, px, py, pz, isRight);
+                    if (posErr <= TRAJ_STRICT_ERROR) {
+                        // Estimate yaw offset
+                        double q1_base = isRight ? Math.atan2(py, px) : -Math.atan2(py, -px);
+                        double yawOffset = Math.toDegrees(q[0] - q1_base);
+                        while(yawOffset > 180) yawOffset -= 360;
+                        while(yawOffset < -180) yawOffset += 360;
+                        
+                        allSolutions.add(new DescartesNode(q, alphaDeg, yawOffset));
+                    }
                 }
             }
         }
@@ -1727,13 +1778,23 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private java.util.List<double[]> planDescartesTrajectory(java.util.List<double[]> path, boolean isRight) throws Exception {
         int N = path.size();
-        java.util.List<java.util.List<double[]>> layers = new java.util.ArrayList<>();
+        java.util.List<java.util.List<DescartesNode>> layers = new java.util.ArrayList<>();
         java.util.List<Integer> validIndices = new java.util.ArrayList<>();
         
+        java.util.List<java.util.List<double[]>> candidatesPerStep = new java.util.ArrayList<>();
+        int[] selectedIndices = new int[N];
+        java.util.Arrays.fill(selectedIndices, -1);
+
         // Step 1: Generate graph layers (only for reachable points)
         for (int i = 0; i < N; i++) {
             double[] pt = path.get(i);
-            java.util.List<double[]> sols = generateAllValidIK(pt[0], pt[1], pt[2], isRight);
+            java.util.List<DescartesNode> sols = generateAllValidIK(pt[0], pt[1], pt[2], isRight);
+            java.util.List<double[]> stepCandidates = new java.util.ArrayList<>();
+            for (DescartesNode n : sols) {
+                stepCandidates.add(n.q.clone());
+            }
+            candidatesPerStep.add(stepCandidates);
+
             if (!sols.isEmpty()) {
                 layers.add(sols);
                 validIndices.add(i);
@@ -1741,6 +1802,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
         
         if (layers.isEmpty()) {
+            this.lastCartesianPath = path;
+            this.lastCandidatesPerStep = candidatesPerStep;
+            this.lastSelectedIndices = selectedIndices;
             // No reachable points in the entire path
             java.util.List<double[]> finalPath = new java.util.ArrayList<>();
             for(int i = 0; i < N; i++) finalPath.add(null);
@@ -1758,23 +1822,23 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         
         double[] currentAngles = isRight ? anglesRight : anglesLeft;
         for (int k = 0; k < layers.get(0).size(); k++) {
-            dp[0][k] = calculateEdgeCost(currentAngles, layers.get(0).get(k));
+            dp[0][k] = calculateEdgeCost(currentAngles, layers.get(0).get(k).q);
             parent[0][k] = -1;
         }
         
         for (int i = 1; i < numLayers; i++) {
-            java.util.List<double[]> prevLayer = layers.get(i-1);
-            java.util.List<double[]> currLayer = layers.get(i);
+            java.util.List<DescartesNode> prevLayer = layers.get(i-1);
+            java.util.List<DescartesNode> currLayer = layers.get(i);
             dp[i] = new double[currLayer.size()];
             parent[i] = new int[currLayer.size()];
             
             for (int currNode = 0; currNode < currLayer.size(); currNode++) {
                 double minCost = Double.POSITIVE_INFINITY;
                 int bestPrevNode = -1;
-                double[] qCurr = currLayer.get(currNode);
+                double[] qCurr = currLayer.get(currNode).q;
                 
                 for (int prevNode = 0; prevNode < prevLayer.size(); prevNode++) {
-                    double[] qPrev = prevLayer.get(prevNode);
+                    double[] qPrev = prevLayer.get(prevNode).q;
                     double edgeCost = calculateEdgeCost(qPrev, qCurr);
                     double totalCost = dp[i-1][prevNode] + edgeCost;
                     if (totalCost < minCost) {
@@ -1797,12 +1861,43 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         }
         
-        java.util.List<double[]> optimalValidPath = new java.util.ArrayList<>();
+        java.util.List<DescartesNode> optimalValidNodes = new java.util.ArrayList<>();
         int currNode = bestLastNode;
         for (int i = numLayers - 1; i >= 0; i--) {
-            optimalValidPath.add(0, layers.get(i).get(currNode));
+            DescartesNode selectedNodeForLayer = layers.get(i).get(currNode);
+            optimalValidNodes.add(0, selectedNodeForLayer);
+            
+            int originalStepIdx = validIndices.get(i);
+            java.util.List<double[]> stepCandidates = candidatesPerStep.get(originalStepIdx);
+            for (int k = 0; k < stepCandidates.size(); k++) {
+                boolean match = true;
+                for (int joint = 0; joint < 6; joint++) {
+                    if (Math.abs(stepCandidates.get(k)[joint] - selectedNodeForLayer.q[joint]) > 1e-5) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) {
+                    selectedIndices[originalStepIdx] = k;
+                    break;
+                }
+            }
+
             currNode = parent[i][currNode];
         }
+        
+        // Save terminal state to global UI variables
+        if (!optimalValidNodes.isEmpty()) {
+            DescartesNode lastNode = optimalValidNodes.get(optimalValidNodes.size() - 1);
+            trajectoryLastQ = lastNode.q.clone();
+            trajectoryLastAlpha = lastNode.alphaDeg;
+            trajectoryLastYawOffset = lastNode.yawOffsetDeg;
+            trajectoryLockedCfg = lastNode.q[3] > 0 ? "+" : "-"; 
+        }
+        
+        this.lastCartesianPath = path;
+        this.lastCandidatesPerStep = candidatesPerStep;
+        this.lastSelectedIndices = selectedIndices;
         
         // Step 4: Construct final path with missing 'null' gaps and branch transition nodes
         java.util.List<double[]> finalPath = new java.util.ArrayList<>();
@@ -1811,33 +1906,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         
         for (int i = 0; i < N; i++) {
             if (validPtr < validIndices.size() && validIndices.get(validPtr) == i) {
-                double[] qNext = optimalValidPath.get(validPtr);
+                double[] qNext = optimalValidNodes.get(validPtr).q;
                 
                 if (qRef != null) {
-                    double maxJump = 0.0;
-                    for (int j = 0; j < 6; j++) {
-                        double diff = Math.abs(wrappedDegDiff(qNext[j], qRef[j]));
-                        if (diff > maxJump) maxJump = diff;
-                    }
-                    
-                    if (maxJump > 30.0) {
-                        int M = (int) Math.ceil(maxJump / 15.0);
-                        if (M < 1) M = 1;
-                        if (DEBUG) {
-                            System.out.printf("[DEBUG_DESCARTES] Điểm %d: Phát hiện lật cấu hình (Jump=%.1f) -> Chèn %d điểm\n", i, maxJump, M);
-                            System.out.println("[DEBUG_TRAJ] CẢNH BÁO: Đoạn chuyển tiếp là nội suy thuần khớp (joint-space). Cần nhấc bút (pen-up)!");
-                        }
-                        for (int step = 1; step <= M; step++) {
-                            double factor = (double) step / M;
-                            double[] interp = new double[6];
-                            for (int j = 0; j < 6; j++) {
-                                double diff = wrappedDegDiff(qNext[j], qRef[j]);
-                                interp[j] = qRef[j] + diff * factor;
-                                while (interp[j] > 180) interp[j] -= 360;
-                                while (interp[j] < -180) interp[j] += 360;
-                            }
-                            finalPath.add(interp);
-                        }
+                    java.util.List<double[]> transitionPoints = generateBranchTransition(qRef, qNext, isRight, i);
+                    if (transitionPoints != null && !transitionPoints.isEmpty()) {
+                        finalPath.addAll(transitionPoints);
                     }
                 }
                 
@@ -1849,6 +1923,41 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         }
         return finalPath;
+    }
+
+    private java.util.List<double[]> generateBranchTransition(double[] qRef, double[] qNext, boolean isRight, int index) {
+        double maxJump = 0.0;
+        for (int j = 0; j < 6; j++) {
+            double diff = Math.abs(wrappedDegDiff(qNext[j], qRef[j]));
+            if (diff > maxJump) maxJump = diff;
+        }
+        
+        if (maxJump > 30.0) {
+            int M = (int) Math.ceil(maxJump / 15.0);
+            if (M < 1) M = 1;
+            if (DEBUG) {
+                System.out.printf("[DEBUG_TRAJ] Điểm %d: Phát hiện lật cấu hình (Jump=%.1f) -> Chèn %d điểm quá độ thuần khớp\n", index, maxJump, M);
+            }
+            java.util.List<double[]> transitionPoints = new java.util.ArrayList<>();
+            for (int step = 1; step <= M; step++) {
+                double factor = (double) step / M;
+                double[] interp = new double[6];
+                for (int j = 0; j < 6; j++) {
+                    double diff = wrappedDegDiff(qNext[j], qRef[j]);
+                    interp[j] = qRef[j] + diff * factor;
+                    while (interp[j] > 180) interp[j] -= 360;
+                    while (interp[j] < -180) interp[j] += 360;
+                }
+                // Check if interpolated points hit joint limits. For DP, it's safer to clamp if they do, but let's just test limits.
+                if (!isWithinLimits(interp, isRight)) {
+                    if (DEBUG) System.out.println("[DEBUG_TRAJ] Interpolated point hits limit, returning null.");
+                    return null;
+                }
+                transitionPoints.add(interp);
+            }
+            return transitionPoints;
+        }
+        return new java.util.ArrayList<>();
     }
 
     private double[] solveIKForTrajectoryPoint(double px, double py, double pz, boolean enforceJumpLimit) {
