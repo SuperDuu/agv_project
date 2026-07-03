@@ -17,9 +17,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     /** Set to false for demos to suppress debug output. Set to true during development. */
     public static final boolean DEBUG = true;
 
-    private static final double MAX_IK_POSITION_ERROR = 1.5; // General IK threshold (allow a bit of error)
-    private static final double TRAJ_RELAXED_ERROR = 2.50; // Trajectory fallback threshold
-    private static final double TRAJ_STRICT_ERROR = 0.50; // Trajectory strict tracking threshold (5.0 mm)
+    private static final double MAX_IK_POSITION_ERROR = 0.30; // General IK threshold (3mm)
+    private static final double TRAJ_RELAXED_ERROR = 0.50; // Trajectory fallback threshold (5mm)
+    private static final double TRAJ_STRICT_ERROR = 0.15; // Trajectory strict tracking threshold (1.5mm)
     double[] anglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] targetAnglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
@@ -1542,13 +1542,17 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     System.out.printf("[DEBUG_TRAJ] WARNING: Max gap = %d points (will be interpolated by cubic spline)\n", maxConsecutiveNulls);
                 }
 
-                // BƯỚC 2: VÁ LỖ HỔNG VÀ LẬP KẾ HOẠCH QUỸ ĐẠO BẰNG QUINTIC SPLINE
+                // BƯỚC 2a: VÁ LỖ HỔNG BẰNG IK CARTESIAN (bám sát đường vẽ hơn joint-space interpolation)
+                publish("Đang vá lỗ hổng bằng IK Cartesian...");
+                rawJointTrajectory = refillGapsCartesian(rawJointTrajectory, finalPath);
+
+                // BƯỚC 2b: VÁ LỖ HỔNG CÒN LẠI VÀ LẬP KẾ HOẠCH QUỸ ĐẠO BẰNG QUINTIC SPLINE
                 publish("Đang tối ưu quỹ đạo mượt mà C2 bằng Quintic Spline...");
                 double maxVelocity = 180.0;
                 double maxAcceleration = 360.0;
                 double dtSec = (double) MOTION_DT_MS / 1000.0;
 
-                // Điền đầy các điểm neo trống bằng các điểm neo gần nhất hoặc nội suy cục bộ tương thích
+                // Điền đầy các điểm neo trống còn lại bằng các điểm neo gần nhất hoặc nội suy cục bộ tương thích
                 java.util.List<double[]> filledJoints = kinematics.TrajectoryPlanner.fillGaps(rawJointTrajectory, armAngles);
 
                 // Lập kế hoạch quỹ đạo không gian khớp qua Quintic Spline & co giãn thời gian (retiming loop)
@@ -2022,6 +2026,96 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         }
         return finalPath;
+    }
+
+    /**
+     * Vá null gaps bằng cách re-solve IK cho các điểm Cartesian nội suy tuyến tính.
+     * Giúp EE bám sát đường vẽ gốc thay vì đi đường cong theo joint-space interpolation.
+     */
+    private java.util.List<double[]> refillGapsCartesian(
+            java.util.List<double[]> rawJointTraj,
+            java.util.List<double[]> cartesianPath) {
+
+        boolean isRight = isRightArmSelected;
+        int n = rawJointTraj.size();
+        java.util.List<double[]> result = new java.util.ArrayList<>(rawJointTraj);
+
+        int i = 0;
+        while (i < n) {
+            if (result.get(i) != null) { i++; continue; }
+
+            // Tìm điểm hợp lệ liền trước (prevIdx) và liền sau (nextIdx)
+            int prevIdx = -1, nextIdx = -1;
+            for (int k = i - 1; k >= 0; k--) {
+                if (result.get(k) != null) { prevIdx = k; break; }
+            }
+            for (int k = i + 1; k < n; k++) {
+                if (result.get(k) != null) { nextIdx = k; break; }
+            }
+
+            // Không có cả 2 điểm neo → skip
+            if (prevIdx < 0 || nextIdx < 0 || nextIdx >= cartesianPath.size()) {
+                i++; continue;
+            }
+
+            double[] qPrev = result.get(prevIdx);
+            double[] ptPrev = cartesianPath.get(Math.min(prevIdx, cartesianPath.size() - 1));
+            double[] ptNext = cartesianPath.get(Math.min(nextIdx, cartesianPath.size() - 1));
+            int gapLen = nextIdx - prevIdx;
+
+            // Re-solve IK dọc đường thẳng Cartesian từ ptPrev -> ptNext
+            double[] qCur = qPrev.clone();
+            boolean allOk = true;
+            for (int g = prevIdx + 1; g < nextIdx; g++) {
+                if (g >= cartesianPath.size()) break;
+                double t = (double)(g - prevIdx) / gapLen;
+                double[] pt = cartesianPath.get(g);
+
+                // Hướng đích: giữ nguyên alpha/yaw từ điểm gần nhất
+                double alpha_rad = Math.toRadians(trajectoryLastAlpha);
+                double q1_base = isRight ? Math.atan2(pt[1], pt[0]) : -Math.atan2(pt[1], -pt[0]);
+                double yaw = q1_base + Math.toRadians(trajectoryLastYawOffset);
+                double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
+                double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
+                double cy2 = Math.cos(yaw), sy2 = Math.sin(yaw);
+                double[][] R_z, R_target;
+                if (isRight) {
+                    R_z = new double[][] { { cy2, -sy2, 0 }, { sy2, cy2, 0 }, { 0, 0, 1 } };
+                    R_target = multiplyMatrices(R_z, R_y);
+                } else {
+                    double yawR = -yaw;
+                    double cyR = Math.cos(yawR), syR = Math.sin(yawR);
+                    double[][] Rz_r = { { cyR, -syR, 0 }, { syR, cyR, 0 }, { 0, 0, 1 } };
+                    double[][] Rt_r = multiplyMatrices(Rz_r, R_y);
+                    R_target = new double[][] {
+                        {  Rt_r[0][0], -Rt_r[0][1], -Rt_r[0][2] },
+                        { -Rt_r[1][0],  Rt_r[1][1],  Rt_r[1][2] },
+                        { -Rt_r[2][0],  Rt_r[2][1],  Rt_r[2][2] }
+                    };
+                }
+
+                double[] qInitRad = new double[NUM_JOINTS];
+                for (int j = 0; j < NUM_JOINTS; j++) {
+                    qInitRad[j] = Math.toRadians(qCur[j]);
+                }
+                double[] qSol = kinematics.Kinematics.solveIK(pt[0], pt[1], pt[2], R_target, qInitRad, isRight);
+
+                if (qSol != null && isWithinLimits(qSol, isRight)) {
+                    double posErr = computePositionError(qSol, pt[0], pt[1], pt[2], isRight);
+                    if (posErr <= TRAJ_RELAXED_ERROR) {
+                        result.set(g, qSol);
+                        qCur = qSol;
+                        continue;
+                    }
+                }
+                allOk = false;
+                // Giữ null nếu IK thất bại, fillGaps sẽ xử lý sau
+            }
+
+            // Bước qua hết gap đã xử lý
+            i = nextIdx;
+        }
+        return result;
     }
 
     private java.util.List<double[]> generateBranchTransition(double[] qRef, double[] qNext, boolean isRight, int index) {

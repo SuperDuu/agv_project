@@ -51,7 +51,7 @@ public class Kinematics {
                 { 0, 0, 0, 1 }
         };
 
-        int maxIter = 100;
+        int maxIter = 200;
         double tol = 1e-5;
         double alpha = 0.8; // Khởi đầu với tốc độ học cao hơn để bắt kịp quỹ đạo
         double prevErrNorm = Double.MAX_VALUE;
@@ -121,7 +121,7 @@ public class Kinematics {
         double dz = ws.T[2][3] - pz;
         double posErr = Math.sqrt(dx*dx + dy*dy + dz*dz);
 
-        if (posErr <= 1.5) {
+        if (posErr <= 0.30) {
             return convertToDegreesWrap(bestQ);
         }
 

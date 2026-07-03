@@ -289,7 +289,7 @@ double wrapToPi(double rad) {
 }
 
 // Full DLS solver in C++
-bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3], const double qInitRad[6], bool isRight, double qOut[6], int maxIter = 100) {
+bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3], const double qInitRad[6], bool isRight, double qOut[6], int maxIter = 200) {
     std::copy(qInitRad, qInitRad + 6, qOut);
     double bestQ[6];
     std::copy(qInitRad, qInitRad + 6, bestQ);
@@ -416,7 +416,7 @@ bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3]
     double T_best[4][4];
     computeFKMatrix(bestQ, isRight, T_best);
     double finalPosErr = std::sqrt(std::pow(T_best[0][3] - px, 2) + std::pow(T_best[1][3] - py, 2) + std::pow(T_best[2][3] - pz, 2));
-    if (finalPosErr <= 1.5) {
+    if (finalPosErr <= 0.30) {
         std::copy(bestQ, bestQ + 6, qOut);
         return true;
     }
