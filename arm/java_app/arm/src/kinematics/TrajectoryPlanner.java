@@ -243,12 +243,16 @@ public class TrajectoryPlanner {
             V[0][j] = 0.0;
             V[N][j] = 0.0;
             for (int k = 1; k < N; k++) {
-                double diff_prev = wrappedDegDiff(Q[k][j], Q[k-1][j]) / H[k-1];
-                double diff_next = wrappedDegDiff(Q[k+1][j], Q[k][j]) / H[k];
+                double diff_prev = wrappedDegDiff(Q[k][j], Q[k-1][j]);
+                double diff_next = wrappedDegDiff(Q[k+1][j], Q[k][j]);
+                double v_prev = diff_prev / H[k-1];
+                double v_next = diff_next / H[k];
 
-                double v = 0.5 * (diff_prev + diff_next);
-                if (diff_prev * diff_next < 0.0) {
+                double v = 0.5 * (v_prev + v_next);
+                if (v_prev * v_next <= 0.0) {
                     v = 0.0;
+                } else if (Math.abs(Math.abs(diff_prev) - Math.abs(diff_next)) > 5.0) {
+                    v = 0.0; // Điểm gãy khúc hình học (kink) do chuyển tiếp nhánh Cartesian/Joint-space
                 }
                 V[k][j] = v;
             }
