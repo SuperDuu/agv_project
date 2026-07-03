@@ -50,6 +50,7 @@ public class ArmPanel extends JPanel
         if (robot.isDrawingActive() && SwingUtilities.isLeftMouseButton(e)) {
             isDrawingPath = true;
             referencePath.clear();
+            robot.notifyPathChanged();
             double zDraw = robot.getFixedHeight();
             double[] pt = screenToWorld(e.getX(), e.getY(), zDraw);
             if (pt != null) {
@@ -89,18 +90,31 @@ public class ArmPanel extends JPanel
     public void mouseDragged(MouseEvent e) {
         if (isDrawingPath) {
             double zDraw = robot.getFixedHeight();
+            if (e.isShiftDown()) {
+                int dy = e.getY() - lastY;
+                zDraw = zDraw - dy * 0.5; // Drag up -> climb Z, drag down -> descend Z
+                zDraw = Math.max(0.0, Math.min(300.0, zDraw));
+                robot.setFixedHeight(zDraw);
+            }
+
             double[] pt = screenToWorld(e.getX(), e.getY(), zDraw);
             if (pt != null) {
                 if (!referencePath.isEmpty()) {
                     double[] last = referencePath.get(referencePath.size() - 1);
-                    double dist = Math.sqrt(Math.pow(pt[0] - last[0], 2) + Math.pow(pt[1] - last[1], 2));
+                    double dist = Math.sqrt(Math.pow(pt[0] - last[0], 2) + 
+                                            Math.pow(pt[1] - last[1], 2) + 
+                                            Math.pow(pt[2] - last[2], 2));
                     if (dist > 1.5) { // Threshold to prevent too many close points
                         referencePath.add(pt);
+                        robot.notifyPathChanged();
                     }
                 } else {
                     referencePath.add(pt);
+                    robot.notifyPathChanged();
                 }
             }
+            lastX = e.getX();
+            lastY = e.getY();
             repaint();
         } else {
             int dx = e.getX() - lastX, dy = e.getY() - lastY;
@@ -121,8 +135,27 @@ public class ArmPanel extends JPanel
     // --- MouseWheelListener ---
     @Override
     public void mouseWheelMoved(MouseWheelEvent e) {
-        scale = Math.max(1.0, Math.min(30.0, scale - e.getWheelRotation() * 0.8));
-        repaint();
+        if (robot.isDrawingActive()) {
+            double currentZ = robot.getFixedHeight();
+            double newZ = currentZ - e.getWheelRotation() * 5.0; // 5mm step
+            newZ = Math.max(0.0, Math.min(300.0, newZ));
+            robot.setFixedHeight(newZ);
+            
+            if (isDrawingPath) {
+                Point mousePt = getMousePosition();
+                if (mousePt != null) {
+                    double[] pt = screenToWorld(mousePt.x, mousePt.y, newZ);
+                    if (pt != null) {
+                        referencePath.add(pt);
+                        robot.notifyPathChanged();
+                    }
+                }
+            }
+            repaint();
+        } else {
+            scale = Math.max(1.0, Math.min(30.0, scale - e.getWheelRotation() * 0.8));
+            repaint();
+        }
     }
 
     public double[] screenToWorld(int sx, int sy, double fixedZ) {
