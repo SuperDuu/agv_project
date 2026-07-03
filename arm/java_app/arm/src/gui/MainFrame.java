@@ -1303,7 +1303,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 java.util.List<double[]> rawJointTrajectory = new java.util.ArrayList<>();
                 for (int i = 0; i < finalPath.size(); i++) {
                     double[] pt = finalPath.get(i);
-                    double[] result = solveIKForTrajectoryPoint(pt[0], pt[1], pt[2]);
+                    double[] result = solveIKForTrajectoryPoint(pt[0], pt[1], pt[2], true);
                     
                     if (result != null) {
                         // Cập nhật Warm Start liên tục bằng kết quả giải IK (bao gồm cả relaxed/rescue)
@@ -1331,6 +1331,64 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                             publish(String.format("Cảnh báo: Điểm %d vượt biên (%.1f mm), đánh dấu lỗ hổng!", i + 1, posErr * 10.0));
                         }
                     } else {
+                        // Thử nghiệm nhánh khác (KHÔNG áp hasHugeJump ở bước tìm kiếm này)
+                        double savedAlpha = trajectoryLastAlpha;
+                        String savedCfg = trajectoryLockedCfg;
+                        double savedYawOffset = trajectoryLastYawOffset;
+
+                        double[] jumpResult = solveIKForTrajectoryPoint(pt[0], pt[1], pt[2], false);
+                        if (jumpResult != null && trajectoryLastQ != null) {
+                            // Tính toán bước nhảy lớn nhất giữa các khớp
+                            double maxJointJump = 0.0;
+                            for (int j = 0; j < NUM_JOINTS; j++) {
+                                double diff = Math.abs(wrappedDegDiff(jumpResult[j], trajectoryLastQ[j]));
+                                if (diff > maxJointJump) {
+                                    maxJointJump = diff;
+                                }
+                            }
+
+                            // Chèn đoạn quá độ N điểm phụ, mỗi bước không quá 15°
+                            int N = (int) Math.ceil(maxJointJump / 15.0);
+                            if (N < 1) N = 1;
+                            
+                            boolean transitionValid = true;
+                            java.util.List<double[]> transitionPoints = new java.util.ArrayList<>();
+                            for (int step = 1; step <= N; step++) {
+                                double factor = (double) step / N;
+                                double[] interp = new double[NUM_JOINTS];
+                                for (int j = 0; j < NUM_JOINTS; j++) {
+                                    double diff = wrappedDegDiff(jumpResult[j], trajectoryLastQ[j]);
+                                    double q_val = trajectoryLastQ[j] + diff * factor;
+                                    while (q_val > 180.0)  q_val -= 360.0;
+                                    while (q_val < -180.0) q_val += 360.0;
+                                    interp[j] = q_val;
+                                }
+                                if (!isWithinLimits(interp, isRight)) {
+                                    transitionValid = false;
+                                    break;
+                                }
+                                transitionPoints.add(interp);
+                            }
+
+                            if (transitionValid) {
+                                if (DEBUG) {
+                                    System.out.printf("[DEBUG_TRAJ] Point %d: PHÁT HIỆN CẦN CHUYỂN NHÁNH! Chèn %d điểm quá độ thuần khớp (bước nhảy tối đa %.2f độ).\n", 
+                                        i + 1, N, maxJointJump);
+                                }
+                                publish(String.format("Chuyển nhánh tại điểm %d: chèn %d điểm quá độ...", i + 1, N));
+                                
+                                // Chèn tất cả các điểm quá độ vào quỹ đạo
+                                rawJointTrajectory.addAll(transitionPoints);
+                                trajectoryLastQ = jumpResult.clone();
+                                continue; // Bỏ qua phần ghi nhận lỗi, tiếp tục vòng lặp sang điểm tiếp theo
+                            }
+                        }
+
+                        // Nếu không thể chuyển nhánh hoặc chuyển nhánh không hợp lệ, phục hồi trạng thái cũ và coi như FAILED
+                        trajectoryLastAlpha = savedAlpha;
+                        trajectoryLockedCfg = savedCfg;
+                        trajectoryLastYawOffset = savedYawOffset;
+
                         // IK thất bại hoàn toàn, đánh dấu lỗ hổng, giữ nguyên trajectoryLastQ cũ làm mốc gần nhất
                         rawJointTrajectory.add(null);
                         if (DEBUG) {
@@ -1496,7 +1554,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double dt = MOTION_DT_MS / 1000.0;
         double stepLen = speedUnitsPerSec * dt;
-        if (stepLen <= 0.05) stepLen = 0.05; // avoid infinite loop or precision hang
+        if (stepLen < 1.2) stepLen = 1.2; // Force minimum 1.2 cm (12mm) spacing between anchors to prevent drift and heavy solver load
 
         double[] lastPt = path.get(0);
         result.add(lastPt.clone());
@@ -1604,7 +1662,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
     }
 
-    private double[] solveIKForTrajectoryPoint(double px, double py, double pz) {
+    private double[] solveIKForTrajectoryPoint(double px, double py, double pz, boolean enforceJumpLimit) {
         boolean isFirstWaypoint = (trajectoryLastQ == null);
         double[] currentAngles = isRightArmSelected ? anglesRight : anglesLeft;
         double[] qRef = isFirstWaypoint ? currentAngles : trajectoryLastQ;
@@ -1646,7 +1704,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             for (double[] q : candidates) {
                 // Reject candidates with a huge joint jump (> 30 degrees) to prevent wild/erratic movements
                 boolean hasHugeJump = false;
-                if (!isFirstWaypoint) {
+                if (enforceJumpLimit && !isFirstWaypoint) {
                     for (int i = 0; i < NUM_JOINTS; i++) {
                         if (Math.abs(wrappedDegDiff(q[i], qRef[i])) > 30.0) {
                             hasHugeJump = true;
@@ -1700,7 +1758,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 for (double[] q : candidates) {
                     // Reject candidates with a huge joint jump (> 30 degrees) to prevent wild/erratic movements
                     boolean hasHugeJump = false;
-                    if (!isFirstWaypoint) {
+                    if (enforceJumpLimit && !isFirstWaypoint) {
                         for (int i = 0; i < NUM_JOINTS; i++) {
                             if (Math.abs(wrappedDegDiff(q[i], qRef[i])) > 30.0) {
                                 hasHugeJump = true;
@@ -1951,20 +2009,44 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return false;
     }
 
-    private boolean hasIKForWorkspaceScan(double px, double py, double pz, boolean isRight, boolean fixedGround, String prefCfg, double[] activeAngles) {
+    private int checkIKForWorkspaceScan(double px, double py, double pz, boolean isRight, boolean fixedGround, String prefCfg, double[] activeAngles) {
         double activeAlpha = isRight ? activeAlphaRight : activeAlphaLeft;
-        
+
+        // 1. Check if direct/strict path solution is available (class 2)
+        double aStart = fixedGround ? -90 : (activeAlpha - 18);
+        double aEnd = fixedGround ? 30 : (activeAlpha + 18);
+        double aStep = fixedGround ? 3.0 : 1.0;
+        for (double a = aStart; a <= aEnd; a += aStep) {
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN);
+            for (double[] q : candidates) {
+                double posErr = computePositionError(q, px, py, pz, isRight);
+                if (posErr <= TRAJ_STRICT_ERROR) {
+                    boolean directPath = true;
+                    for (int i = 0; i < NUM_JOINTS; i++) {
+                        if (Math.abs(wrappedDegDiff(q[i], activeAngles[i])) > 45.0) {
+                            directPath = false;
+                            break;
+                        }
+                    }
+                    if (directPath) {
+                        return 2; // Direct/Strict success
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback to basic geometric IK with 15mm tolerance (class 1)
         if (fixedGround) {
             for (double a = -90; a <= 30; a += 5.0) {
                 List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRight);
                     if (posErr <= MAX_IK_POSITION_ERROR) {
-                        return true;
+                        return 1; // Transition/Geometry success
                     }
                 }
             }
-            return false;
+            return 0;
         }
 
         // Chế độ tự do: tìm xung quanh alpha hiện tại trước, sau đó tìm toàn cục
@@ -1973,7 +2055,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr <= MAX_IK_POSITION_ERROR) {
-                    return true;
+                    return 1;
                 }
             }
         }
@@ -1982,11 +2064,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr <= MAX_IK_POSITION_ERROR) {
-                    return true;
+                    return 1;
                 }
             }
         }
-        return false;
+        return 0;
     }
 
     public void updateWorkspaceSlice() {
@@ -2008,7 +2090,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         sliceExplorationThread = new Thread(() -> {
             boolean[] arms = { true, false }; // Scan both Right (true) and Left (false) arms
             for (boolean isRight : arms) {
-                java.util.List<double[]> dots = new java.util.ArrayList<>();
+                java.util.List<double[]> directDots = new java.util.ArrayList<>();
+                java.util.List<double[]> transitionDots = new java.util.ArrayList<>();
                 java.util.List<double[]> outer = new java.util.ArrayList<>();
                 java.util.List<double[]> inner = new java.util.ArrayList<>();
 
@@ -2023,14 +2106,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 double[] activeAngles = isRight ? activeAnglesRight : activeAnglesLeft;
 
                 java.util.TreeSet<Double> reachableRadii = new java.util.TreeSet<>();
+                java.util.HashMap<Double, Integer> radiusClasses = new java.util.HashMap<>();
 
                 // Quét trực tiếp bán kính r và kiểm tra bằng bộ giải IK thực tế.
-                // Điều này đảm bảo lát cắt vùng làm việc khớp chính xác với vùng có thể vẽ được của quỹ đạo.
                 for (double r = 15.0; r <= 70.0; r += 0.2) {
                     if (Thread.interrupted()) return;
                     double px = isRight ? r : -r;
-                    if (hasIKForWorkspaceScan(px, 0, fixedZ, isRight, fixedGround, prefCfg, activeAngles)) {
+                    int code = checkIKForWorkspaceScan(px, 0, fixedZ, isRight, fixedGround, prefCfg, activeAngles);
+                    if (code > 0) {
                         reachableRadii.add(r);
+                        radiusClasses.put(r, code);
                     }
                 }
 
@@ -2066,6 +2151,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     for (double r : reachableRadii) {
                         if (r - lastRAdded >= 1.5) { // Lọc không gian
                             lastRAdded = r;
+                            int rClass = radiusClasses.getOrDefault(r, 1);
                             for (double theta = q1_min; theta <= q1_max; theta += 4.0) {
                                 double rad = Math.toRadians(theta);
                                 double px, py;
@@ -2076,13 +2162,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                                     px = -r * Math.cos(rad);
                                     py = -r * Math.sin(rad);
                                 }
-                                dots.add(new double[] { px, py, fixedZ });
+                                double[] pt = new double[] { px, py, fixedZ };
+                                if (rClass == 2) {
+                                    directDots.add(pt);
+                                } else {
+                                    transitionDots.add(pt);
+                                }
                             }
                         }
                     }
                 }
 
-                armPanel.setWorkspaceSliceData(dots, outer, inner, isRight);
+                armPanel.setWorkspaceSliceData(directDots, transitionDots, outer, inner, isRight);
 
                 SwingUtilities.invokeLater(() -> {
                     armPanel.workspaceStatus = String.format("LÁT CẮT Z = %.1f", fixedZ);

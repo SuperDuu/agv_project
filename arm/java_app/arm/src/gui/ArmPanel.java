@@ -24,10 +24,13 @@ public class ArmPanel extends JPanel
     // Workspace slice at fixed Z
     ArrayList<double[]> workspaceSlicePointsRight = new ArrayList<>();
     ArrayList<double[]> workspaceSlicePointsLeft = new ArrayList<>();
+    ArrayList<double[]> workspaceSliceTransitionPointsRight = new ArrayList<>();
+    ArrayList<double[]> workspaceSliceTransitionPointsLeft = new ArrayList<>();
     ArrayList<double[]> sliceOuterRight = new ArrayList<>();
     ArrayList<double[]> sliceInnerRight = new ArrayList<>();
     ArrayList<double[]> sliceOuterLeft = new ArrayList<>();
     ArrayList<double[]> sliceInnerLeft = new ArrayList<>();
+
 
     MainFrame robot;
 
@@ -969,22 +972,25 @@ public class ArmPanel extends JPanel
         java.util.List<double[]> outer;
         java.util.List<double[]> inner;
         java.util.List<double[]> dots;
+        java.util.List<double[]> transitionDots;
 
         if (isRight) {
             synchronized (workspaceSlicePointsRight) {
                 outer = new ArrayList<>(sliceOuterRight);
                 inner = new ArrayList<>(sliceInnerRight);
                 dots = new ArrayList<>(workspaceSlicePointsRight);
+                transitionDots = new ArrayList<>(workspaceSliceTransitionPointsRight);
             }
         } else {
             synchronized (workspaceSlicePointsLeft) {
                 outer = new ArrayList<>(sliceOuterLeft);
                 inner = new ArrayList<>(sliceInnerLeft);
                 dots = new ArrayList<>(workspaceSlicePointsLeft);
+                transitionDots = new ArrayList<>(workspaceSliceTransitionPointsLeft);
             }
         }
 
-        if (outer.isEmpty() && inner.isEmpty() && dots.isEmpty()) {
+        if (outer.isEmpty() && inner.isEmpty() && dots.isEmpty() && transitionDots.isEmpty()) {
             return;
         }
 
@@ -1001,18 +1007,18 @@ public class ArmPanel extends JPanel
             }
 
             if (isRight) {
-                g2.setColor(new Color(0, 200, 255, 45)); // Translucent Cyan
+                g2.setColor(new Color(0, 200, 255, 30)); // Translucent Cyan
             } else {
-                g2.setColor(new Color(255, 0, 150, 45)); // Translucent Magenta
+                g2.setColor(new Color(255, 0, 150, 30)); // Translucent Magenta
             }
             g2.fill(poly);
 
             // Draw outlines
             g2.setStroke(new BasicStroke(2.0f));
             if (isRight) {
-                g2.setColor(new Color(0, 150, 255, 180));
+                g2.setColor(new Color(0, 150, 255, 120));
             } else {
-                g2.setColor(new Color(255, 0, 128, 180));
+                g2.setColor(new Color(255, 0, 128, 120));
             }
 
             for (int i = 0; i < outer.size() - 1; i++) {
@@ -1038,18 +1044,28 @@ public class ArmPanel extends JPanel
             }
         }
 
-        // Draw fine grid dots
+        // Draw fine grid direct dots (Strict/Direct)
         if (!dots.isEmpty()) {
             if (isRight) {
-                g2.setColor(new Color(0, 150, 255, 120));
+                g2.setColor(new Color(0, 180, 100, 180)); // Direct Green/Cyan for Right
             } else {
-                g2.setColor(new Color(255, 0, 128, 120));
+                g2.setColor(new Color(180, 0, 120, 180)); // Direct Magenta for Left
             }
             for (double[] p : dots) {
                 int[] sc = project(p, cx, cy);
                 g2.fillRect(sc[0] - 1, sc[1] - 1, 2, 2);
             }
         }
+
+        // Draw transition dots (Yellow/Orange)
+        if (!transitionDots.isEmpty()) {
+            g2.setColor(new Color(255, 140, 0, 180)); // Amber/Orange color for transition
+            for (double[] p : transitionDots) {
+                int[] sc = project(p, cx, cy);
+                g2.fillRect(sc[0] - 1, sc[1] - 1, 2, 2);
+            }
+        }
+
     }
 
     void addWorkspacePoint(double[] p) {
@@ -1091,21 +1107,25 @@ public class ArmPanel extends JPanel
     public void clearWorkspaceSlice() {
         synchronized (workspaceSlicePointsRight) {
             workspaceSlicePointsRight.clear();
+            workspaceSliceTransitionPointsRight.clear();
             sliceOuterRight.clear();
             sliceInnerRight.clear();
         }
         synchronized (workspaceSlicePointsLeft) {
             workspaceSlicePointsLeft.clear();
+            workspaceSliceTransitionPointsLeft.clear();
             sliceOuterLeft.clear();
             sliceInnerLeft.clear();
         }
     }
 
-    public void setWorkspaceSliceData(java.util.List<double[]> dots, java.util.List<double[]> outer, java.util.List<double[]> inner, boolean isRight) {
+    public void setWorkspaceSliceData(java.util.List<double[]> directDots, java.util.List<double[]> transitionDots, java.util.List<double[]> outer, java.util.List<double[]> inner, boolean isRight) {
         if (isRight) {
             synchronized (workspaceSlicePointsRight) {
                 workspaceSlicePointsRight.clear();
-                workspaceSlicePointsRight.addAll(dots);
+                workspaceSlicePointsRight.addAll(directDots);
+                workspaceSliceTransitionPointsRight.clear();
+                workspaceSliceTransitionPointsRight.addAll(transitionDots);
                 sliceOuterRight.clear();
                 sliceOuterRight.addAll(outer);
                 sliceInnerRight.clear();
@@ -1114,12 +1134,15 @@ public class ArmPanel extends JPanel
         } else {
             synchronized (workspaceSlicePointsLeft) {
                 workspaceSlicePointsLeft.clear();
-                workspaceSlicePointsLeft.addAll(dots);
+                workspaceSlicePointsLeft.addAll(directDots);
+                workspaceSliceTransitionPointsLeft.clear();
+                workspaceSliceTransitionPointsLeft.addAll(transitionDots);
                 sliceOuterLeft.clear();
                 sliceOuterLeft.addAll(outer);
                 sliceInnerLeft.clear();
                 sliceInnerLeft.addAll(inner);
             }
         }
+
     }
 }
