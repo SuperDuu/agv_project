@@ -32,6 +32,7 @@ public class Kinematics {
     }
 
     public static double[] solveIK(double px, double py, double pz, double[][] R_target, double[] qInitRad, boolean isRight) {
+        IKWorkspace ws = new IKWorkspace();
         double[] q = qInitRad.clone();
         double[] bestQ = q.clone();
         double bestErrNorm = Double.MAX_VALUE;
@@ -56,23 +57,21 @@ public class Kinematics {
         }
 
         for (int iter = 0; iter < maxIter; iter++) {
-            double[][] T_curr = computeFKMatrix(q, isRight);
-            double[] e = computeTr2Delta(T_curr, T_target);
+            computeFKMatrix(q, isRight, ws);
+            computeTr2Delta(ws.T, T_target, ws);
 
             double errNorm = 0;
             for (int i = 0; i < 6; i++) {
-                errNorm += e[i] * e[i];
+                errNorm += ws.delta[i] * ws.delta[i];
             }
             errNorm = Math.sqrt(errNorm);
 
             if (errNorm < bestErrNorm) {
                 bestErrNorm = errNorm;
-                bestQ = q.clone();
+                System.arraycopy(q, 0, bestQ, 0, NUM_JOINTS);
             }
 
             // --- CẢI TIẾN 1: ADAPTIVE STEP SIZE (ALPHA ĐỘNG) ---
-            // Nếu sai số tăng hoặc dao động (overshoot), giảm alpha để mịn hóa bước nhảy.
-            // Ngược lại, nếu giảm tốt, tăng nhẹ alpha để tránh trễ pha (Phase Lag).
             if (errNorm > prevErrNorm) {
                 alpha *= 0.5;
             } else {
@@ -84,10 +83,10 @@ public class Kinematics {
                 return convertToDegreesWrap(q);
             }
 
-            double[][] J = computeJacobianEE(q, isRight);
+            computeJacobianEE(q, isRight, ws);
             
-            // Adaptive DLS (Tự động tăng lambda khi ma trận suy biến để tránh nổ nghiệm)
-            double detJ = compute6x6Determinant(J);
+            // Adaptive DLS
+            double detJ = compute6x6Determinant(ws.Je);
             double manipulability = Math.abs(detJ);
             double lambda = 0.01;
             if (manipulability < 0.008) {
@@ -95,26 +94,24 @@ public class Kinematics {
                 lambda = Math.sqrt(0.01*0.01 + 0.4*0.4 * (1 - ratio)*(1 - ratio));
             }
 
-            double[] dq = solveDLS(J, e, lambda);
+            solveDLS(ws.Je, ws.delta, lambda, ws);
 
             // --- CẢI TIẾN 2: THUẬT TOÁN KẸP BIÊN GIẢM CHẤN (CLAMPING) ---
             for (int i = 0; i < NUM_JOINTS; i++) {
-                double nextQ = wrapToPi(q[i] + alpha * dq[i]);
-                
-                // Nếu khớp vi phạm giới hạn, triệt tiêu vận tốc của chính nó thay vì bẻ gãy toán học
+                double nextQ = wrapToPi(q[i] + alpha * ws.dq[i]);
                 if (nextQ < minLimRad[i] || nextQ > maxLimRad[i]) {
-                    dq[i] = 0; // Khóa khớp này lại, ép các khớp khác gánh quỹ đạo
+                    ws.dq[i] = 0; // Khóa khớp này lại, ép các khớp khác gánh quỹ đạo
                     nextQ = Math.max(minLimRad[i], Math.min(maxLimRad[i], nextQ));
                 }
                 q[i] = nextQ;
             }
         }
 
-        // Constraint Relaxation: Fallback nếu vượt quá số vòng lặp nhưng vị trí đã rất gần đích
-        double[][] T_best = computeFKMatrix(bestQ, isRight);
-        double dx = T_best[0][3] - px;
-        double dy = T_best[1][3] - py;
-        double dz = T_best[2][3] - pz;
+        // Fallback nếu vượt quá số vòng lặp nhưng vị trí đã rất gần đích
+        computeFKMatrix(bestQ, isRight, ws);
+        double dx = ws.T[0][3] - px;
+        double dy = ws.T[1][3] - py;
+        double dz = ws.T[2][3] - pz;
         double posErr = Math.sqrt(dx*dx + dy*dy + dz*dz);
 
         if (posErr <= 1.5) {
@@ -543,5 +540,351 @@ public class Kinematics {
             det = -det;
         }
         return det;
+    }
+
+    // --- ZERO-ALLOCATION IN-PLACE ALGORITHMS ---
+
+    public static void computeFKMatrix(double[] q, boolean isRight, IKWorkspace ws) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                ws.T[i][j] = (i == j) ? 1.0 : 0.0;
+            }
+        }
+        double d2 = isRight ? (L2 + L3) : -(L2 + L3);
+        double[][] params = ws.params;
+        params[0][0] = 0;             params[0][1] = L1 + L0; params[0][2] = 0;  params[0][3] = -Math.PI / 2; params[0][4] = q[0];
+        params[1][0] = -Math.PI / 2; params[1][1] = d2;      params[1][2] = 0;  params[1][3] = -Math.PI / 2; params[1][4] = q[1];
+        params[2][0] = -Math.PI / 2; params[2][1] = 0;       params[2][2] = 0;  params[2][3] = -Math.PI;      params[2][4] = q[2];
+        params[3][0] = 0;             params[3][1] = 0;       params[3][2] = L4; params[3][3] = -Math.PI / 2; params[3][4] = q[3];
+        params[4][0] = -Math.PI / 2; params[4][1] = L5 + L6; params[4][2] = 0;  params[4][3] = -Math.PI / 2; params[4][4] = q[4];
+        params[5][0] = -Math.PI / 2; params[5][1] = 0;       params[5][2] = 0;  params[5][3] = 0;             params[5][4] = q[5];
+
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            getMDHMatrix(params[i][0], params[i][1], params[i][2], params[i][3], params[i][4], ws.MDH);
+            multiply4x4(ws.T, ws.MDH, ws.T_next);
+            for (int r = 0; r < 4; r++) {
+                System.arraycopy(ws.T_next[r], 0, ws.T[r], 0, 4);
+            }
+        }
+        
+        getToolMatrix(ws.MDH);
+        multiply4x4(ws.T, ws.MDH, ws.T_next);
+        for (int r = 0; r < 4; r++) {
+            System.arraycopy(ws.T_next[r], 0, ws.T[r], 0, 4);
+        }
+    }
+
+    public static void getMDHMatrix(double alpha, double d, double a, double offset, double q, double[][] out) {
+        double theta = q + offset;
+        double ct = Math.cos(theta), st = Math.sin(theta);
+        double ca = Math.cos(alpha), sa = Math.sin(alpha);
+
+        out[0][0] = ct;      out[0][1] = -st;     out[0][2] = 0;   out[0][3] = a;
+        out[1][0] = st * ca; out[1][1] = ct * ca; out[1][2] = -sa;  out[1][3] = -sa * d;
+        out[2][0] = st * sa; out[2][1] = ct * sa; out[2][2] = ca;   out[2][3] = ca * d;
+        out[3][0] = 0;       out[3][1] = 0;       out[3][2] = 0;   out[3][3] = 1;
+    }
+
+    public static void getToolMatrix(double[][] out) {
+        out[0][0] = 1; out[0][1] = 0;  out[0][2] = 0;  out[0][3] = 0;
+        out[1][0] = 0; out[1][1] = 0;  out[1][2] = -1; out[1][3] = -L7;
+        out[2][0] = 0; out[2][1] = 1;  out[2][2] = 0;  out[2][3] = 0;
+        out[3][0] = 0; out[3][1] = 0;  out[3][2] = 0;  out[3][3] = 1;
+    }
+
+    public static void multiply4x4(double[][] A, double[][] B, double[][] C) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                C[i][j] = 0;
+            }
+        }
+        for (int i = 0; i < 4; i++) {
+            for (int k = 0; k < 4; k++) {
+                double aik = A[i][k];
+                if (aik != 0) {
+                    for (int j = 0; j < 4; j++) {
+                        C[i][j] += aik * B[k][j];
+                    }
+                }
+            }
+        }
+    }
+
+    public static void computeTr2Delta(double[][] T0, double[][] T1, IKWorkspace ws) {
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                ws.R0[i][j] = T0[i][j];
+                ws.R1[i][j] = T1[i][j];
+            }
+        }
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                ws.R0T[i][j] = ws.R0[j][i];
+            }
+        }
+        multiply3x3(ws.R0T, ws.R1, ws.R);
+        orthonormalize3x3InPlace(ws.R);
+
+        double dx = T1[0][3] - T0[0][3];
+        double dy = T1[1][3] - T0[1][3];
+        double dz = T1[2][3] - T0[2][3];
+
+        ws.dp[0] = ws.R0T[0][0] * dx + ws.R0T[0][1] * dy + ws.R0T[0][2] * dz;
+        ws.dp[1] = ws.R0T[1][0] * dx + ws.R0T[1][1] * dy + ws.R0T[1][2] * dz;
+        ws.dp[2] = ws.R0T[2][0] * dx + ws.R0T[2][1] * dy + ws.R0T[2][2] * dz;
+
+        double trace = ws.R[0][0] + ws.R[1][1] + ws.R[2][2];
+        double cosTheta = 0.5 * (trace - 1.0);
+        cosTheta = Math.max(-1.0, Math.min(1.0, cosTheta));
+        double theta = Math.acos(cosTheta);
+
+        if (theta < 1e-6) {
+            ws.dw[0] = 0; ws.dw[1] = 0; ws.dw[2] = 0;
+        } else if (theta > 3.0) {
+            ws.dw[0] = theta * Math.sqrt(Math.max(0.0, 0.5 * (ws.R[0][0] + 1.0)));
+            ws.dw[1] = theta * Math.sqrt(Math.max(0.0, 0.5 * (ws.R[1][1] + 1.0)));
+            ws.dw[2] = theta * Math.sqrt(Math.max(0.0, 0.5 * (ws.R[2][2] + 1.0)));
+            
+            if (ws.R[2][1] - ws.R[1][2] < 0) ws.dw[0] = -ws.dw[0];
+            if (ws.R[0][2] - ws.R[2][0] < 0) ws.dw[1] = -ws.dw[1];
+            if (ws.R[1][0] - ws.R[0][1] < 0) ws.dw[2] = -ws.dw[2];
+        } else {
+            double sinTheta = Math.sin(theta);
+            double s = (Math.abs(sinTheta) > 1e-4) ? (0.5 * theta / sinTheta) : 0.5;
+            ws.dw[0] = (ws.R[2][1] - ws.R[1][2]) * s;
+            ws.dw[1] = (ws.R[0][2] - ws.R[2][0]) * s;
+            ws.dw[2] = (ws.R[1][0] - ws.R[0][1]) * s;
+        }
+
+        ws.delta[0] = ws.dp[0];
+        ws.delta[1] = ws.dp[1];
+        ws.delta[2] = ws.dp[2];
+        ws.delta[3] = ws.dw[0];
+        ws.delta[4] = ws.dw[1];
+        ws.delta[5] = ws.dw[2];
+    }
+
+    public static void multiply3x3(double[][] A, double[][] B, double[][] C) {
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                C[i][j] = 0;
+                for (int k = 0; k < 3; k++) {
+                    C[i][j] += A[i][k] * B[k][j];
+                }
+            }
+        }
+    }
+
+    public static void orthonormalize3x3InPlace(double[][] R) {
+        double len0 = Math.sqrt(R[0][0]*R[0][0] + R[1][0]*R[1][0] + R[2][0]*R[2][0]);
+        if (len0 < 1e-9) len0 = 1.0;
+        R[0][0] /= len0;
+        R[1][0] /= len0;
+        R[2][0] /= len0;
+        
+        double dot = R[0][0]*R[0][1] + R[1][0]*R[1][1] + R[2][0]*R[2][1];
+        R[0][1] -= dot * R[0][0];
+        R[1][1] -= dot * R[1][0];
+        R[2][1] -= dot * R[2][0];
+        double len1 = Math.sqrt(R[0][1]*R[0][1] + R[1][1]*R[1][1] + R[2][1]*R[2][1]);
+        if (len1 < 1e-9) len1 = 1.0;
+        R[0][1] /= len1;
+        R[1][1] /= len1;
+        R[2][1] /= len1;
+        
+        R[0][2] = R[1][0]*R[2][1] - R[2][0]*R[1][1];
+        R[1][2] = R[2][0]*R[0][1] - R[0][0]*R[2][1];
+        R[2][2] = R[0][0]*R[1][1] - R[1][0]*R[0][1];
+    }
+
+    public static void computeJacobianEE(double[] q, boolean isRight, IKWorkspace ws) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                ws.T[i][j] = (i == j) ? 1.0 : 0.0;
+            }
+        }
+        double d2 = isRight ? (L2 + L3) : -(L2 + L3);
+        double[][] params = ws.params;
+        params[0][0] = 0;             params[0][1] = L1 + L0; params[0][2] = 0;  params[0][3] = -Math.PI / 2; params[0][4] = q[0];
+        params[1][0] = -Math.PI / 2; params[1][1] = d2;      params[1][2] = 0;  params[1][3] = -Math.PI / 2; params[1][4] = q[1];
+        params[2][0] = -Math.PI / 2; params[2][1] = 0;       params[2][2] = 0;  params[2][3] = -Math.PI;      params[2][4] = q[2];
+        params[3][0] = 0;             params[3][1] = 0;       params[3][2] = L4; params[3][3] = -Math.PI / 2; params[3][4] = q[3];
+        params[4][0] = -Math.PI / 2; params[4][1] = L5 + L6; params[4][2] = 0;  params[4][3] = -Math.PI / 2; params[4][4] = q[4];
+        params[5][0] = -Math.PI / 2; params[5][1] = 0;       params[5][2] = 0;  params[5][3] = 0;             params[5][4] = q[5];
+
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            double alpha = params[i][0];
+            double a = params[i][2];
+            double d = params[i][1];
+            double offset = params[i][3];
+            double qi = params[i][4];
+
+            double ca = Math.cos(alpha), sa = Math.sin(alpha);
+            ws.RxTx[0][0] = 1; ws.RxTx[0][1] = 0;  ws.RxTx[0][2] = 0;   ws.RxTx[0][3] = a;
+            ws.RxTx[1][0] = 0; ws.RxTx[1][1] = ca; ws.RxTx[1][2] = -sa;  ws.RxTx[1][3] = 0;
+            ws.RxTx[2][0] = 0; ws.RxTx[2][1] = sa; ws.RxTx[2][2] = ca;   ws.RxTx[2][3] = 0;
+            ws.RxTx[3][0] = 0; ws.RxTx[3][1] = 0;  ws.RxTx[3][2] = 0;   ws.RxTx[3][3] = 1;
+
+            multiply4x4(ws.T, ws.RxTx, ws.T_i_prime);
+
+            ws.z0[i][0] = ws.T_i_prime[0][2];
+            ws.z0[i][1] = ws.T_i_prime[1][2];
+            ws.z0[i][2] = ws.T_i_prime[2][2];
+
+            ws.p0[i][0] = ws.T_i_prime[0][3];
+            ws.p0[i][1] = ws.T_i_prime[1][3];
+            ws.p0[i][2] = ws.T_i_prime[2][3];
+
+            double theta = qi + offset;
+            double ct = Math.cos(theta), st = Math.sin(theta);
+            ws.RzTz[0][0] = ct; ws.RzTz[0][1] = -st; ws.RzTz[0][2] = 0; ws.RzTz[0][3] = 0;
+            ws.RzTz[1][0] = st; ws.RzTz[1][1] = ct;  ws.RzTz[1][2] = 0; ws.RzTz[1][3] = 0;
+            ws.RzTz[2][0] = 0;  ws.RzTz[2][1] = 0;   ws.RzTz[2][2] = 1; ws.RzTz[2][3] = d;
+            ws.RzTz[3][0] = 0;  ws.RzTz[3][1] = 0;   ws.RzTz[3][2] = 0; ws.RzTz[3][3] = 1;
+
+            multiply4x4(ws.T_i_prime, ws.RzTz, ws.T);
+        }
+
+        getToolMatrix(ws.MDH);
+        multiply4x4(ws.T, ws.MDH, ws.T_tool);
+
+        double p_tool_x = ws.T_tool[0][3];
+        double p_tool_y = ws.T_tool[1][3];
+        double p_tool_z = ws.T_tool[2][3];
+
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                ws.R_tool[i][j] = ws.T_tool[i][j];
+            }
+        }
+
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            double dx = p_tool_x - ws.p0[i][0];
+            double dy = p_tool_y - ws.p0[i][1];
+            double dz = p_tool_z - ws.p0[i][2];
+
+            ws.J0[0][i] = ws.z0[i][1] * dz - ws.z0[i][2] * dy;
+            ws.J0[1][i] = ws.z0[i][2] * dx - ws.z0[i][0] * dz;
+            ws.J0[2][i] = ws.z0[i][0] * dy - ws.z0[i][1] * dx;
+
+            ws.J0[3][i] = ws.z0[i][0];
+            ws.J0[4][i] = ws.z0[i][1];
+            ws.J0[5][i] = ws.z0[i][2];
+        }
+
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                ws.RT[i][j] = ws.R_tool[j][i];
+            }
+        }
+
+        for (int j = 0; j < NUM_JOINTS; j++) {
+            ws.Je[0][j] = ws.RT[0][0] * ws.J0[0][j] + ws.RT[0][1] * ws.J0[1][j] + ws.RT[0][2] * ws.J0[2][j];
+            ws.Je[1][j] = ws.RT[1][0] * ws.J0[0][j] + ws.RT[1][1] * ws.J0[1][j] + ws.RT[1][2] * ws.J0[2][j];
+            ws.Je[2][j] = ws.RT[2][0] * ws.J0[0][j] + ws.RT[2][1] * ws.J0[1][j] + ws.RT[2][2] * ws.J0[2][j];
+
+            ws.Je[3][j] = ws.RT[0][0] * ws.J0[3][j] + ws.RT[0][1] * ws.J0[4][j] + ws.RT[0][2] * ws.J0[5][j];
+            ws.Je[4][j] = ws.RT[1][0] * ws.J0[3][j] + ws.RT[1][1] * ws.J0[4][j] + ws.RT[1][2] * ws.J0[5][j];
+            ws.Je[5][j] = ws.RT[2][0] * ws.J0[3][j] + ws.RT[2][1] * ws.J0[4][j] + ws.RT[2][2] * ws.J0[5][j];
+        }
+    }
+
+    public static void solveDLS(double[][] J, double[] e, double lambda, IKWorkspace ws) {
+        int n = 6;
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                double sum = 0;
+                for (int k = 0; k < NUM_JOINTS; k++) {
+                    sum += J[i][k] * J[j][k];
+                }
+                ws.JJT[i][j] = sum;
+            }
+            ws.JJT[i][i] += lambda * lambda;
+        }
+
+        boolean success = solveLinearSystem(ws.JJT, e, ws.x, ws.M);
+        if (!success) {
+            for (int i = 0; i < NUM_JOINTS; i++) ws.dq[i] = 0.0;
+            return;
+        }
+
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            double sum = 0;
+            for (int k = 0; k < n; k++) {
+                sum += J[k][i] * ws.x[k];
+            }
+            ws.dq[i] = sum;
+        }
+    }
+
+    private static boolean solveLinearSystem(double[][] A, double[] b, double[] x, double[][] M) {
+        int n = b.length;
+        for (int i = 0; i < n; i++) {
+            System.arraycopy(A[i], 0, M[i], 0, n);
+            M[i][n] = b[i];
+        }
+
+        for (int i = 0; i < n; i++) {
+            int max = i;
+            for (int k = i + 1; k < n; k++) {
+                if (Math.abs(M[k][i]) > Math.abs(M[max][i])) {
+                    max = k;
+                }
+            }
+            double[] temp = M[i];
+            M[i] = M[max];
+            M[max] = temp;
+
+            if (Math.abs(M[i][i]) < 1e-12) {
+                return false;
+            }
+
+            for (int k = i + 1; k < n; k++) {
+                double factor = M[k][i] / M[i][i];
+                for (int j = i; j <= n; j++) {
+                    M[k][j] -= factor * M[i][j];
+                }
+            }
+        }
+
+        for (int i = n - 1; i >= 0; i--) {
+            double sum = 0;
+            for (int j = i + 1; j < n; j++) {
+                sum += M[i][j] * x[j];
+            }
+            x[i] = (M[i][n] - sum) / M[i][i];
+        }
+        return true;
+    }
+
+    private static class IKWorkspace {
+        final double[][] T = new double[4][4];
+        final double[][] T_next = new double[4][4];
+        final double[][] MDH = new double[4][4];
+        final double[][] params = new double[6][5];
+        
+        final double[][] R0 = new double[3][3];
+        final double[][] R1 = new double[3][3];
+        final double[][] R0T = new double[3][3];
+        final double[][] R = new double[3][3];
+        final double[] dp = new double[3];
+        final double[] dw = new double[3];
+        final double[] delta = new double[6];
+        
+        final double[][] z0 = new double[6][3];
+        final double[][] p0 = new double[6][3];
+        final double[][] J0 = new double[6][6];
+        final double[][] Je = new double[6][6];
+        final double[][] RxTx = new double[4][4];
+        final double[][] RzTz = new double[4][4];
+        final double[][] T_i_prime = new double[4][4];
+        final double[][] T_tool = new double[4][4];
+        final double[][] R_tool = new double[3][3];
+        final double[][] RT = new double[3][3];
+        
+        final double[][] JJT = new double[6][6];
+        final double[] x = new double[6];
+        final double[] dq = new double[6];
+        final double[][] M = new double[6][7];
     }
 }
