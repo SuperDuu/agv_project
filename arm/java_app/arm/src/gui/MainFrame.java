@@ -2857,14 +2857,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
             
             double[] q = solveIK(px, py, pz, R_target, qInit, isRight);
-            if (!isRight) {
-                System.out.printf("[DEBUG_TRY_ALPHA] Left Arm offsetDeg=%.1f alphaDeg=%.1f target=[%.2f,%.2f,%.2f] qInit=[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f] solveIK=%s limits=%s\n",
-                    offsetDeg, alphaDeg, px, py, pz,
-                    Math.toDegrees(qInit[0]), Math.toDegrees(qInit[1]), Math.toDegrees(qInit[2]),
-                    Math.toDegrees(qInit[3]), Math.toDegrees(qInit[4]), Math.toDegrees(qInit[5]),
-                    q == null ? "NULL" : String.format("[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f]", q[0], q[1], q[2], q[3], q[4], q[5]),
-                    q == null ? "N/A" : isWithinLimits(q, isRight));
-            }
+            // Debug prints removed to prevent console flood and performance lag
             if (q != null && isWithinLimits(q, isRight)) {
                 addUniqueSolution(validSolutions, q);
             }
