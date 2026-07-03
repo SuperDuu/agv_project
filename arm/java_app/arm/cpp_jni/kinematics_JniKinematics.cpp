@@ -1,3 +1,4 @@
+#define _USE_MATH_DEFINES
 #include <jni.h>
 #include <cmath>
 #include <vector>
