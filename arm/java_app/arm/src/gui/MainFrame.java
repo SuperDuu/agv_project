@@ -124,6 +124,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     String trajectoryLockedCfg = "+";
     boolean ikSelectionLogEnabled = false;
     boolean useGlobalC2 = true;
+    boolean useDescartesIK = true;
 
 
     comm.UartManager uartManager = new comm.UartManager();
@@ -672,9 +673,15 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             useGlobalC2 = c2SplineItem.isSelected();
         });
 
+        JCheckBoxMenuItem descartesItem = new JCheckBoxMenuItem("Tối ưu quỹ đạo Descartes (Graph Search)", useDescartesIK);
+        descartesItem.addItemListener(e -> {
+            useDescartesIK = descartesItem.isSelected();
+        });
+
         chedoMenu.add(clickModeItem);
         chedoMenu.add(manualModeItem);
         chedoMenu.add(c2SplineItem);
+        chedoMenu.add(descartesItem);
 
 
         // Add menus to bar
@@ -1299,10 +1306,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         SwingWorker<java.util.List<double[]>, String> precomputeWorker = new SwingWorker<java.util.List<double[]>, String>() {
             @Override
             protected java.util.List<double[]> doInBackground() throws Exception {
-                // BƯỚC 1: FORWARD PASS (QUÉT GIẢI VÀ ĐÁNH DẤU LỖ HỔNG)
-                java.util.List<double[]> rawJointTrajectory = new java.util.ArrayList<>();
-                for (int i = 0; i < finalPath.size(); i++) {
-                    double[] pt = finalPath.get(i);
+                java.util.List<double[]> rawJointTrajectory;
+                
+                if (useDescartesIK) {
+                    publish("Đang phân tích đồ thị toàn cục (Descartes ROS-Industrial)...");
+                    rawJointTrajectory = planDescartesTrajectory(finalPath, isRight);
+                } else {
+                    // BƯỚC 1: FORWARD PASS (QUÉT GIẢI VÀ ĐÁNH DẤU LỖ HỔNG) TUẦN TỰ (Greedy Warm-Start)
+                    rawJointTrajectory = new java.util.ArrayList<>();
+                    for (int i = 0; i < finalPath.size(); i++) {
+                        double[] pt = finalPath.get(i);
                     double[] result = solveIKForTrajectoryPoint(pt[0], pt[1], pt[2], true);
                     
                     if (result != null) {
@@ -1374,8 +1387,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                                 if (DEBUG) {
                                     System.out.printf("[DEBUG_TRAJ] Point %d: PHÁT HIỆN CẦN CHUYỂN NHÁNH! Chèn %d điểm quá độ thuần khớp (bước nhảy tối đa %.2f độ).\n", 
                                         i + 1, N, maxJointJump);
+                                    System.out.println("[DEBUG_TRAJ] CẢNH BÁO: Đoạn chuyển tiếp là nội suy thuần khớp (joint-space). Đầu công cụ sẽ lệch khỏi mặt phẳng Cartesian/đường vẽ. Cần nhấc bút (pen-up) nếu đang vẽ!");
                                 }
-                                publish(String.format("Chuyển nhánh tại điểm %d: chèn %d điểm quá độ...", i + 1, N));
+                                publish(String.format("Chuyển nhánh tại điểm %d: chèn %d điểm thuần khớp (Cảnh báo: Lệch đường vẽ, khuyên dùng Pen-Up)", i + 1, N));
                                 
                                 // Chèn tất cả các điểm quá độ vào quỹ đạo
                                 rawJointTrajectory.addAll(transitionPoints);
@@ -1397,6 +1411,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         publish(String.format("Cảnh báo: Điểm %d bị kẹt (Ngoài vùng), đánh dấu lỗ hổng!", i + 1));
                     }
                 }
+                } // End of else block (Sequential Warm-Start)
 
                 // THÊM BỘ KHỐNG CHẾ KHOẢNG CÁCH VÁ (GAP LIMITER)
                 int consecutiveNulls = 0;
@@ -1660,6 +1675,180 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         } else {
             return isRight ? activeAlphaRight : activeAlphaLeft;
         }
+    }
+
+    private double calculateEdgeCost(double[] qA, double[] qB) {
+        double cost = 0.0;
+        double maxJump = 0.0;
+        for (int i = 0; i < 6; i++) {
+            double d = Math.abs(wrappedDegDiff(qA[i], qB[i]));
+            cost += d * d; // Penalize large individual joint moves
+            if (d > maxJump) maxJump = d;
+        }
+        if (maxJump > 30.0) {
+            cost += 100000.0; // Heavy penalty for jumping branches, but allows it if no other path exists
+        }
+        return cost;
+    }
+
+    private java.util.List<double[]> generateAllValidIK(double px, double py, double pz, boolean isRight) {
+        java.util.List<double[]> allSolutions = new java.util.ArrayList<>();
+        double activeAlpha = isRight ? activeAlphaRight : activeAlphaLeft;
+        
+        JComboBox<String> gCombo = isRight ? gripperModeComboRight : gripperModeComboLeft;
+        boolean fixedGround = (gCombo.getSelectedIndex() == 0);
+        
+        // Coarse grid for alpha and yawOffset to keep graph size manageable
+        double[] alphaGrid = fixedGround ? new double[]{-90, -75, -60, -45, -30, -15, 0, 15, 30} 
+                                         : new double[]{activeAlpha - 15, activeAlpha, activeAlpha + 15};
+        
+        for (double alphaDeg : alphaGrid) {
+            java.util.List<double[]> sols = tryAlpha(px, py, pz, alphaDeg, isRight, isRight ? anglesRight : anglesLeft, Double.NaN);
+            for (double[] q : sols) {
+                // Ensure unique solutions roughly
+                boolean isDuplicate = false;
+                for (double[] existing : allSolutions) {
+                    double diff = 0;
+                    for (int j = 0; j < 6; j++) {
+                        diff += Math.abs(wrappedDegDiff(q[j], existing[j]));
+                    }
+                    if (diff < 1.0) {
+                        isDuplicate = true;
+                        break;
+                    }
+                }
+                if (!isDuplicate && isWithinLimits(q, isRight)) {
+                    allSolutions.add(q);
+                }
+            }
+        }
+        return allSolutions;
+    }
+
+    private java.util.List<double[]> planDescartesTrajectory(java.util.List<double[]> path, boolean isRight) throws Exception {
+        int N = path.size();
+        java.util.List<java.util.List<double[]>> layers = new java.util.ArrayList<>();
+        java.util.List<Integer> validIndices = new java.util.ArrayList<>();
+        
+        // Step 1: Generate graph layers (only for reachable points)
+        for (int i = 0; i < N; i++) {
+            double[] pt = path.get(i);
+            java.util.List<double[]> sols = generateAllValidIK(pt[0], pt[1], pt[2], isRight);
+            if (!sols.isEmpty()) {
+                layers.add(sols);
+                validIndices.add(i);
+            }
+        }
+        
+        if (layers.isEmpty()) {
+            // No reachable points in the entire path
+            java.util.List<double[]> finalPath = new java.util.ArrayList<>();
+            for(int i = 0; i < N; i++) finalPath.add(null);
+            return finalPath;
+        }
+        
+        int numLayers = layers.size();
+        
+        // Step 2: Dynamic Programming (Viterbi) shortest path
+        double[][] dp = new double[numLayers][];
+        int[][] parent = new int[numLayers][];
+        
+        dp[0] = new double[layers.get(0).size()];
+        parent[0] = new int[layers.get(0).size()];
+        
+        double[] currentAngles = isRight ? anglesRight : anglesLeft;
+        for (int k = 0; k < layers.get(0).size(); k++) {
+            dp[0][k] = calculateEdgeCost(currentAngles, layers.get(0).get(k));
+            parent[0][k] = -1;
+        }
+        
+        for (int i = 1; i < numLayers; i++) {
+            java.util.List<double[]> prevLayer = layers.get(i-1);
+            java.util.List<double[]> currLayer = layers.get(i);
+            dp[i] = new double[currLayer.size()];
+            parent[i] = new int[currLayer.size()];
+            
+            for (int currNode = 0; currNode < currLayer.size(); currNode++) {
+                double minCost = Double.POSITIVE_INFINITY;
+                int bestPrevNode = -1;
+                double[] qCurr = currLayer.get(currNode);
+                
+                for (int prevNode = 0; prevNode < prevLayer.size(); prevNode++) {
+                    double[] qPrev = prevLayer.get(prevNode);
+                    double edgeCost = calculateEdgeCost(qPrev, qCurr);
+                    double totalCost = dp[i-1][prevNode] + edgeCost;
+                    if (totalCost < minCost) {
+                        minCost = totalCost;
+                        bestPrevNode = prevNode;
+                    }
+                }
+                dp[i][currNode] = minCost;
+                parent[i][currNode] = bestPrevNode;
+            }
+        }
+        
+        // Step 3: Backtrack
+        int bestLastNode = 0;
+        double minFinalCost = Double.POSITIVE_INFINITY;
+        for (int k = 0; k < layers.get(numLayers-1).size(); k++) {
+            if (dp[numLayers-1][k] < minFinalCost) {
+                minFinalCost = dp[numLayers-1][k];
+                bestLastNode = k;
+            }
+        }
+        
+        java.util.List<double[]> optimalValidPath = new java.util.ArrayList<>();
+        int currNode = bestLastNode;
+        for (int i = numLayers - 1; i >= 0; i--) {
+            optimalValidPath.add(0, layers.get(i).get(currNode));
+            currNode = parent[i][currNode];
+        }
+        
+        // Step 4: Construct final path with missing 'null' gaps and branch transition nodes
+        java.util.List<double[]> finalPath = new java.util.ArrayList<>();
+        int validPtr = 0;
+        double[] qRef = null;
+        
+        for (int i = 0; i < N; i++) {
+            if (validPtr < validIndices.size() && validIndices.get(validPtr) == i) {
+                double[] qNext = optimalValidPath.get(validPtr);
+                
+                if (qRef != null) {
+                    double maxJump = 0.0;
+                    for (int j = 0; j < 6; j++) {
+                        double diff = Math.abs(wrappedDegDiff(qNext[j], qRef[j]));
+                        if (diff > maxJump) maxJump = diff;
+                    }
+                    
+                    if (maxJump > 30.0) {
+                        int M = (int) Math.ceil(maxJump / 15.0);
+                        if (M < 1) M = 1;
+                        if (DEBUG) {
+                            System.out.printf("[DEBUG_DESCARTES] Điểm %d: Phát hiện lật cấu hình (Jump=%.1f) -> Chèn %d điểm\n", i, maxJump, M);
+                            System.out.println("[DEBUG_TRAJ] CẢNH BÁO: Đoạn chuyển tiếp là nội suy thuần khớp (joint-space). Cần nhấc bút (pen-up)!");
+                        }
+                        for (int step = 1; step <= M; step++) {
+                            double factor = (double) step / M;
+                            double[] interp = new double[6];
+                            for (int j = 0; j < 6; j++) {
+                                double diff = wrappedDegDiff(qNext[j], qRef[j]);
+                                interp[j] = qRef[j] + diff * factor;
+                                while (interp[j] > 180) interp[j] -= 360;
+                                while (interp[j] < -180) interp[j] += 360;
+                            }
+                            finalPath.add(interp);
+                        }
+                    }
+                }
+                
+                finalPath.add(qNext);
+                qRef = qNext;
+                validPtr++;
+            } else {
+                finalPath.add(null);
+            }
+        }
+        return finalPath;
     }
 
     private double[] solveIKForTrajectoryPoint(double px, double py, double pz, boolean enforceJumpLimit) {
@@ -2106,7 +2295,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 double[] activeAngles = isRight ? activeAnglesRight : activeAnglesLeft;
 
                 java.util.TreeSet<Double> reachableRadii = new java.util.TreeSet<>();
-                java.util.HashMap<Double, Integer> radiusClasses = new java.util.HashMap<>();
 
                 // Quét trực tiếp bán kính r và kiểm tra bằng bộ giải IK thực tế.
                 for (double r = 15.0; r <= 70.0; r += 0.2) {
@@ -2115,7 +2303,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     int code = checkIKForWorkspaceScan(px, 0, fixedZ, isRight, fixedGround, prefCfg, activeAngles);
                     if (code > 0) {
                         reachableRadii.add(r);
-                        radiusClasses.put(r, code);
                     }
                 }
 
@@ -2151,7 +2338,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     for (double r : reachableRadii) {
                         if (r - lastRAdded >= 1.5) { // Lọc không gian
                             lastRAdded = r;
-                            int rClass = radiusClasses.getOrDefault(r, 1);
                             for (double theta = q1_min; theta <= q1_max; theta += 4.0) {
                                 double rad = Math.toRadians(theta);
                                 double px, py;
@@ -2163,9 +2349,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                                     py = -r * Math.sin(rad);
                                 }
                                 double[] pt = new double[] { px, py, fixedZ };
-                                if (rClass == 2) {
+                                
+                                int pointClass = checkIKForWorkspaceScan(px, py, fixedZ, isRight, fixedGround, prefCfg, activeAngles);
+                                if (pointClass == 2) {
                                     directDots.add(pt);
-                                } else {
+                                } else if (pointClass == 1) {
                                     transitionDots.add(pt);
                                 }
                             }
