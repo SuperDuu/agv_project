@@ -971,6 +971,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         gotoStatusLeft.setText(text);
     }
 
+    public boolean isArmInterpolating() {
+        boolean isRight = isRightArmSelected;
+        double[] armAngles = isRight ? anglesRight : anglesLeft;
+        double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            if (Math.abs(armTargetAngles[i] - armAngles[i]) > 0.05) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void gotoCoordinate() {
         gotoCoordinate(isRightArmSelected);
     }
@@ -1331,7 +1343,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             setGotoStatus("Tốc độ đang là 0, tự tăng lên 30 °/s để chạy quỹ đạo", new Color(180, 110, 0));
         }
 
-        showTrailCb.setSelected(false);
         armPanel.trail.clear();
 
         final JComboBox<String> armConfigCombo = isRight ? configComboRight : configComboLeft;
@@ -1555,7 +1566,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private void runPlayback(final java.util.List<double[]> jointTrajectory, final String statusTitle, final boolean isRight, final double[] armAngles, final double[] armTargetAngles, final JSlider[] armSliders, final JLabel[] armAngleLbls) {
-        showTrailCb.setSelected(false);
         armPanel.trail.clear();
 
         if (motionTimer != null) motionTimer.stop();
@@ -1591,7 +1601,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 Timer delayTimer = new Timer(1000, evt2 -> {
                     ((Timer) evt2.getSource()).stop();
                     setTitle(statusTitle + " đang chạy...");
-                    showTrailCb.setSelected(true);
+                    // showTrailCb state is preserved
 
                     final int[] currentIndex = { 0 };
                     trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
