@@ -65,3 +65,9 @@ void Encoder_Reset(uint8_t index) {
     encoders[index].last_counter_value = 0;
     encoders[index].accumulated_count = 0;
 }
+
+// Đọc encoder đơn giản - trả về giá trị counter trực tiếp
+int32_t Encoder_Read_Raw(uint8_t index) {
+    if (index >= NUM_ENCODERS) return 0;
+    return (int32_t)__HAL_TIM_GET_COUNTER(encoders[index].htim);
+}
