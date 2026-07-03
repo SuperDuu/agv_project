@@ -2794,7 +2794,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return (0.15 * jSmooth) + (0.5 * jLimit) + (3.0 * jPosture) + (0.5 * jPhi) + jConfig;
     }
 
-    private String getActualConfig(double[] q, boolean isRight) {
+    public String getActualConfig(double[] q, boolean isRight) {
         if (isRight) {
             return q[2] >= 0 ? "+" : "-";
         } else {
@@ -2831,6 +2831,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double[] activeAngles = qRef;
 
+        // --- Loop 1: Strategy 1 (Warm Start) for ALL yawOffsets first ---
         for (double offsetDeg : yawOffsets) {
             double yaw = q1_base + Math.toRadians(offsetDeg);
             double[][] R_target;
@@ -2850,7 +2851,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 };
             }
 
-            // --- Strategy 1: Warm start from qRef (previous trajectory point) ---
             double[] qInit = new double[NUM_JOINTS];
             for (int i = 0; i < NUM_JOINTS; i++) {
                 qInit[i] = Math.toRadians(activeAngles[i]);
@@ -2861,8 +2861,29 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 addUniqueSolution(validSolutions, q);
                 if (findOneOnly) return validSolutions;
             }
+        }
 
-            // --- Strategy 2: ALWAYS try diverse cold-start initial guesses ---
+        // --- Loop 2: Strategy 2 & 3 (Cold Starts) ONLY if no Warm Start was found ---
+        for (double offsetDeg : yawOffsets) {
+            double yaw = q1_base + Math.toRadians(offsetDeg);
+            double[][] R_target;
+            if (isRight) {
+                double cy = Math.cos(yaw), sy = Math.sin(yaw);
+                double[][] R_z = { { cy, -sy, 0 }, { sy, cy, 0 }, { 0, 0, 1 } };
+                R_target = multiplyMatrices(R_z, R_y);
+            } else {
+                double yawR = -yaw;
+                double cyR = Math.cos(yawR), syR = Math.sin(yawR);
+                double[][] R_z_right = { { cyR, -syR, 0 }, { syR, cyR, 0 }, { 0, 0, 1 } };
+                double[][] R_target_right = multiplyMatrices(R_z_right, R_y);
+                R_target = new double[][] {
+                    {  R_target_right[0][0], -R_target_right[0][1], -R_target_right[0][2] },
+                    { -R_target_right[1][0],  R_target_right[1][1],  R_target_right[1][2] },
+                    { -R_target_right[2][0],  R_target_right[2][1],  R_target_right[2][2] }
+                };
+            }
+
+            // Strategy 2: Cold start guesses
             double[] q3_options = isRight ? new double[] { 0.3, -0.3 } : new double[] { -0.3, 0.3 };
             double[] q4_options = isRight ? new double[] { -35.0, 35.0 } : new double[] { 35.0, -35.0 };
             
@@ -2885,7 +2906,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 }
             }
             
-            // --- Strategy 3: Try with qRef[0] as q1 ---
+            // Strategy 3: Alternative cold start guesses
+            double[] qInit = new double[NUM_JOINTS];
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                qInit[i] = Math.toRadians(activeAngles[i]);
+            }
             if (Math.abs(qInit[0] - yaw) > 0.15) {
                 for (int cfgIdx = 0; cfgIdx < 2; cfgIdx++) {
                     double q3_val = q3_options[cfgIdx];

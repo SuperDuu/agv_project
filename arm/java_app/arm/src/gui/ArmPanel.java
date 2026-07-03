@@ -348,7 +348,13 @@ public class ArmPanel extends JPanel
         double[][] pts3dActive = robot.isRightArmSelected ? pts3dRight : pts3dLeft;
 
         if (robot.showTrailCb.isSelected()) {
-            if (robot.isArmInterpolating()) {
+            boolean isRight = robot.isRightArmSelected;
+            double[] armAngles = isRight ? robot.anglesRight : robot.anglesLeft;
+            double[] armTargetAngles = isRight ? robot.targetAnglesRight : robot.targetAnglesLeft;
+            String targetCfg = robot.getActualConfig(armTargetAngles, isRight);
+            String currentCfg = robot.getActualConfig(armAngles, isRight);
+
+            if (!targetCfg.equals(currentCfg)) {
                 trail.clear();
             } else {
                 double[] currentEE = pts3dActive[NUM_JOINTS + 1];
