@@ -51,6 +51,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     JCheckBox showGridCb = new JCheckBox("Hiện Lưới", true);
     JCheckBox showTrailCb = new JCheckBox("Hiện Vết Quỹ Đạo", false);
+    JCheckBox useJniIKCb = new JCheckBox("Dùng bộ giải C++ (JNI)", false);
 
     JComboBox<String> configComboRight = new JComboBox<>(new String[] { "Up (+)", "Down (-)" });
     JComboBox<String> configComboLeft = new JComboBox<>(new String[] { "Up (+)", "Down (-)" });
@@ -705,10 +706,33 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             trajectoryNeedsRecalculation = true;
         });
 
+        JCheckBoxMenuItem jniItem = new JCheckBoxMenuItem("Dùng bộ giải C++ (JNI Industrial)", useJniIKCb.isSelected());
+        jniItem.addItemListener(e -> {
+            if (jniItem.isSelected()) {
+                if (kinematics.JniKinematics.isLoaded()) {
+                    useJniIKCb.setSelected(true);
+                    kinematics.Kinematics.useJni = true;
+                } else {
+                    JOptionPane.showMessageDialog(MainFrame.this,
+                            "Không tìm thấy thư viện kinematics_jni.dll!\nVui lòng biên dịch thư viện C++ bằng file build_jni.bat.",
+                            "Lỗi tải thư viện",
+                            JOptionPane.ERROR_MESSAGE);
+                    jniItem.setSelected(false);
+                    useJniIKCb.setSelected(false);
+                    kinematics.Kinematics.useJni = false;
+                }
+            } else {
+                useJniIKCb.setSelected(false);
+                kinematics.Kinematics.useJni = false;
+            }
+            trajectoryNeedsRecalculation = true;
+        });
+
         chedoMenu.add(clickModeItem);
         chedoMenu.add(manualModeItem);
         chedoMenu.add(c2SplineItem);
         chedoMenu.add(descartesItem);
+        chedoMenu.add(jniItem);
 
 
         // Add menus to bar

@@ -2,6 +2,7 @@ package kinematics;
 
 public class Kinematics {
     public static final boolean IK_AUDIT_ENABLED = false;
+    public static boolean useJni = false;
 
     // Các thông số của Robot 6DOF từ ARM.m
     public static final int NUM_JOINTS = 6;
@@ -32,6 +33,12 @@ public class Kinematics {
     }
 
     public static double[] solveIK(double px, double py, double pz, double[][] R_target, double[] qInitRad, boolean isRight) {
+        if (useJni && JniKinematics.isLoaded()) {
+            double[] sol = JniKinematics.solveIKNative(px, py, pz, R_target, qInitRad, isRight);
+            if (sol != null) {
+                return sol;
+            }
+        }
         IKWorkspace ws = new IKWorkspace();
         double[] q = qInitRad.clone();
         double[] bestQ = q.clone();
