@@ -78,6 +78,28 @@ void computeFKMatrix(const double q[6], bool isRight, double T[4][4]) {
     for (int r = 0; r < 4; r++) std::copy(T_next[r], T_next[r] + 4, T[r]);
 }
 
+void orthonormalize3x3(const double R[3][3], double Q[3][3]) {
+    double len0 = std::sqrt(R[0][0]*R[0][0] + R[1][0]*R[1][0] + R[2][0]*R[2][0]);
+    if (len0 < 1e-9) len0 = 1.0;
+    Q[0][0] = R[0][0] / len0;
+    Q[1][0] = R[1][0] / len0;
+    Q[2][0] = R[2][0] / len0;
+    
+    double dot = Q[0][0]*R[0][1] + Q[1][0]*R[1][1] + Q[2][0]*R[2][1];
+    double v1_x = R[0][1] - dot * Q[0][0];
+    double v1_y = R[1][1] - dot * Q[1][0];
+    double v1_z = R[2][1] - dot * Q[2][0];
+    double len1 = std::sqrt(v1_x*v1_x + v1_y*v1_y + v1_z*v1_z);
+    if (len1 < 1e-9) len1 = 1.0;
+    Q[0][1] = v1_x / len1;
+    Q[1][1] = v1_y / len1;
+    Q[2][1] = v1_z / len1;
+    
+    Q[0][2] = Q[1][0]*Q[2][1] - Q[2][0]*Q[1][1];
+    Q[1][2] = Q[2][0]*Q[0][1] - Q[0][0]*Q[2][1];
+    Q[2][2] = Q[0][0]*Q[1][1] - Q[1][0]*Q[0][1];
+}
+
 double compute6x6Determinant(const double A[6][6]) {
     double M[6][6];
     for (int i = 0; i < 6; i++) {
@@ -313,6 +335,10 @@ bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3]
             }
         }
 
+        // Orthonormalize relative rotation matrix to prevent numerical drift (Matches Java exactly!)
+        double R_rel_ortho[3][3];
+        orthonormalize3x3(R_rel, R_rel_ortho);
+
         double dx = T_target[0][3] - T_curr[0][3];
         double dy = T_target[1][3] - T_curr[1][3];
         double dz = T_target[2][3] - T_curr[2][3];
@@ -323,7 +349,7 @@ bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3]
             R0T[2][0]*dx + R0T[2][1]*dy + R0T[2][2]*dz
         };
 
-        double trace = R_rel[0][0] + R_rel[1][1] + R_rel[2][2];
+        double trace = R_rel_ortho[0][0] + R_rel_ortho[1][1] + R_rel_ortho[2][2];
         double cosTheta = 0.5 * (trace - 1.0);
         cosTheta = std::max(-1.0, std::min(1.0, cosTheta));
         double theta = std::acos(cosTheta);
@@ -331,17 +357,18 @@ bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3]
         double dw[3] = {0, 0, 0};
         if (theta >= 1e-6) {
             if (theta > 3.0) {
-                dw[0] = theta * std::sqrt(std::max(0.0, 0.5 * (R_rel[0][0] + 1.0)));
-                dw[1] = theta * std::sqrt(std::max(0.0, 0.5 * (R_rel[1][1] + 1.0)));
-                dw[2] = theta * std::sqrt(std::max(0.0, 0.5 * (R_rel[2][2] + 1.0)));
-                if (R_rel[2][1] - R_rel[1][2] < 0) dw[0] = -dw[0];
-                if (R_rel[0][2] - R_rel[2][0] < 0) dw[1] = -dw[1];
-                if (R_rel[1][0] - R_rel[0][1] < 0) dw[2] = -dw[2];
+                dw[0] = theta * std::sqrt(std::max(0.0, 0.5 * (R_rel_ortho[0][0] + 1.0)));
+                dw[1] = theta * std::sqrt(std::max(0.0, 0.5 * (R_rel_ortho[1][1] + 1.0)));
+                dw[2] = theta * std::sqrt(std::max(0.0, 0.5 * (R_rel_ortho[2][2] + 1.0)));
+                if (R_rel_ortho[2][1] - R_rel_ortho[1][2] < 0) dw[0] = -dw[0];
+                if (R_rel_ortho[0][2] - R_rel_ortho[2][0] < 0) dw[1] = -dw[1];
+                if (R_rel_ortho[1][0] - R_rel_ortho[0][1] < 0) dw[2] = -dw[2];
             } else {
-                double s = 0.5 * theta / std::sin(theta);
-                dw[0] = (R_rel[2][1] - R_rel[1][2]) * s;
-                dw[1] = (R_rel[0][2] - R_rel[2][0]) * s;
-                dw[2] = (R_rel[1][0] - R_rel[0][1]) * s;
+                double sinTheta = std::sin(theta);
+                double s = (std::abs(sinTheta) > 1e-4) ? (0.5 * theta / sinTheta) : 0.5;
+                dw[0] = (R_rel_ortho[2][1] - R_rel_ortho[1][2]) * s;
+                dw[1] = (R_rel_ortho[0][2] - R_rel_ortho[2][0]) * s;
+                dw[2] = (R_rel_ortho[1][0] - R_rel_ortho[0][1]) * s;
             }
         }
 
@@ -375,9 +402,11 @@ bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3]
         double dq[6];
         solveDLS(Je, delta, lambda, dq);
 
+        // Clamping with locking to force joint limits contribution (Matches Java exactly!)
         for (int i = 0; i < 6; i++) {
             double nextQ = wrapToPi(qOut[i] + alpha * dq[i]);
             if (nextQ < minLimRad[i] || nextQ > maxLimRad[i]) {
+                dq[i] = 0.0; // Lock this joint!
                 nextQ = std::max(minLimRad[i], std::min(maxLimRad[i], nextQ));
             }
             qOut[i] = nextQ;
@@ -394,10 +423,9 @@ bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3]
     return false;
 }
 
-// C++ IKFast (Analytical geometric approximation + 2 DLS loops)
+// C++ IKFast (Analytical geometric approximation + 3 DLS loops)
 bool solveIK_IKFast(double px, double py, double pz, const double R_target[3][3], const double qInitRad[6], bool isRight, double qOut[6]) {
     // 1. Calculate simplified wrist center
-    // TCP is offset from wrist center along tool Y axis by L7
     double xw = px - R_target[0][1] * (-L7);
     double yw = py - R_target[1][1] * (-L7);
     double zw = pz - R_target[2][1] * (-L7);
@@ -407,29 +435,26 @@ bool solveIK_IKFast(double px, double py, double pz, const double R_target[3][3]
     
     // Project wrist to plane
     double r = std::sqrt(xw * xw + yw * yw);
-    double h = zw - (L0 + L1); // Height offset from joint 2
+    double h = zw - (L0 + L1);
     
-    // Joint 2 and 3 geometry (2-link planar system)
-    double link1 = isRight ? (L2 + L3) : -(L2 + L3); // shoulder to elbow link
-    double link2 = L4; // elbow to wrist link
+    // Joint 2 and 3 geometry
+    double link1 = isRight ? (L2 + L3) : -(L2 + L3);
+    double link2 = L4;
     
     double d_sq = r * r + h * h;
-    double d = std::sqrt(d_sq);
     
     // Cosine rule
     double cos_q2 = (d_sq - link1 * link1 - link2 * link2) / (2.0 * std::abs(link1) * link2);
     cos_q2 = std::max(-1.0, std::min(1.0, cos_q2));
     
-    // Elbow up/down config
-    double q2 = std::acos(cos_q2); // Elbow up
-    if (qInitRad[2] < 0) q2 = -q2; // Elbow down fallback
+    double q2 = std::acos(cos_q2);
+    if (qInitRad[2] < 0) q2 = -q2;
     
     double q1 = std::atan2(h, r) - std::atan2(link2 * std::sin(q2), std::abs(link1) + link2 * std::cos(q2));
     
-    // Setup analytical angles array
     double q_guess[6] = { q0, q1, q2, qInitRad[3], qInitRad[4], qInitRad[5] };
     
-    // 3. Fast DLS refinement (exactly 3 loops) to adjust for exact link offsets and find wrist angles q3, q4, q5
+    // 3. Fast DLS refinement (exactly 4 loops)
     return solveIK_CppDLS(px, py, pz, R_target, q_guess, isRight, qOut, 4);
 }
 
@@ -463,10 +488,8 @@ JNIEXPORT jdoubleArray JNICALL Java_kinematics_JniKinematics_solveIKNative(
     bool success = false;
     
     if (mode == 2) {
-        // IKFast Analytical Mode
         success = solveIK_IKFast(px, py, pz, R_target, q_init_cpp, isRight, q_out);
     } else {
-        // C++ Numerical Mode
         success = solveIK_CppDLS(px, py, pz, R_target, q_init_cpp, isRight, q_out, 100);
     }
 
