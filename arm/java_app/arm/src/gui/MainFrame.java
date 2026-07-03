@@ -129,6 +129,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private java.util.List<double[]> lastCartesianPath = null;
     private java.util.List<java.util.List<double[]>> lastCandidatesPerStep = null;
     private int[] lastSelectedIndices = null;
+    private boolean trajectoryNeedsRecalculation = true;
+
+    public void notifyPathChanged() {
+        trajectoryNeedsRecalculation = true;
+    }
+
+    public void setFixedHeight(double z) {
+        fixedHeightSpinner.setValue(z);
+        trajectoryNeedsRecalculation = true;
+    }
 
 
     comm.UartManager uartManager = new comm.UartManager();
@@ -414,6 +424,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 if (showWorkspaceSlice) {
                     updateWorkspaceSlice();
                 }
+                trajectoryNeedsRecalculation = true;
             }
         });
         topPanel.add(new JLabel(" Tay Vẽ:"));
@@ -426,6 +437,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         btnClearMouseDraw.addActionListener(evt -> {
             armPanel.referencePath.clear();
             armPanel.repaint();
+            trajectoryNeedsRecalculation = true;
         });
         topPanel.add(btnClearMouseDraw);
 
@@ -457,7 +469,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         speedSlider.setPreferredSize(new Dimension(100, 25));
         speedSlider.setMajorTickSpacing(30);
         speedSlider.setPaintTicks(true);
-        speedSlider.addChangeListener(ev -> speedLabel.setText(speedSlider.getValue() + " °/s"));
+        speedSlider.addChangeListener(ev -> {
+            speedLabel.setText(speedSlider.getValue() + " °/s");
+            trajectoryNeedsRecalculation = true;
+        });
         topPanel.add(speedSlider);
         topPanel.add(speedLabel);
 
@@ -681,11 +696,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         JCheckBoxMenuItem c2SplineItem = new JCheckBoxMenuItem("Mượt C2 toàn cục (Quintic Spline)", useGlobalC2);
         c2SplineItem.addItemListener(e -> {
             useGlobalC2 = c2SplineItem.isSelected();
+            trajectoryNeedsRecalculation = true;
         });
 
         JCheckBoxMenuItem descartesItem = new JCheckBoxMenuItem("Tối ưu quỹ đạo Descartes (Graph Search)", useDescartesIK);
         descartesItem.addItemListener(e -> {
             useDescartesIK = descartesItem.isSelected();
+            trajectoryNeedsRecalculation = true;
         });
 
         chedoMenu.add(clickModeItem);
@@ -1293,6 +1310,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return;
         }
 
+        final boolean isRight = isRightArmSelected;
+        final double[] armAngles = isRight ? anglesRight : anglesLeft;
+        final double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
+        final JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
+        final JLabel[] armAngleLbls = isRight ? angleLblsRight : angleLblsLeft;
+
+        if (!trajectoryNeedsRecalculation && lastJointTrajectory != null && !lastJointTrajectory.isEmpty()) {
+            setGotoStatus("Chạy trực tiếp quỹ đạo đã lưu...", new Color(0, 140, 0));
+            runPlayback(lastJointTrajectory, statusTitle, isRight, armAngles, armTargetAngles, armSliders, armAngleLbls);
+            return;
+        }
+
         setTitle("Đang chuẩn bị dữ liệu...");
         setGotoStatus("Đang tính toán động học ngược (IK) cho quỹ đạo...", new Color(0, 90, 180));
         
@@ -1305,13 +1334,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         showTrailCb.setSelected(false);
         armPanel.trail.clear();
 
-        final boolean isRight = isRightArmSelected;
-        final double[] armAngles = isRight ? anglesRight : anglesLeft;
-        final double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
-        final JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
-        final JLabel[] armAngleLbls = isRight ? angleLblsRight : angleLblsLeft;
         final JComboBox<String> armConfigCombo = isRight ? configComboRight : configComboLeft;
-
         String cfg = armConfigCombo.getSelectedIndex() == 0 ? "+" : "-";
         trajectoryLockedCfg = cfg;
         trajectoryLastQ = null;
@@ -1339,7 +1362,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     publish("Đang phân tích đồ thị toàn cục (Descartes ROS-Industrial)...");
                     rawJointTrajectory = planDescartesTrajectory(finalPath, isRight);
                 } else {
-                    // BƯỚC 1: FORWARD PASS (QUÉT GIẢI VÀ ĐÁNH DẤU LỖ HỔNG) TUẦN TỰ (Greedy Warm-Start)
                     // BƯỚC 1: FORWARD PASS (QUÉT GIẢI VÀ ĐÁNH DẤU LỖ HỔNG) TUẦN TỰ (Greedy Warm-Start)
                     rawJointTrajectory = new java.util.ArrayList<>();
                     lastCartesianPath = finalPath;
@@ -1505,16 +1527,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         return;
                     }
 
-                    // Nhảy đến điểm xuất phát
-                    double[] startResult = jointTrajectory.get(0);
-                    if (isRight) {
-                        setTargetAnglesRight(startResult);
-                    } else {
-                        setTargetAnglesLeft(startResult);
-                    }
-                    updateArm();
-
                     lastJointTrajectory = jointTrajectory;
+                    trajectoryNeedsRecalculation = false;
+
                     SwingUtilities.invokeLater(() -> {
                         TrajectoryAnalyticsWindow analytics = new TrajectoryAnalyticsWindow(
                             lastJointTrajectory,
@@ -1526,58 +1541,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         analytics.setVisible(true);
                     });
 
-                    setGotoStatus("Tính toán xong. Đang di chuyển đến điểm bắt đầu...", new Color(0, 90, 180));
-
-                    final int[] waitMs = { 0 };
-                    Timer prepareTimer = new Timer(50, evt -> {
-                        waitMs[0] += 50;
-                        boolean arrived = true;
-                        for (int i = 0; i < NUM_JOINTS; i++) {
-                            if (Math.abs(armAngles[i] - armTargetAngles[i]) > 0.5) {
-                                arrived = false;
-                            }
-                        }
-                        if (arrived || waitMs[0] >= 5000) {
-                            ((Timer) evt.getSource()).stop();
-                            if (!arrived) {
-                                setGotoStatus("Hết thời gian chờ điểm đầu, chạy quỹ đạo từ vị trí hiện tại", new Color(180, 110, 0));
-                            }
-                            setTitle("Chờ 1 giây...");
-
-                            Timer delayTimer = new Timer(1000, evt2 -> {
-                                ((Timer) evt2.getSource()).stop();
-                                setTitle(statusTitle + " đang chạy...");
-                                showTrailCb.setSelected(true);
-
-                                final int[] currentIndex = { 0 };
-                                trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
-                                    if (currentIndex[0] >= jointTrajectory.size()) {
-                                        trajectoryTimer.stop();
-                                        setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
-                                        setGotoStatus("Quỹ đạo hoàn thành!", new Color(0, 140, 0));
-                                        startMotionTimer();
-                                        return;
-                                    }
-
-                                    double[] q_target = jointTrajectory.get(currentIndex[0]);
-                                    currentIndex[0]++;
-
-                                    for (int i = 0; i < NUM_JOINTS; i++) {
-                                        armTargetAngles[i] = armAngles[i] = q_target[i];
-                                        armSliders[i].removeChangeListener(MainFrame.this);
-                                        armSliders[i].setValue((int) Math.round(armAngles[i]));
-                                        armSliders[i].addChangeListener(MainFrame.this);
-                                        armAngleLbls[i].setText((int) Math.round(armAngles[i]) + "°");
-                                    }
-                                    updateArm();
-                                    sendJointsToUart();
-                                });
-                                trajectoryTimer.start();
-                            });
-                            delayTimer.start();
-                        }
-                    });
-                    prepareTimer.start();
+                    runPlayback(jointTrajectory, statusTitle, isRight, armAngles, armTargetAngles, armSliders, armAngleLbls);
 
                 } catch (Exception ex) {
                     ex.printStackTrace();
@@ -1588,6 +1552,76 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         };
 
         precomputeWorker.execute();
+    }
+
+    private void runPlayback(final java.util.List<double[]> jointTrajectory, final String statusTitle, final boolean isRight, final double[] armAngles, final double[] armTargetAngles, final JSlider[] armSliders, final JLabel[] armAngleLbls) {
+        showTrailCb.setSelected(false);
+        armPanel.trail.clear();
+
+        if (motionTimer != null) motionTimer.stop();
+        if (trajectoryTimer != null) trajectoryTimer.stop();
+
+        // Nhảy đến điểm xuất phát
+        double[] startResult = jointTrajectory.get(0);
+        if (isRight) {
+            setTargetAnglesRight(startResult);
+        } else {
+            setTargetAnglesLeft(startResult);
+        }
+        updateArm();
+
+        setGotoStatus("Tính toán xong. Đang di chuyển đến điểm bắt đầu...", new Color(0, 90, 180));
+
+        final int[] waitMs = { 0 };
+        Timer prepareTimer = new Timer(50, evt -> {
+            waitMs[0] += 50;
+            boolean arrived = true;
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                if (Math.abs(armAngles[i] - armTargetAngles[i]) > 0.5) {
+                    arrived = false;
+                }
+            }
+            if (arrived || waitMs[0] >= 5000) {
+                ((Timer) evt.getSource()).stop();
+                if (!arrived) {
+                    setGotoStatus("Hết thời gian chờ điểm đầu, chạy quỹ đạo từ vị trí hiện tại", new Color(180, 110, 0));
+                }
+                setTitle("Chờ 1 giây...");
+
+                Timer delayTimer = new Timer(1000, evt2 -> {
+                    ((Timer) evt2.getSource()).stop();
+                    setTitle(statusTitle + " đang chạy...");
+                    showTrailCb.setSelected(true);
+
+                    final int[] currentIndex = { 0 };
+                    trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
+                        if (currentIndex[0] >= jointTrajectory.size()) {
+                            trajectoryTimer.stop();
+                            setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
+                            setGotoStatus("Quỹ đạo hoàn thành!", new Color(0, 140, 0));
+                            startMotionTimer();
+                            return;
+                        }
+
+                        double[] q_target = jointTrajectory.get(currentIndex[0]);
+                        currentIndex[0]++;
+
+                        for (int i = 0; i < NUM_JOINTS; i++) {
+                            armTargetAngles[i] = armAngles[i] = q_target[i];
+                            armSliders[i].removeChangeListener(MainFrame.this);
+                            armSliders[i].setValue((int) Math.round(armAngles[i]));
+                            armSliders[i].addChangeListener(MainFrame.this);
+                            armAngleLbls[i].setText((int) Math.round(armAngles[i]) + "°");
+                        }
+                        updateArm();
+                        sendJointsToUart();
+                    });
+                    trajectoryTimer.start();
+                });
+                delayTimer.start();
+            }
+        });
+        prepareTimer.start();
     }
 
     void runCustomPathTrajectory(java.util.List<double[]> path) {
