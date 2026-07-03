@@ -338,17 +338,21 @@ public class ArmPanel extends JPanel
         double[][] pts3dActive = robot.isRightArmSelected ? pts3dRight : pts3dLeft;
 
         if (robot.showTrailCb.isSelected()) {
-            double[] currentEE = pts3dActive[NUM_JOINTS + 1];
-            if (trail.isEmpty()) {
-                trail.add(currentEE.clone());
+            if (robot.isArmInterpolating()) {
+                trail.clear();
             } else {
-                double[] last = trail.get(trail.size() - 1);
-                double dist = Math.sqrt(Math.pow(currentEE[0] - last[0], 2) + Math.pow(currentEE[1] - last[1], 2)
-                        + Math.pow(currentEE[2] - last[2], 2));
-                if (dist > 1.0) {
+                double[] currentEE = pts3dActive[NUM_JOINTS + 1];
+                if (trail.isEmpty()) {
                     trail.add(currentEE.clone());
-                    if (trail.size() > 500)
-                        trail.remove(0);
+                } else {
+                    double[] last = trail.get(trail.size() - 1);
+                    double dist = Math.sqrt(Math.pow(currentEE[0] - last[0], 2) + Math.pow(currentEE[1] - last[1], 2)
+                            + Math.pow(currentEE[2] - last[2], 2));
+                    if (dist > 1.0) {
+                        trail.add(currentEE.clone());
+                        if (trail.size() > 500)
+                            trail.remove(0);
+                    }
                 }
             }
             drawTrail(g2, cx, cy);
