@@ -1788,8 +1788,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] alphaGrid = fixedGround ? new double[]{-90, -75, -60, -45, -30, -15, 0, 15, 30} 
                                          : new double[]{activeAlpha - 15, activeAlpha, activeAlpha + 15};
         
+        double[] activeA = isRight ? anglesRight : anglesLeft;
+        double prefY = getYawOffsetFromQ(activeA, px, py, isRight);
         for (double alphaDeg : alphaGrid) {
-            java.util.List<double[]> sols = tryAlpha(px, py, pz, alphaDeg, isRight, isRight ? anglesRight : anglesLeft, Double.NaN, false);
+            java.util.List<double[]> sols = tryAlpha(px, py, pz, alphaDeg, isRight, activeA, prefY, false);
             for (double[] q : sols) {
                 // Ensure unique solutions roughly
                 boolean isDuplicate = false;
@@ -2353,13 +2355,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private int checkIKForWorkspaceScan(double px, double py, double pz, boolean isRight, boolean fixedGround, String prefCfg, double[] activeAngles) {
         double activeAlpha = isRight ? activeAlphaRight : activeAlphaLeft;
+        double prefYaw = getYawOffsetFromQ(activeAngles, px, py, isRight);
 
         // 1. Check if direct/strict path solution is available (class 2)
         double aStart = fixedGround ? -90 : (activeAlpha - 18);
         double aEnd = fixedGround ? 30 : (activeAlpha + 18);
         double aStep = fixedGround ? 3.0 : 1.0;
         for (double a = aStart; a <= aEnd; a += aStep) {
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, prefYaw, true);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr <= TRAJ_STRICT_ERROR) {
@@ -2380,7 +2383,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // 2. Fallback to basic geometric IK with 15mm tolerance (class 1)
         if (fixedGround) {
             for (double a = -90; a <= 30; a += 5.0) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, prefYaw, true);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRight);
                     if (posErr <= MAX_IK_POSITION_ERROR) {
@@ -2393,7 +2396,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // Chế độ tự do: tìm xung quanh alpha hiện tại trước, sau đó tìm toàn cục
         for (double a = activeAlpha - 15; a <= activeAlpha + 15; a += 5.0) {
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, prefYaw, true);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr <= MAX_IK_POSITION_ERROR) {
@@ -2402,7 +2405,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         }
         for (double a = -90; a <= 30; a += 10.0) {
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, prefYaw, true);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr <= MAX_IK_POSITION_ERROR) {
@@ -2565,6 +2568,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         JComboBox<String> cCombo = isRight ? configComboRight : configComboLeft;
         double[] activeAngles = isRight ? anglesRight : anglesLeft;
         boolean fixedGround = (gCombo.getSelectedIndex() == 0);
+        double prefYaw = getYawOffsetFromQ(activeAngles, px, py, isRight);
 
         if (fixedGround) {
             // Scan alphas from 0 outward, heavily penalizing deviation from 0
@@ -2576,7 +2580,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             
             // Try alpha=0 first, then expand outward in larger steps to save CPU
             for (double a = -90; a <= 30; a += 15.0) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, prefYaw, true);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRight);
                     if (posErr > MAX_IK_POSITION_ERROR) {
@@ -2621,7 +2625,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         for (double a = currentAlpha - 15; a <= currentAlpha + 15; a += 5.0) {
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, prefYaw, true);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr > MAX_IK_POSITION_ERROR) {
@@ -2657,7 +2661,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         for (double a = -90; a <= 30; a += 15.0) {
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, Double.NaN, true);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, prefYaw, true);
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr > MAX_IK_POSITION_ERROR) {
