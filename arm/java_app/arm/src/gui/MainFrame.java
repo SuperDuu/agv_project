@@ -15,7 +15,9 @@ import comm.ControllerReceiver;
 
 public final class MainFrame extends JFrame implements ActionListener, ChangeListener {
     /** Set to false for demos to suppress debug output. Set to true during development. */
-    public static final boolean DEBUG = true;
+    public static final boolean DEBUG = false;
+    public static final boolean FAST_RENDER =
+            !"full".equalsIgnoreCase(System.getenv().getOrDefault("AGV_RENDER_QUALITY", "fast"));
 
     private static final double MAX_IK_POSITION_ERROR = 0.30; // General IK threshold (3mm)
     private static final double TRAJ_RELAXED_ERROR = 0.50; // Trajectory fallback threshold (5mm)
@@ -887,25 +889,33 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // 3. Sync sliders and labels of Right arm without triggering listener
         for (int i = 0; i < NUM_JOINTS; i++) {
-            if (slidersRight[i] != null) {
+            int rounded = (int) Math.round(anglesRight[i]);
+            if (slidersRight[i] != null && slidersRight[i].getValue() != rounded) {
                 slidersRight[i].removeChangeListener(this);
-                slidersRight[i].setValue((int) Math.round(anglesRight[i]));
+                slidersRight[i].setValue(rounded);
                 slidersRight[i].addChangeListener(this);
             }
             if (angleLblsRight[i] != null) {
-                angleLblsRight[i].setText((int) Math.round(anglesRight[i]) + "°");
+                String text = rounded + "°";
+                if (!text.equals(angleLblsRight[i].getText())) {
+                    angleLblsRight[i].setText(text);
+                }
             }
         }
 
         // 4. Sync sliders and labels of Left arm without triggering listener
         for (int i = 0; i < NUM_JOINTS; i++) {
-            if (slidersLeft[i] != null) {
+            int rounded = (int) Math.round(anglesLeft[i]);
+            if (slidersLeft[i] != null && slidersLeft[i].getValue() != rounded) {
                 slidersLeft[i].removeChangeListener(this);
-                slidersLeft[i].setValue((int) Math.round(anglesLeft[i]));
+                slidersLeft[i].setValue(rounded);
                 slidersLeft[i].addChangeListener(this);
             }
             if (angleLblsLeft[i] != null) {
-                angleLblsLeft[i].setText((int) Math.round(anglesLeft[i]) + "°");
+                String text = rounded + "°";
+                if (!text.equals(angleLblsLeft[i].getText())) {
+                    angleLblsLeft[i].setText(text);
+                }
             }
         }
 
@@ -1272,11 +1282,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     void updateArm() {
         double[][] ptsRight = armPanel.computeAllJoints3DRight();
         double[] eeRight = ptsRight[NUM_JOINTS + 1];
-        endEffectorLabelRight.setText(String.format("Tọa độ kẹp (R): (%.1f,  %.1f,  %.1f)", eeRight[0], eeRight[1], eeRight[2]));
+        setLabelIfChanged(endEffectorLabelRight, String.format("Tọa độ kẹp (R): (%.1f,  %.1f,  %.1f)", eeRight[0], eeRight[1], eeRight[2]));
 
         double[][] ptsLeft = armPanel.computeAllJoints3DLeft();
         double[] eeLeft = ptsLeft[NUM_JOINTS + 1];
-        endEffectorLabelLeft.setText(String.format("Tọa độ kẹp (L): (%.1f,  %.1f,  %.1f)", eeLeft[0], eeLeft[1], eeLeft[2]));
+        setLabelIfChanged(endEffectorLabelLeft, String.format("Tọa độ kẹp (L): (%.1f,  %.1f,  %.1f)", eeLeft[0], eeLeft[1], eeLeft[2]));
 
         if (manualMode) {
             isUpdatingFromFK = true; // Lock IK
@@ -1319,6 +1329,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         armPanel.repaint();
+    }
+
+    private void setLabelIfChanged(JLabel label, String text) {
+        if (!text.equals(label.getText())) {
+            label.setText(text);
+        }
     }
 
     void resetAngles() {
