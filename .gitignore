@@ -24,3 +24,14 @@ agv_firmware/Debug/
 # STM32/CubeIDE build artifacts (Giữ lại Src/ và Inc/, chặn file build sinh ra)
 **/Debug/
 **/Release/
+
+# Java app build/runtime artifacts
+arm/java_app/arm/build/
+arm/java_app/arm/dist/
+arm/java_app/arm/uart_temp/
+arm/java_app/arm/.venv/
+*.class
+
+# Python cache artifacts
+__pycache__/
+*.pyc

@@ -67,7 +67,7 @@ public class ArmPanel extends JPanel
     public void mouseClicked(MouseEvent e) {
         // Fixed-height click-to-move: only when fixedHeightMode is enabled,
         // right-click, and not dragged
-        if (!hasDragged && robot.fixedHeightMode && SwingUtilities.isRightMouseButton(e)) {
+        if (!hasDragged && e.getClickCount() == 1 && robot.fixedHeightMode && SwingUtilities.isRightMouseButton(e)) {
             clickTarget = moveToScreenPoint(e.getX(), e.getY());
         }
     }

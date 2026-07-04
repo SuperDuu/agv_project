@@ -2,7 +2,7 @@ package kinematics;
 
 public class Kinematics {
     public static final boolean IK_AUDIT_ENABLED = false;
-    public static int solverMode = 0; // 0 = Java Numerical, 1 = C++ JNI Numerical, 2 = C++ JNI IKFast
+    public static int solverMode = JniKinematics.isLoaded() ? 1 : 0; // 0 = Java Numerical, 1 = C++ JNI Numerical, 2 = C++ JNI IKFast
 
     // Các thông số của Robot 6DOF từ ARM.m
     public static final int NUM_JOINTS = 6;

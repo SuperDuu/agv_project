@@ -3,13 +3,40 @@ import sys
 import subprocess
 import shutil
 
+def platform_config():
+    if sys.platform.startswith("win"):
+        return {
+            "name": "Windows",
+            "jni_include": "win32",
+            "output": os.path.join("..", "lib", "kinematics_jni.dll"),
+            "msvc": True,
+        }
+    if sys.platform.startswith("linux"):
+        return {
+            "name": "Linux",
+            "jni_include": "linux",
+            "output": os.path.join("..", "lib", "libkinematics_jni.so"),
+            "msvc": False,
+        }
+    if sys.platform == "darwin":
+        return {
+            "name": "macOS",
+            "jni_include": "darwin",
+            "output": os.path.join("..", "lib", "libkinematics_jni.dylib"),
+            "msvc": False,
+        }
+    print(f"[ERROR] Unsupported platform: {sys.platform}")
+    sys.exit(1)
+
 def compile():
     # Change working directory to script's directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
 
+    cfg = platform_config()
+
     print("===================================================")
-    print("Compiling C++ JNI library (kinematics_jni.dll)...")
+    print(f"Compiling C++ JNI library for {cfg['name']}...")
     print("===================================================")
 
     java_home = os.environ.get("JAVA_HOME")
@@ -28,11 +55,17 @@ def compile():
 
     print(f"Using JAVA_HOME: {java_home}")
 
+    output_path = cfg["output"]
+    include_dirs = [
+        os.path.join(java_home, "include"),
+        os.path.join(java_home, "include", cfg["jni_include"])
+    ]
+
     vs_path = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat"
     if not os.path.exists(vs_path):
         vs_path = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat"
 
-    if os.path.exists(vs_path):
+    if cfg["msvc"] and os.path.exists(vs_path):
         print(f"Found Visual Studio MSVC compiler tool: {vs_path}")
         # Extract environment variables set by vcvars64.bat
         cmd = f'"{vs_path}" && set'
@@ -54,11 +87,6 @@ def compile():
         # Rebuild standard dictionary for subprocess
         sub_env = {k: v for k, v in env.items()}
         
-        include_dirs = [
-            os.path.join(java_home, "include"),
-            os.path.join(java_home, "include", "win32")
-        ]
-        
         cl_cmd = [
             "cl.exe",
             "/LD",
@@ -67,7 +95,7 @@ def compile():
             "/I", include_dirs[0],
             "/I", include_dirs[1],
             "kinematics_JniKinematics.cpp",
-            "/Fe:..\\lib\\kinematics_jni.dll"
+            f"/Fe:{output_path}"
         ]
         
         print("Running: " + " ".join(f'"{x}"' if ' ' in x else x for x in cl_cmd))
@@ -88,7 +116,7 @@ def compile():
             cl_proc = subprocess.run(" ".join(cl_cmd), env=sub_env, shell=True)
             
         if cl_proc.returncode == 0:
-            print("[SUCCESS] Compiled successfully to ../lib/kinematics_jni.dll")
+            print(f"[SUCCESS] Compiled successfully to {output_path}")
             # Clean up temporary files
             for f in ["kinematics_JniKinematics.obj", "..\\lib\\kinematics_jni.exp", "..\\lib\\kinematics_jni.lib"]:
                 if os.path.exists(f):
@@ -98,27 +126,34 @@ def compile():
             sys.exit(cl_proc.returncode)
     else:
         # Fallback to g++
-        print("Visual Studio MSVC compiler not found. Trying g++...")
+        if cfg["msvc"]:
+            print("Visual Studio MSVC compiler not found. Trying g++...")
+        else:
+            print("Trying g++...")
         gxx = shutil.which("g++")
         if not gxx:
-            print("[ERROR] Neither cl.exe (MSVC) nor g++ (MinGW) was found in PATH.")
+            print("[ERROR] g++ was not found in PATH.")
+            if cfg["msvc"]:
+                print("[ERROR] Install Visual Studio Build Tools or MinGW-w64.")
+            else:
+                print("[ERROR] On Ubuntu, install it with: sudo apt install g++")
             sys.exit(1)
-            
+
         gxx_cmd = [
             "g++",
             "-shared",
             "-O3",
             "-fPIC",
-            "-I", os.path.join(java_home, "include"),
-            "-I", os.path.join(java_home, "include", "win32"),
+            "-I", include_dirs[0],
+            "-I", include_dirs[1],
             "kinematics_JniKinematics.cpp",
             "-o",
-            "../lib/kinematics_jni.dll"
+            output_path
         ]
         print("Running: " + " ".join(f'"{x}"' if ' ' in x else x for x in gxx_cmd))
         gxx_proc = subprocess.run(gxx_cmd)
         if gxx_proc.returncode == 0:
-            print("[SUCCESS] Compiled successfully to ../lib/kinematics_jni.dll")
+            print(f"[SUCCESS] Compiled successfully to {output_path}")
         else:
             print("[ERROR] g++ compilation failed.")
             sys.exit(gxx_proc.returncode)

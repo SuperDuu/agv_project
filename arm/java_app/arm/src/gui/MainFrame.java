@@ -719,7 +719,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     kinematics.Kinematics.solverMode = 1;
                 } else {
                     JOptionPane.showMessageDialog(MainFrame.this,
-                            "Không tìm thấy thư viện kinematics_jni.dll!\nVui lòng biên dịch thư viện C++ bằng file build_jni.py.",
+                            "Không tìm thấy thư viện kinematics_jni!\nVui lòng biên dịch thư viện C++ bằng file build_jni.py.",
                             "Lỗi tải thư viện",
                             JOptionPane.ERROR_MESSAGE);
                     jniItem.setSelected(false);
@@ -742,7 +742,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     kinematics.Kinematics.solverMode = 2;
                 } else {
                     JOptionPane.showMessageDialog(MainFrame.this,
-                            "Không tìm thấy thư viện kinematics_jni.dll!\nVui lòng biên dịch thư viện C++ bằng file build_jni.py.",
+                            "Không tìm thấy thư viện kinematics_jni!\nVui lòng biên dịch thư viện C++ bằng file build_jni.py.",
                             "Lỗi tải thư viện",
                             JOptionPane.ERROR_MESSAGE);
                     ikFastItem.setSelected(false);
@@ -2725,8 +2725,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             double[] best = null;
             double bestAlphaGround = 0.0;
             
-            // Try alpha=0 first, then expand outward in larger steps to save CPU
-            for (double a = -90; a <= 30; a += 15.0) {
+            // Try alpha=0 first. Because alphaPenalty = a^2 * 50, a valid
+            // vertical-gripper solution dominates nonzero-alpha candidates.
+            double[] alphaScan = { 0, -15, 15, -30, 30, -45, -60, -75, -90 };
+            for (double a : alphaScan) {
                 List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, prefYaw, true);
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRight);
@@ -2746,6 +2748,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         best = q;
                         bestAlphaGround = a;
                     }
+                }
+                if (best != null && a == 0.0) {
+                    if (isRight) activeAlphaRight = bestAlphaGround;
+                    else activeAlphaLeft = bestAlphaGround;
+                    return best;
                 }
             }
             if (best != null) {
