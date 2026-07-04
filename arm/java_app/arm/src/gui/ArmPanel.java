@@ -186,7 +186,9 @@ public class ArmPanel extends JPanel
             p1 = (-sAz * vy_prime + cAz * sEl * vx) / sEl;
         }
 
-        System.out.printf("[DEBUG_DRAW] Screen (%d, %d) -> World: (X=%.2f, Y=%.2f, Z=%.2f)\n", sx, sy, p0, p1, fixedZ);
+        if (MainFrame.DEBUG) {
+            System.out.printf("[DEBUG_DRAW] Screen (%d, %d) -> World: (X=%.2f, Y=%.2f, Z=%.2f)\n", sx, sy, p0, p1, fixedZ);
+        }
         return new double[] { p0, p1, fixedZ };
     }
 
@@ -220,15 +222,21 @@ public class ArmPanel extends JPanel
         }
 
         double[] targetPos = { p0, p1, fixedZ };
-        System.out.printf("[DEBUG_CLICK] Click position: (X=%.2f, Y=%.2f, Z=%.2f)\n", p0, p1, fixedZ);
+        if (MainFrame.DEBUG) {
+            System.out.printf("[DEBUG_CLICK] Click position: (X=%.2f, Y=%.2f, Z=%.2f)\n", p0, p1, fixedZ);
+        }
         
         String prefCfgRight = robot.configComboRight.getSelectedIndex() == 0 ? "+" : "-";
         double[] resultRight = robot.solveIKSmartRight(p0, p1, fixedZ, prefCfgRight);
-        System.out.printf("[DEBUG_CLICK] Right Arm Solver: %s\n", resultRight == null ? "FAILED" : "SUCCESS");
+        if (MainFrame.DEBUG) {
+            System.out.printf("[DEBUG_CLICK] Right Arm Solver: %s\n", resultRight == null ? "FAILED" : "SUCCESS");
+        }
         
         String prefCfgLeft = robot.configComboLeft.getSelectedIndex() == 0 ? "+" : "-";
         double[] resultLeft = robot.solveIKSmartLeft(p0, p1, fixedZ, prefCfgLeft);
-        System.out.printf("[DEBUG_CLICK] Left Arm Solver: %s\n", resultLeft == null ? "FAILED" : "SUCCESS");
+        if (MainFrame.DEBUG) {
+            System.out.printf("[DEBUG_CLICK] Left Arm Solver: %s\n", resultLeft == null ? "FAILED" : "SUCCESS");
+        }
 
         boolean chooseRight = true;
         double[] chosenResult = null;
@@ -236,7 +244,9 @@ public class ArmPanel extends JPanel
         if (resultRight != null && resultLeft != null) {
             double costRight = calculateMovementCost(resultRight, robot.getAnglesRight());
             double costLeft = calculateMovementCost(resultLeft, robot.getAnglesLeft());
-            System.out.printf("[DEBUG_CLICK] Both reached. costRight=%.2f, costLeft=%.2f\n", costRight, costLeft);
+            if (MainFrame.DEBUG) {
+                System.out.printf("[DEBUG_CLICK] Both reached. costRight=%.2f, costLeft=%.2f\n", costRight, costLeft);
+            }
             if (costRight <= costLeft) {
                 chooseRight = true;
                 chosenResult = resultRight;
@@ -251,7 +261,9 @@ public class ArmPanel extends JPanel
             chooseRight = false;
             chosenResult = resultLeft;
         }
-        System.out.printf("[DEBUG_CLICK] Decision: Chosen Arm = %s\n", chosenResult == null ? "NONE" : (chooseRight ? "RIGHT" : "LEFT"));
+        if (MainFrame.DEBUG) {
+            System.out.printf("[DEBUG_CLICK] Decision: Chosen Arm = %s\n", chosenResult == null ? "NONE" : (chooseRight ? "RIGHT" : "LEFT"));
+        }
 
         if (chosenResult != null) {
             robot.trajArmCombo.setSelectedIndex(chooseRight ? 0 : 1);
@@ -322,7 +334,8 @@ public class ArmPanel extends JPanel
 
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g;
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                MainFrame.FAST_RENDER ? RenderingHints.VALUE_ANTIALIAS_OFF : RenderingHints.VALUE_ANTIALIAS_ON);
         int cx = getWidth() / 2, cy = getHeight() * 2 / 3;
 
         if (robot.showGridCb.isSelected())
@@ -502,19 +515,23 @@ public class ArmPanel extends JPanel
                 float endX = s1[0] + gnx * tw / 2.0f;
                 float endY = s1[1] + gny * tw / 2.0f;
 
-                LinearGradientPaint gp = new LinearGradientPaint(
-                    startX, startY, endX, endY,
-                    new float[] { 0.0f, 0.25f, 0.7f, 1.0f },
-                    new Color[] { color.darker().darker(), color.brighter(), color, color.darker() }
-                );
-                
-                // Shadow
-                g2.setColor(new Color(20, 20, 25, 45));
-                g2.setStroke(new BasicStroke(tw + 3, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g2.drawLine(s1[0], s1[1] + 2, s2[0], s2[1] + 2);
+                if (MainFrame.FAST_RENDER) {
+                    g2.setColor(color);
+                } else {
+                    LinearGradientPaint gp = new LinearGradientPaint(
+                        startX, startY, endX, endY,
+                        new float[] { 0.0f, 0.25f, 0.7f, 1.0f },
+                        new Color[] { color.darker().darker(), color.brighter(), color, color.darker() }
+                    );
 
-                // Cylinder
-                g2.setPaint(gp);
+                    // Shadow
+                    g2.setColor(new Color(20, 20, 25, 45));
+                    g2.setStroke(new BasicStroke(tw + 3, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                    g2.drawLine(s1[0], s1[1] + 2, s2[0], s2[1] + 2);
+
+                    // Cylinder
+                    g2.setPaint(gp);
+                }
                 g2.setStroke(new BasicStroke(tw, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 g2.drawLine(s1[0], s1[1], s2[0], s2[1]);
             } else {
@@ -552,7 +569,7 @@ public class ArmPanel extends JPanel
             float radius = jr;
             float centerX = s[0] - jr * 0.3f;
             float centerY = s[1] - jr * 0.3f;
-            if (radius > 1) {
+            if (!MainFrame.FAST_RENDER && radius > 1) {
                 RadialGradientPaint rgp = new RadialGradientPaint(
                     centerX, centerY, radius * 1.6f,
                     new float[] { 0.0f, 0.75f, 1.0f },
