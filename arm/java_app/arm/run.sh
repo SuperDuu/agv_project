@@ -21,6 +21,27 @@ if [[ -z "$JAVA_CMD" || -z "$JAVAC_CMD" ]]; then
     exit 1
 fi
 
+JAVA2D_MODE="${AGV_JAVA2D_MODE:-safe}"
+JAVA2D_OPTS=()
+case "$JAVA2D_MODE" in
+    safe)
+        JAVA2D_OPTS=(-Dsun.java2d.opengl=false -Dsun.java2d.xrender=true -Dsun.java2d.pmoffscreen=false)
+        ;;
+    software)
+        JAVA2D_OPTS=(-Dsun.java2d.opengl=false -Dsun.java2d.xrender=false -Dsun.java2d.pmoffscreen=false)
+        ;;
+    opengl)
+        JAVA2D_OPTS=(-Dsun.java2d.opengl=True -Dsun.java2d.xrender=false -Dsun.java2d.pmoffscreen=false)
+        ;;
+    default)
+        JAVA2D_OPTS=()
+        ;;
+    *)
+        echo "[ERROR] Invalid AGV_JAVA2D_MODE=$JAVA2D_MODE. Use safe, software, opengl, or default."
+        exit 1
+        ;;
+esac
+
 PYTHON_CMD=""
 if [[ -x ".venv/bin/python" ]]; then
     PYTHON_CMD=".venv/bin/python"
@@ -48,7 +69,8 @@ find src -name '*.java' -print > build/sources.txt
     -d build/classes \
     @build/sources.txt
 
-"$JAVA_CMD" -Djava.io.tmpdir=uart_temp \
+"$JAVA_CMD" "${JAVA2D_OPTS[@]}" \
+    -Djava.io.tmpdir=uart_temp \
     --enable-native-access=ALL-UNNAMED \
     -Djava.library.path=lib \
     -cp "build/classes:lib/jSerialComm-2.10.4.jar" \
