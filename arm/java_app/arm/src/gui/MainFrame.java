@@ -12,6 +12,7 @@ import javax.swing.event.ChangeListener;
 
 import static kinematics.Kinematics.*;
 import comm.ControllerReceiver;
+import utils.WorkspaceLogger;
 
 public final class MainFrame extends JFrame implements ActionListener, ChangeListener {
     /** Set to false for demos to suppress debug output. Set to true during development. */
@@ -1850,6 +1851,22 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
     }
 
+    private static class WorkspaceScanSolution {
+        double[] q;
+        double alphaDeg;
+        double yawOffsetDeg;
+        int reachClass;
+        double posError;
+
+        WorkspaceScanSolution(double[] q, double alphaDeg, double yawOffsetDeg, int reachClass, double posError) {
+            this.q = q;
+            this.alphaDeg = alphaDeg;
+            this.yawOffsetDeg = yawOffsetDeg;
+            this.reachClass = reachClass;
+            this.posError = posError;
+        }
+    }
+
     private java.util.List<DescartesNode> generateAllValidIK(double px, double py, double pz, boolean isRight) {
         java.util.List<DescartesNode> allSolutions = new java.util.ArrayList<>();
         double activeAlpha = isRight ? activeAlphaRight : activeAlphaLeft;
@@ -2517,6 +2534,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private int checkIKForWorkspaceScan(double px, double py, double pz, boolean isRight, boolean fixedGround, String prefCfg, double[] activeAngles) {
+        WorkspaceScanSolution solution = findWorkspaceScanSolution(px, py, pz, isRight, fixedGround, prefCfg, activeAngles);
+        return solution == null ? 0 : solution.reachClass;
+    }
+
+    private WorkspaceScanSolution findWorkspaceScanSolution(double px, double py, double pz, boolean isRight, boolean fixedGround, String prefCfg, double[] activeAngles) {
         double activeAlpha = isRight ? activeAlphaRight : activeAlphaLeft;
         double prefYaw = getYawOffsetFromQ(activeAngles, px, py, isRight);
 
@@ -2537,7 +2559,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         }
                     }
                     if (directPath) {
-                        return 2; // Direct/Strict success
+                        return new WorkspaceScanSolution(q.clone(), a, getYawOffsetFromQ(q, px, py, isRight), 2, posErr);
                     }
                 }
             }
@@ -2550,11 +2572,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 for (double[] q : candidates) {
                     double posErr = computePositionError(q, px, py, pz, isRight);
                     if (posErr <= MAX_IK_POSITION_ERROR) {
-                        return 1; // Transition/Geometry success
+                        return new WorkspaceScanSolution(q.clone(), a, getYawOffsetFromQ(q, px, py, isRight), 1, posErr);
                     }
                 }
             }
-            return 0;
+            return null;
         }
 
         // Chế độ tự do: tìm xung quanh alpha hiện tại trước, sau đó tìm toàn cục
@@ -2563,7 +2585,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr <= MAX_IK_POSITION_ERROR) {
-                    return 1;
+                    return new WorkspaceScanSolution(q.clone(), a, getYawOffsetFromQ(q, px, py, isRight), 1, posErr);
                 }
             }
         }
@@ -2572,11 +2594,31 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             for (double[] q : candidates) {
                 double posErr = computePositionError(q, px, py, pz, isRight);
                 if (posErr <= MAX_IK_POSITION_ERROR) {
-                    return 1;
+                    return new WorkspaceScanSolution(q.clone(), a, getYawOffsetFromQ(q, px, py, isRight), 1, posErr);
                 }
             }
         }
-        return 0;
+        return null;
+    }
+
+    private void logWorkspaceScanSolution(WorkspaceLogger logger, double[] pt, boolean isRight, boolean fixedGround, WorkspaceScanSolution solution) {
+        if (logger == null || solution == null) {
+            return;
+        }
+        logger.logRecord(
+                isRight ? "R" : "L",
+                pt[0],
+                pt[1],
+                pt[2],
+                solution.q,
+                solution.alphaDeg,
+                solution.yawOffsetDeg,
+                fixedGround ? "FIXED_GROUND" : "FREE",
+                getActualConfig(solution.q, isRight),
+                solution.reachClass,
+                solution.posError,
+                computeJointMargin(solution.q, isRight),
+                computeManipulability(solution.q, isRight));
     }
 
     public void updateWorkspaceSlice() {
@@ -2596,6 +2638,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final double[] activeAnglesLeft = anglesLeft.clone();
 
         sliceExplorationThread = new Thread(() -> {
+            WorkspaceLogger workspaceLogger = new WorkspaceLogger();
+            workspaceLogger.init();
+            try {
             boolean[] arms = { true, false }; // Scan both Right (true) and Left (false) arms
             for (boolean isRight : arms) {
                 java.util.List<double[]> directDots = new java.util.ArrayList<>();
@@ -2669,11 +2714,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                                 }
                                 double[] pt = new double[] { px, py, fixedZ };
                                 
-                                int pointClass = checkIKForWorkspaceScan(px, py, fixedZ, isRight, fixedGround, prefCfg, activeAngles);
+                                WorkspaceScanSolution solution = findWorkspaceScanSolution(px, py, fixedZ, isRight, fixedGround, prefCfg, activeAngles);
+                                int pointClass = solution == null ? 0 : solution.reachClass;
                                 if (pointClass == 2) {
                                     directDots.add(pt);
+                                    logWorkspaceScanSolution(workspaceLogger, pt, isRight, fixedGround, solution);
                                 } else if (pointClass == 1) {
                                     transitionDots.add(pt);
+                                    logWorkspaceScanSolution(workspaceLogger, pt, isRight, fixedGround, solution);
                                 }
                             }
                         }
@@ -2686,6 +2734,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     armPanel.workspaceStatus = String.format("LÁT CẮT Z = %.1f", fixedZ);
                     armPanel.repaint();
                 });
+            }
+            } finally {
+                workspaceLogger.close();
             }
         });
 
@@ -2870,6 +2921,26 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double dy = fk[1] - ty;
         double dz = fk[2] - tz;
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    private double computeJointMargin(double[] qDeg, boolean isRight) {
+        double[] minLim = isRight ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
+        double[] maxLim = isRight ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
+        double margin = Double.MAX_VALUE;
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            margin = Math.min(margin, qDeg[i] - minLim[i]);
+            margin = Math.min(margin, maxLim[i] - qDeg[i]);
+        }
+        return margin;
+    }
+
+    private double computeManipulability(double[] qDeg, boolean isRight) {
+        double[] qRad = new double[NUM_JOINTS];
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            qRad[i] = Math.toRadians(qDeg[i]);
+        }
+        double[][] jacobian = kinematics.Kinematics.computeJacobianEE(qRad, isRight);
+        return Math.abs(kinematics.Kinematics.compute6x6Determinant(jacobian));
     }
 
     private double[] selectBestByPositionError(List<double[]> candidates, double tx, double ty, double tz, boolean isRight) {
