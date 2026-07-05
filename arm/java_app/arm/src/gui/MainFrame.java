@@ -2477,6 +2477,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         stopWorkspaceExploration();
 
         explorationThread = new Thread(() -> {
+            WorkspaceLogger workspaceLogger = new WorkspaceLogger();
+            workspaceLogger.init();
+            int[] loggedCount = { 0 };
+            try {
             final double step = 8; // Degrees
             final boolean[] arms = { true, false }; // Scan Right (true) first, then Left (false)
 
@@ -2507,7 +2511,23 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                                     double z = p0[2];
 
                                     if (z >= -5) { // Floor limit
+                                        double[] qSample = new double[] { q1, q2, q3, q4, q5, 0 };
                                         armPanel.addWorkspacePoint(new double[] { x, y, z }, isRight);
+                                        workspaceLogger.logRecord(
+                                                isRight ? "R" : "L",
+                                                x,
+                                                y,
+                                                z,
+                                                qSample,
+                                                Double.NaN,
+                                                getYawOffsetFromQ(qSample, x, y, isRight),
+                                                "ANY",
+                                                getActualConfig(qSample, isRight),
+                                                1,
+                                                0.0,
+                                                computeJointMargin(qSample, isRight),
+                                                computeManipulability(qSample, isRight));
+                                        loggedCount[0]++;
                                     }
                                 }
                             }
@@ -2532,8 +2552,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             SwingUtilities.invokeLater(() -> {
                 armPanel.workspaceStatus = String.format("ĐÃ QUÉT XONG! (Tổng: %d điểm)",
                         armPanel.workspacePoints.size());
+                armPanel.workspaceStatus = String.format("DA QUET XONG! (%d diem, CSV: %d dong)",
+                        armPanel.workspacePoints.size(), loggedCount[0]);
                 armPanel.repaint();
             });
+            } finally {
+                workspaceLogger.close();
+            }
         });
 
         explorationThread.setPriority(Thread.MIN_PRIORITY);

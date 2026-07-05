@@ -82,7 +82,7 @@ public class WorkspaceMap {
             if (!arm.equals(entry.arm)) {
                 continue;
             }
-            if (gripperMode != null && !gripperMode.equals(entry.gripperMode)) {
+            if (gripperMode != null && !gripperMode.equals(entry.gripperMode) && !"ANY".equals(entry.gripperMode)) {
                 continue;
             }
             if (entry.reachClass <= 0 || !entry.hasJointSolution()) {
