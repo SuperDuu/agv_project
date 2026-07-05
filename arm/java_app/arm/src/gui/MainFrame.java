@@ -21,11 +21,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     public static final boolean FAST_RENDER =
             !"full".equalsIgnoreCase(System.getenv().getOrDefault("AGV_RENDER_QUALITY", "fast"));
 
-    private static final double MAX_IK_POSITION_ERROR = 0.30; // General IK threshold (3mm)
-    private static final double TRAJ_RELAXED_ERROR = 0.50; // Trajectory fallback threshold (5mm)
-    private static final double TRAJ_STRICT_ERROR = 0.15; // Trajectory strict tracking threshold (1.5mm)
-    private static final double WORKSPACE_FALLBACK_MAX_DISTANCE = 8.0;
-    private static final double WORKSPACE_FALLBACK_MAX_JOINT_JUMP = 35.0;
+    private static final double MAX_IK_POSITION_ERROR = 0.20; // General IK threshold
+    private static final double TRAJ_RELAXED_ERROR = 0.25; // Trajectory fallback threshold
+    private static final double TRAJ_STRICT_ERROR = 0.10; // Trajectory strict tracking threshold
+    private static final double WORKSPACE_FALLBACK_MAX_DISTANCE = 2.0;
+    private static final double WORKSPACE_FALLBACK_MAX_JOINT_JUMP = 25.0;
     double[] anglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] targetAnglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
