@@ -13,6 +13,7 @@ import javax.swing.event.ChangeListener;
 import static kinematics.Kinematics.*;
 import comm.ControllerReceiver;
 import utils.WorkspaceLogger;
+import utils.WorkspaceMap;
 
 public final class MainFrame extends JFrame implements ActionListener, ChangeListener {
     /** Set to false for demos to suppress debug output. Set to true during development. */
@@ -23,6 +24,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final double MAX_IK_POSITION_ERROR = 0.30; // General IK threshold (3mm)
     private static final double TRAJ_RELAXED_ERROR = 0.50; // Trajectory fallback threshold (5mm)
     private static final double TRAJ_STRICT_ERROR = 0.15; // Trajectory strict tracking threshold (1.5mm)
+    private static final double WORKSPACE_FALLBACK_MAX_DISTANCE = 8.0;
+    private static final double WORKSPACE_FALLBACK_MAX_JOINT_JUMP = 35.0;
     double[] anglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] targetAnglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
@@ -1535,6 +1538,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     }
                 } // End of else block (Sequential Warm-Start)
 
+                WorkspaceMap workspaceMap = loadWorkspaceFallbackMap();
+                int[] workspaceReplacementCount = { 0 };
+                rawJointTrajectory = applyWorkspaceMapFallback(rawJointTrajectory, finalPath, isRight, workspaceMap, workspaceReplacementCount);
+                if (workspaceReplacementCount[0] > 0) {
+                    publish(String.format("Da thay %d diem loi bang workspace CSV.", workspaceReplacementCount[0]));
+                }
+
                 // THÊM BỘ KHỐNG CHẾ KHOẢNG CÁCH VÁ (GAP LIMITER)
                 int consecutiveNulls = 0;
                 int maxConsecutiveNulls = 0;
@@ -2059,6 +2069,85 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         }
         return finalPath;
+    }
+
+    private WorkspaceMap loadWorkspaceFallbackMap() {
+        try {
+            WorkspaceMap map = WorkspaceMap.loadDefault();
+            return map.size() == 0 ? null : map;
+        } catch (java.io.IOException ex) {
+            if (DEBUG) {
+                System.err.println("[WORKSPACE_FALLBACK] Could not load workspace_points.csv: " + ex.getMessage());
+            }
+            return null;
+        }
+    }
+
+    private java.util.List<double[]> applyWorkspaceMapFallback(
+            java.util.List<double[]> rawJointTraj,
+            java.util.List<double[]> cartesianPath,
+            boolean isRight,
+            WorkspaceMap workspaceMap,
+            int[] replacementCount) {
+        if (workspaceMap == null || rawJointTraj == null || cartesianPath == null) {
+            return rawJointTraj;
+        }
+
+        java.util.List<double[]> result = new java.util.ArrayList<>(rawJointTraj);
+        String gripperMode = (isRight ? gripperModeComboRight : gripperModeComboLeft).getSelectedIndex() == 0
+                ? "FIXED_GROUND" : "FREE";
+        double[] defaultQ = isRight ? anglesRight : anglesLeft;
+
+        for (int i = 0; i < result.size() && i < cartesianPath.size(); i++) {
+            if (result.get(i) != null) {
+                continue;
+            }
+
+            double[] qRef = defaultQ;
+            for (int k = i - 1; k >= 0; k--) {
+                if (result.get(k) != null) {
+                    qRef = result.get(k);
+                    break;
+                }
+            }
+
+            double[] pt = cartesianPath.get(i);
+            WorkspaceMap.Entry entry = workspaceMap.findBestReplacement(
+                    pt[0],
+                    pt[1],
+                    pt[2],
+                    isRight,
+                    gripperMode,
+                    qRef,
+                    WORKSPACE_FALLBACK_MAX_DISTANCE,
+                    WORKSPACE_FALLBACK_MAX_JOINT_JUMP);
+
+            if (entry != null) {
+                double[] qReplacement = entry.q.clone();
+                result.set(i, qReplacement);
+                if (replacementCount != null && replacementCount.length > 0) {
+                    replacementCount[0]++;
+                }
+
+                if (lastCandidatesPerStep != null && i < lastCandidatesPerStep.size()) {
+                    java.util.List<double[]> candidates = lastCandidatesPerStep.get(i);
+                    if (candidates != null) {
+                        candidates.add(qReplacement.clone());
+                        if (lastSelectedIndices != null && i < lastSelectedIndices.length) {
+                            lastSelectedIndices[i] = candidates.size() - 1;
+                        }
+                    }
+                }
+
+                if (DEBUG) {
+                    double dist = entry.distanceTo(pt[0], pt[1], pt[2]);
+                    System.out.printf("[WORKSPACE_FALLBACK] Replaced waypoint %d using CSV point dist=%.3f class=%d%n",
+                            i + 1, dist, entry.reachClass);
+                }
+            }
+        }
+
+        return result;
     }
 
     /**
