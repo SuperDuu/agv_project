@@ -16,7 +16,7 @@ public class Ros2BridgeClient {
         this(
                 System.getenv().getOrDefault("AGV_ROS2_HOST", "127.0.0.1"),
                 parseInt(System.getenv().getOrDefault("AGV_ROS2_PORT", "5010"), 5010),
-                parseInt(System.getenv().getOrDefault("AGV_ROS2_TIMEOUT_MS", "1500"), 1500));
+                parseInt(System.getenv().getOrDefault("AGV_ROS2_TIMEOUT_MS", "3000"), 3000));
     }
 
     public Ros2BridgeClient(String host, int port, int timeoutMs) {
@@ -25,21 +25,32 @@ public class Ros2BridgeClient {
         this.timeoutMs = timeoutMs;
     }
 
-    public String requestPlanPose(String arm, double x, double y, double z) throws Exception {
+    public String requestPlanPose(String arm, double x, double y, double z, double[] currentAngles) throws Exception {
         try (DatagramSocket socket = new DatagramSocket()) {
             socket.setSoTimeout(timeoutMs);
             String requestId = UUID.randomUUID().toString();
             int replyPort = socket.getLocalPort();
+            
+            StringBuilder jointsBuilder = new StringBuilder("[");
+            for (int i = 0; i < currentAngles.length; i++) {
+                jointsBuilder.append(String.format(Locale.US, "%.4f", currentAngles[i]));
+                if (i < currentAngles.length - 1) {
+                    jointsBuilder.append(",");
+                }
+            }
+            jointsBuilder.append("]");
+
             String payload = String.format(Locale.US,
                     "{"
                             + "\"type\":\"plan_pose\","
                             + "\"request_id\":\"%s\","
                             + "\"arm\":\"%s\","
                             + "\"target\":{\"x\":%.4f,\"y\":%.4f,\"z\":%.4f},"
+                            + "\"current_joints\":%s,"
                             + "\"reply_host\":\"host.docker.internal\","
                             + "\"reply_port\":%d"
                             + "}",
-                    escape(requestId), escape(arm), x, y, z, replyPort);
+                    escape(requestId), escape(arm), x, y, z, jointsBuilder.toString(), replyPort);
 
             byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
             DatagramPacket packet = new DatagramPacket(bytes, bytes.length, InetAddress.getByName(host), port);
