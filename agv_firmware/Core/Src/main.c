@@ -35,6 +35,7 @@
 #include "sensor.h"
 #include <string.h>
 #include <stdlib.h> // Để sử dụng hàm atoi
+#include <agv_body_step.h>
 
 /* USER CODE END Includes */
 
@@ -106,6 +107,9 @@ volatile uint64_t debug_wiegand_raw =
     0; // Raw 34 bit trước khi decode (để chẩn đoán)
 volatile uint32_t debug_wiegand_high32 = 0;
 volatile uint32_t debug_wiegand_low32 = 0;
+	//Step thân robot
+volatile step_command_t cmd = { .angle = 0, .rpm = 45 };
+static step_command_t cmd_prev = {0};
 
 // --- CẤU HÌNH MÃ THẺ RFID CỦA TỪNG TRẠM ---
 #define RFID_NODE_0 N00
@@ -915,6 +919,18 @@ int main(void) {
       AGV_HandleIntersectionRouting(&pending_qr_node, &last_processed_node,
                                     &path_length, &current_heading);
     }
+
+// chay Step
+    if (cmd.angle != cmd_prev.angle || cmd.rpm != cmd_prev.rpm) {
+          cmd_prev = cmd;
+          if (cmd.angle != 0) {
+            step_Run(&cmd);
+          } else {
+            step_Stop();
+          }
+        }
+
+
   }
   /* USER CODE END 3 */
 }
