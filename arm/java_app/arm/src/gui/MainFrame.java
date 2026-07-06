@@ -1653,6 +1653,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private void runPlayback(final java.util.List<double[]> jointTrajectory, final String statusTitle, final boolean isRight, final double[] armAngles, final double[] armTargetAngles, final JSlider[] armSliders, final JLabel[] armAngleLbls) {
         armPanel.trail.clear();
+        showTrailCb.setSelected(true);
+        armPanel.repaint();
 
         if (motionTimer != null) motionTimer.stop();
         if (trajectoryTimer != null) trajectoryTimer.stop();
