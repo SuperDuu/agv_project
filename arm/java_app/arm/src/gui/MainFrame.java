@@ -9,8 +9,10 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import java.nio.ByteBuffer;
 
 import static kinematics.Kinematics.*;
+import kinematics.RobotTransmission;
 import comm.ControllerReceiver;
 import utils.WorkspaceLogger;
 import utils.WorkspaceMap;
@@ -24,9 +26,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final double MAX_IK_POSITION_ERROR = 0.20; // General IK threshold
     private static final double TRAJ_RELAXED_ERROR = 0.25; // Trajectory fallback threshold
     private static final double TRAJ_STRICT_ERROR = 0.10; // Trajectory strict tracking threshold
-    private static final double WORKSPACE_FALLBACK_MAX_DISTANCE = 2.0;
-    private static final double WORKSPACE_FALLBACK_MAX_JOINT_JUMP = 25.0;
-    private static final double WORKSPACE_SEED_MAX_DISTANCE = 1.0;
+    static final double WORKSPACE_FALLBACK_MAX_DISTANCE = 2.0;
+    static final double WORKSPACE_FALLBACK_MAX_JOINT_JUMP = 25.0;
+    static final double WORKSPACE_SEED_MAX_DISTANCE = 1.0;
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = { 0, 0, 20, -35, 0, 0 };
     double[] targetAnglesRight = { 0, 0, 20, -35, 0, 0 };
@@ -57,6 +59,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     ArmPanel armPanel;
     JLabel endEffectorLabelRight = new JLabel("Tọa độ kẹp (R): 0, 0, 0");
     JLabel endEffectorLabelLeft = new JLabel("Tọa độ kẹp (L): 0, 0, 0");
+    /** Display: last binary frame summary sent to each arm (hex, for debug). */
+    JTextField txUartRight = new JTextField("[V2.1] --");
+    JTextField txUartLeft  = new JTextField("[V2.1] --");
 
     JCheckBox showGridCb = new JCheckBox("Hiện Lưới", true);
     JCheckBox showTrailCb = new JCheckBox("Hiện Vết Quỹ Đạo", false);
@@ -116,8 +121,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JSpinner fixedHeightSpinner = new JSpinner(new SpinnerNumberModel(100.0, -200.0, 500.0, 1.0));
     boolean fixedHeightMode = false;
     JCheckBoxMenuItem clickModeItem;
-    JSlider speedSlider = new JSlider(0, 120, 60);
-    JLabel speedLabel = new JLabel("60 °/s");
+    JSlider speedSlider = new JSlider(0, 120, 20);
+    JLabel speedLabel = new JLabel("20 °/s");
     private static final int MOTION_DT_MS = 30;
     Timer motionTimer;
 
@@ -280,7 +285,27 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
             int minVal = (int) Math.min(minLimits[i], maxLimits[i]);
             int maxVal = (int) Math.max(minLimits[i], maxLimits[i]);
-            armSliders[i] = new JSlider(minVal, maxVal, (int) Math.round(armAngles[i]));
+            int initVal = (int) Math.round(armAngles[i]);
+            
+            if (i == 2 || i == 3) {
+                double[] qHome = RobotTransmission.jointToActuator(armAngles[2], armAngles[3], isRight);
+                if (i == 2) {
+                    initVal = (int) Math.round(qHome[0]);
+                    minVal = isRight ? (int)RobotTransmission.Q3_RIGHT_MIN : (int)RobotTransmission.Q3_LEFT_MIN;
+                    maxVal = isRight ? (int)RobotTransmission.Q3_RIGHT_MAX : (int)RobotTransmission.Q3_LEFT_MAX;
+                } else {
+                    initVal = (int) Math.round(qHome[1]);
+                    double q3Val = qHome[0];
+                    if (isRight) {
+                        minVal = (int)Math.round(q3Val + RobotTransmission.Q4_RIGHT_MIN_OFFSET);
+                        maxVal = (int)Math.round(q3Val + RobotTransmission.Q4_RIGHT_MAX_OFFSET);
+                    } else {
+                        minVal = (int)Math.round(q3Val + RobotTransmission.Q4_LEFT_MIN_OFFSET);
+                        maxVal = (int)Math.round(q3Val + RobotTransmission.Q4_LEFT_MAX_OFFSET);
+                    }
+                }
+            }
+            armSliders[i] = new JSlider(minVal, maxVal, initVal);
             armSliders[i].setMajorTickSpacing(60);
             armSliders[i].setPaintTicks(true);
             armSliders[i].setPreferredSize(new Dimension(120, 25));
@@ -371,12 +396,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         configPanel.setBorder(BorderFactory.createTitledBorder("Cấu hình & Hướng kẹp"));
 
         JComboBox<String> comb = isRight ? configComboRight : configComboLeft;
-        configPanel.add(comb);
-
         JComboBox<String> gCombo = isRight ? gripperModeComboRight : gripperModeComboLeft;
-        JPanel alphaRow = new JPanel(new BorderLayout());
-        alphaRow.add(new JLabel("Chế độ hướng kẹp:"), BorderLayout.NORTH);
-        alphaRow.add(gCombo, BorderLayout.CENTER);
 
         gCombo.addActionListener(e -> {
             gotoCoordinate(isRight);
@@ -385,7 +405,27 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             gotoCoordinate(isRight);
         });
 
-        configPanel.add(alphaRow);
+        JPanel comboRow = new JPanel(new GridLayout(1, 2, 5, 0));
+        JPanel col1 = new JPanel(new BorderLayout());
+        col1.add(new JLabel("Cấu hình IK:"), BorderLayout.NORTH);
+        col1.add(comb, BorderLayout.CENTER);
+
+        JPanel col2 = new JPanel(new BorderLayout());
+        col2.add(new JLabel("Hướng kẹp:"), BorderLayout.NORTH);
+        col2.add(gCombo, BorderLayout.CENTER);
+
+        comboRow.add(col1);
+        comboRow.add(col2);
+        configPanel.add(comboRow);
+
+        JPanel uartRow = new JPanel(new BorderLayout(5, 0));
+        uartRow.setBorder(BorderFactory.createEmptyBorder(5, 0, 0, 0));
+        uartRow.add(new JLabel("Gửi STM32:"), BorderLayout.WEST);
+        JTextField txUart = isRight ? txUartRight : txUartLeft;
+        txUart.setEditable(false);
+        txUart.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        uartRow.add(txUart, BorderLayout.CENTER);
+        configPanel.add(uartRow);
 
         panel.add(configPanel);
 
@@ -1059,70 +1099,100 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
      * Formats current joint angles and sends them to STM32 via UART.
      * Format: R:q1,q2,... and L:q1,q2,...
      */
+    /**
+     * Builds and sends Protocol V2.1 Arm Joint Command frames to STM32.
+     *
+     * Key changes from legacy text protocol:
+     *   - Binary frame: [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H][CMD][SEQ][PAYLOAD][CRC_L][CRC_H]
+     *   - All multi-byte fields: Little-Endian (ByteBuffer.LITTLE_ENDIAN)
+     *   - DEST = 0x03 (Right arm) or 0x02 (Left arm) — arm_id field removed from payload
+     *   - max_delta_x100 = 300 in every frame (3.00 deg/frame safety guard at 50 Hz)
+     *   - Angles converted to int16 x100 fixed-point via round() in UartManager
+     */
     private void sendJointsToUart() {
-        if (uartManager != null && uartManager.isConnected()) {
-            // Check Right Arm
-            boolean changedRight = false;
-            for (int i = 0; i < NUM_JOINTS; i++) {
-                if (Math.abs(anglesRight[i] - lastSentAnglesRight[i]) > 0.01) {
-                    changedRight = true;
-                    break;
-                }
-            }
-
-            if (changedRight) {
-                StringBuilder sb = new StringBuilder("R:");
-                for (int i = 0; i < NUM_JOINTS; i++) {
-                    double val = anglesRight[i];
-                    if (i == 3) {
-                        // q₄ = θ₄ + θ₃ (parallelogram: θ→q)
-                        val = anglesRight[3] + anglesRight[2];
-                    }
-                    sb.append(String.format("%d", (int) Math.round(val)));
-                    if (i < NUM_JOINTS - 1) {
-                        sb.append(",");
-                    }
-                    lastSentAnglesRight[i] = anglesRight[i];
-                }
-                sb.append("\n");
-                String data = sb.toString();
-                uartManager.sendData(data);
-                if (DEBUG && uartManager.isConnected()) {
-                    System.out.print("Sent UART: " + data);
-                }
-            }
-
-            // Check Left Arm
-            boolean changedLeft = false;
-            for (int i = 0; i < NUM_JOINTS; i++) {
-                if (Math.abs(anglesLeft[i] - lastSentAnglesLeft[i]) > 0.01) {
-                    changedLeft = true;
-                    break;
-                }
-            }
-
-            if (changedLeft) {
-                StringBuilder sb = new StringBuilder("L:");
-                for (int i = 0; i < NUM_JOINTS; i++) {
-                    double val = anglesLeft[i];
-                    if (i == 3) {
-                        // q₄ = θ₄ + θ₃ (parallelogram coupling: θ→q)
-                        val = anglesLeft[3] + anglesLeft[2];
-                    }
-                    sb.append(String.format("%d", (int) Math.round(val)));
-                    if (i < NUM_JOINTS - 1) {
-                        sb.append(",");
-                    }
-                    lastSentAnglesLeft[i] = anglesLeft[i];
-                }
-                sb.append("\n");
-                String data = sb.toString();
-                uartManager.sendData(data);
-                if (DEBUG && uartManager.isConnected()) {
-                    System.out.print("Sent UART: " + data);
-                }
+        // --- Right Arm ---
+        boolean changedRight = false;
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            if (Math.abs(anglesRight[i] - lastSentAnglesRight[i]) > 0.01) {
+                changedRight = true;
+                break;
             }
         }
+
+        if (changedRight) {
+            // Convert joint-space (theta) to actuator-space (q) for joints 3 & 4
+            double[] q34 = RobotTransmission.jointToActuator(anglesRight[2], anglesRight[3], true);
+            double[] qActuator = new double[NUM_JOINTS];
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                qActuator[i] = (i == 2) ? q34[0] : (i == 3) ? q34[1] : anglesRight[i];
+            }
+
+            // Build V2.1 binary frame: DEST = 0x03 (Right arm)
+            byte[] frame = uartManager.buildArmJointFrame(comm.UartManager.ADDR_ARM_RIGHT, qActuator);
+
+            if (txUartRight != null) {
+                // Show first 10 header bytes as hex for live debug
+                txUartRight.setText(frameHexSummary(frame, qActuator));
+            }
+            if (uartManager != null && uartManager.isConnected()) {
+                uartManager.sendBytes(frame);
+                if (DEBUG) {
+                    System.out.printf("[V2.1] Sent Right arm frame: %d bytes | q=%s%n",
+                        frame.length, Arrays.toString(qActuator));
+                }
+            }
+            System.arraycopy(anglesRight, 0, lastSentAnglesRight, 0, NUM_JOINTS);
+        }
+
+        // --- Left Arm ---
+        boolean changedLeft = false;
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            if (Math.abs(anglesLeft[i] - lastSentAnglesLeft[i]) > 0.01) {
+                changedLeft = true;
+                break;
+            }
+        }
+
+        if (changedLeft) {
+            double[] q34 = RobotTransmission.jointToActuator(anglesLeft[2], anglesLeft[3], false);
+            double[] qActuator = new double[NUM_JOINTS];
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                qActuator[i] = (i == 2) ? q34[0] : (i == 3) ? q34[1] : anglesLeft[i];
+            }
+
+            // Build V2.1 binary frame: DEST = 0x02 (Left arm)
+            byte[] frame = uartManager.buildArmJointFrame(comm.UartManager.ADDR_ARM_LEFT, qActuator);
+
+            if (txUartLeft != null) {
+                txUartLeft.setText(frameHexSummary(frame, qActuator));
+            }
+            if (uartManager != null && uartManager.isConnected()) {
+                uartManager.sendBytes(frame);
+                if (DEBUG) {
+                    System.out.printf("[V2.1] Sent Left  arm frame: %d bytes | q=%s%n",
+                        frame.length, Arrays.toString(qActuator));
+                }
+            }
+            System.arraycopy(anglesLeft, 0, lastSentAnglesLeft, 0, NUM_JOINTS);
+        }
+    }
+
+    /**
+     * Creates a short hex string summarising a V2.1 arm joint frame for the debug display field.
+     * Format: "DEST=03 SEQ=xx | q=[q0,q1,q2,q3,q4,q5]"
+     */
+    private static String frameHexSummary(byte[] frame, double[] qDeg) {
+        if (frame == null || frame.length < 8) return "[invalid]";
+        int dest = frame[2] & 0xFF;
+        int seq  = frame[7] & 0xFF;
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("DEST=%02X SEQ=%02X | q=[", dest, seq));
+        for (int i = 0; i < qDeg.length; i++) {
+            sb.append(String.format("%d", (int) Math.round(qDeg[i])));
+            if (i < qDeg.length - 1) sb.append(",");
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     /**
@@ -1279,30 +1349,185 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
     }
 
+    private void syncJoint34Sliders(boolean isRight) {
+        JSlider[] sliders = isRight ? slidersRight : slidersLeft;
+        double[] angles = isRight ? anglesRight : anglesLeft;
+        
+        // 1. Convert current theta to q
+        double[] q = RobotTransmission.jointToActuator(angles[2], angles[3], isRight);
+        int q3 = (int) Math.round(q[0]);
+        int q4 = (int) Math.round(q[1]);
+        
+        // 2. Temporarily remove change listeners
+        sliders[2].removeChangeListener(this);
+        sliders[3].removeChangeListener(this);
+        
+        // 3. Update dynamic limits based on the new values
+        int q3Min, q3Max, q4Min, q4Max;
+        if (isRight) {
+            q4Min = (int) Math.round(q3 + RobotTransmission.Q4_RIGHT_MIN_OFFSET);
+            q4Max = (int) Math.round(q3 + RobotTransmission.Q4_RIGHT_MAX_OFFSET);
+            q3Min = (int) Math.round(q4 - RobotTransmission.Q4_RIGHT_MAX_OFFSET);
+            q3Max = (int) Math.round(q4 - RobotTransmission.Q4_RIGHT_MIN_OFFSET);
+            q3Min = (int) Math.max(RobotTransmission.Q3_RIGHT_MIN, q3Min);
+            q3Max = (int) Math.min(RobotTransmission.Q3_RIGHT_MAX, q3Max);
+        } else {
+            q4Min = (int) Math.round(q3 + RobotTransmission.Q4_LEFT_MIN_OFFSET);
+            q4Max = (int) Math.round(q3 + RobotTransmission.Q4_LEFT_MAX_OFFSET);
+            q3Min = (int) Math.round(q4 - RobotTransmission.Q4_LEFT_MAX_OFFSET);
+            q3Max = (int) Math.round(q4 - RobotTransmission.Q4_LEFT_MIN_OFFSET);
+            q3Min = (int) Math.max(RobotTransmission.Q3_LEFT_MIN, q3Min);
+            q3Max = (int) Math.min(RobotTransmission.Q3_LEFT_MAX, q3Max);
+        }
+        
+        sliders[3].setMinimum(q4Min);
+        sliders[3].setMaximum(q4Max);
+        sliders[2].setMinimum(q3Min);
+        sliders[2].setMaximum(q3Max);
+        
+        // 4. Set slider values
+        sliders[2].setValue(q3);
+        sliders[3].setValue(q4);
+        
+        // 5. Restore change listeners
+        sliders[2].addChangeListener(this);
+        sliders[3].addChangeListener(this);
+    }
+
     @Override
     public void stateChanged(ChangeEvent e) {
-        // 1. Right joint sliders
+        // 1. Handle Right arm joint 3/4 custom change listener
+        if (e.getSource() == slidersRight[2] || e.getSource() == slidersRight[3]) {
+            double oldTheta3 = anglesRight[2];
+            double oldTheta4 = anglesRight[3];
+            
+            double q3 = slidersRight[2].getValue();
+            double q4 = slidersRight[3].getValue();
+            
+            // Enforce dynamic limit updates on the other slider
+            if (e.getSource() == slidersRight[2]) {
+                int q4Min = (int) Math.round(q3 + RobotTransmission.Q4_RIGHT_MIN_OFFSET);
+                int q4Max = (int) Math.round(q3 + RobotTransmission.Q4_RIGHT_MAX_OFFSET);
+                slidersRight[3].removeChangeListener(this);
+                slidersRight[3].setMinimum(q4Min);
+                slidersRight[3].setMaximum(q4Max);
+                slidersRight[3].addChangeListener(this);
+                q4 = slidersRight[3].getValue();
+            } else {
+                int q3Min = (int) Math.round(q4 - RobotTransmission.Q4_RIGHT_MAX_OFFSET);
+                int q3Max = (int) Math.round(q4 - RobotTransmission.Q4_RIGHT_MIN_OFFSET);
+                q3Min = (int) Math.max((int)RobotTransmission.Q3_RIGHT_MIN, q3Min);
+                q3Max = (int) Math.min((int)RobotTransmission.Q3_RIGHT_MAX, q3Max);
+                slidersRight[2].removeChangeListener(this);
+                slidersRight[2].setMinimum(q3Min);
+                slidersRight[2].setMaximum(q3Max);
+                slidersRight[2].addChangeListener(this);
+                q3 = slidersRight[2].getValue();
+            }
+            
+            double[] theta = RobotTransmission.actuatorToJoint(q3, q4, true);
+            anglesRight[2] = theta[0];
+            anglesRight[3] = theta[1];
+            
+            double[][] pts3d = armPanel.computeAllJoints3DRight();
+            double[] ee = pts3d[NUM_JOINTS + 1];
+            if (ee[2] < 0) {
+                // Revert
+                anglesRight[2] = oldTheta3;
+                anglesRight[3] = oldTheta4;
+                double[] qOld = RobotTransmission.jointToActuator(oldTheta3, oldTheta4, true);
+                slidersRight[2].removeChangeListener(this);
+                slidersRight[3].removeChangeListener(this);
+                slidersRight[2].setValue((int) Math.round(qOld[0]));
+                slidersRight[3].setValue((int) Math.round(qOld[1]));
+                slidersRight[2].addChangeListener(this);
+                slidersRight[3].addChangeListener(this);
+            } else {
+                targetAnglesRight[2] = anglesRight[2];
+                targetAnglesRight[3] = anglesRight[3];
+            }
+            
+            angleLblsRight[2].setText((int) Math.round(anglesRight[2]) + "°");
+            angleLblsRight[3].setText((int) Math.round(anglesRight[3]) + "°");
+            updateArm();
+            return;
+        }
+
+        // 2. Handle Left arm joint 3/4 custom change listener
+        if (e.getSource() == slidersLeft[2] || e.getSource() == slidersLeft[3]) {
+            double oldTheta3 = anglesLeft[2];
+            double oldTheta4 = anglesLeft[3];
+            
+            double q3 = slidersLeft[2].getValue();
+            double q4 = slidersLeft[3].getValue();
+            
+            // Enforce dynamic limit updates on the other slider
+            if (e.getSource() == slidersLeft[2]) {
+                int q4Min = (int) Math.round(q3 + RobotTransmission.Q4_LEFT_MIN_OFFSET);
+                int q4Max = (int) Math.round(q3 + RobotTransmission.Q4_LEFT_MAX_OFFSET);
+                slidersLeft[3].removeChangeListener(this);
+                slidersLeft[3].setMinimum(q4Min);
+                slidersLeft[3].setMaximum(q4Max);
+                slidersLeft[3].addChangeListener(this);
+                q4 = slidersLeft[3].getValue();
+            } else {
+                int q3Min = (int) Math.round(q4 - RobotTransmission.Q4_LEFT_MAX_OFFSET);
+                int q3Max = (int) Math.round(q4 - RobotTransmission.Q4_LEFT_MIN_OFFSET);
+                q3Min = (int) Math.max((int)RobotTransmission.Q3_LEFT_MIN, q3Min);
+                q3Max = (int) Math.min((int)RobotTransmission.Q3_LEFT_MAX, q3Max);
+                slidersLeft[2].removeChangeListener(this);
+                slidersLeft[2].setMinimum(q3Min);
+                slidersLeft[2].setMaximum(q3Max);
+                slidersLeft[2].addChangeListener(this);
+                q3 = slidersLeft[2].getValue();
+            }
+            
+            double[] theta = RobotTransmission.actuatorToJoint(q3, q4, false);
+            anglesLeft[2] = theta[0];
+            anglesLeft[3] = theta[1];
+            
+            double[][] pts3d = armPanel.computeAllJoints3DLeft();
+            double[] ee = pts3d[NUM_JOINTS + 1];
+            if (ee[2] < 0) {
+                // Revert
+                anglesLeft[2] = oldTheta3;
+                anglesLeft[3] = oldTheta4;
+                double[] qOld = RobotTransmission.jointToActuator(oldTheta3, oldTheta4, false);
+                slidersLeft[2].removeChangeListener(this);
+                slidersLeft[3].removeChangeListener(this);
+                slidersLeft[2].setValue((int) Math.round(qOld[0]));
+                slidersLeft[3].setValue((int) Math.round(qOld[1]));
+                slidersLeft[2].addChangeListener(this);
+                slidersLeft[3].addChangeListener(this);
+            } else {
+                targetAnglesLeft[2] = anglesLeft[2];
+                targetAnglesLeft[3] = anglesLeft[3];
+            }
+            
+            angleLblsLeft[2].setText((int) Math.round(anglesLeft[2]) + "°");
+            angleLblsLeft[3].setText((int) Math.round(anglesLeft[3]) + "°");
+            updateArm();
+            return;
+        }
+
+        // 3. Right joint sliders (joints 0, 1, 4, 5)
         for (int i = 0; i < NUM_JOINTS; i++) {
+            if (i == 2 || i == 3) continue;
             if (e.getSource() == slidersRight[i]) {
                 double oldVal = anglesRight[i];
                 anglesRight[i] = slidersRight[i].getValue();
-
+                
                 // Prevent gripper from going under floor
                 double[][] pts3d = armPanel.computeAllJoints3DRight();
                 double[] ee = pts3d[NUM_JOINTS + 1];
-                // Parallelogram constraint: 5° ≤ |q₃+q₄| ≤ 90° where q₃=θ₃, q₄=θ₄+θ₃
-                double q3 = anglesRight[2];
-                double q4 = anglesRight[3] + anglesRight[2];
-                double absSum = Math.abs(q3 + q4);
-                if (ee[2] < 0 || absSum < 5.0 - 0.1 || absSum > 90.0 + 0.1) {
+                if (ee[2] < 0) {
                     anglesRight[i] = oldVal;
                     slidersRight[i].setValue((int) Math.round(oldVal));
                 }
-
+                
                 targetAnglesRight[i] = anglesRight[i];
                 
                 if (i == 0) {
-                    // Synchronize shared waist joint 1
                     anglesLeft[0] = anglesRight[0];
                     targetAnglesLeft[0] = anglesRight[0];
                     if (slidersLeft[0] != null && slidersLeft[0].getValue() != (int)Math.round(anglesRight[0])) {
@@ -1312,35 +1537,31 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         angleLblsLeft[0].setText((int)Math.round(anglesRight[0]) + "°");
                     }
                 }
-
+                
                 angleLblsRight[i].setText((int) anglesRight[i] + "°");
                 updateArm();
                 return;
             }
         }
 
-        // 2. Left joint sliders
+        // 4. Left joint sliders (joints 0, 1, 4, 5)
         for (int i = 0; i < NUM_JOINTS; i++) {
+            if (i == 2 || i == 3) continue;
             if (e.getSource() == slidersLeft[i]) {
                 double oldVal = anglesLeft[i];
                 anglesLeft[i] = slidersLeft[i].getValue();
-
+                
                 // Prevent gripper from going under floor
                 double[][] pts3d = armPanel.computeAllJoints3DLeft();
                 double[] ee = pts3d[NUM_JOINTS + 1];
-                // Parallelogram constraint: 5° ≤ |q₃+q₄| ≤ 90° where q₃=θ₃, q₄=θ₄+θ₃
-                double q3 = anglesLeft[2];
-                double q4 = anglesLeft[3] + anglesLeft[2];
-                double absSum = Math.abs(q3 + q4);
-                if (ee[2] < 0 || absSum < 5.0 - 0.1 || absSum > 90.0 + 0.1) {
+                if (ee[2] < 0) {
                     anglesLeft[i] = oldVal;
                     slidersLeft[i].setValue((int) Math.round(oldVal));
                 }
-
+                
                 targetAnglesLeft[i] = anglesLeft[i];
                 
                 if (i == 0) {
-                    // Synchronize shared waist joint 1
                     anglesRight[0] = anglesLeft[0];
                     targetAnglesRight[0] = anglesLeft[0];
                     if (slidersRight[0] != null && slidersRight[0].getValue() != (int)Math.round(anglesLeft[0])) {
@@ -1350,7 +1571,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         angleLblsRight[0].setText((int)Math.round(anglesLeft[0]) + "°");
                     }
                 }
-
+                
                 angleLblsLeft[i].setText((int) anglesLeft[i] + "°");
                 updateArm();
                 return;
@@ -2716,25 +2937,38 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
                                     if (z >= -5) { // Floor limit
                                         double[] qSample = new double[] { q1, q2, q3, q4, q5, 0 };
-                                        armPanel.addWorkspacePoint(new double[] { x, y, z }, isRight);
-                                        workspaceLogger.logRecord(
-                                                isRight ? "R" : "L",
-                                                x,
-                                                y,
-                                                z,
-                                                qSample,
-                                                Double.NaN,
-                                                getYawOffsetFromQ(qSample, x, y, isRight),
-                                                "ANY",
-                                                getActualConfig(qSample, isRight),
-                                                1,
-                                                0.0,
-                                                computeJointMargin(qSample, isRight),
-                                                computeManipulability(qSample, isRight));
-                                        loggedCount[0]++;
-                                    }
-                                }
-                            }
+
+                                        // Collision check against torso and opposite arm home
+                                        boolean collisionOk;
+                                        if (isRight) {
+                                            double[] leftHome = { q1, 0, -10, 30, 0, 0 };
+                                            collisionOk = ArmPanel.isCollisionFree(qSample, leftHome);
+                                        } else {
+                                            double[] rightHome = { q1, 0, 10, -30, 0, 0 };
+                                            collisionOk = ArmPanel.isCollisionFree(rightHome, qSample);
+                                        }
+
+                                        if (collisionOk) {
+                                            armPanel.addWorkspacePoint(new double[] { x, y, z }, isRight);
+                                            workspaceLogger.logRecord(
+                                                    isRight ? "R" : "L",
+                                                    x,
+                                                    y,
+                                                    z,
+                                                    qSample,
+                                                    Double.NaN,
+                                                    getYawOffsetFromQ(qSample, x, y, isRight),
+                                                    "ANY",
+                                                    getActualConfig(qSample, isRight),
+                                                    1,
+                                                    0.0,
+                                                    computeJointMargin(qSample, isRight),
+                                                    computeManipulability(qSample, isRight));
+                                            loggedCount[0]++;
+                                        } // end if(collisionOk)
+                                    } // end if(z >= -5)
+                                } // end for q1
+                            } // end for q2
                             if (Thread.interrupted())
                                 return;
 

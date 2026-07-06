@@ -5,6 +5,10 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Comparator;
+import utils.WorkspaceMap;
+import java.io.IOException;
 
 public class ArmPanel extends JPanel
         implements MouseListener, MouseMotionListener, MouseWheelListener {
@@ -18,6 +22,25 @@ public class ArmPanel extends JPanel
     int lastX, lastY;
     int demoStep = 0;
     double[] clickTarget = null; // To draw where we clicked
+    /** Up to 3 nearest reachable CSV suggestions (drawn in green when click is out-of-range). */
+    List<double[]> suggestedPoints = new ArrayList<>();
+
+    /** Lazily-loaded workspace map from CSV file. */
+    private WorkspaceMap workspaceMap = null;
+    private boolean workspaceMapLoaded = false;
+
+    private WorkspaceMap loadWorkspaceMapIfNeeded() {
+        if (!workspaceMapLoaded) {
+            workspaceMapLoaded = true;
+            try {
+                workspaceMap = WorkspaceMap.loadDefault();
+            } catch (IOException e) {
+                System.err.println("[ArmPanel] Cannot load workspace CSV: " + e.getMessage());
+                workspaceMap = null;
+            }
+        }
+        return workspaceMap;
+    }
     ArrayList<double[]> workspacePoints = new ArrayList<>();
     ArrayList<double[]> workspacePointsRight = new ArrayList<>();
     ArrayList<double[]> workspacePointsLeft = new ArrayList<>();
@@ -238,6 +261,23 @@ public class ArmPanel extends JPanel
             System.out.printf("[DEBUG_CLICK] Left Arm Solver: %s\n", resultLeft == null ? "FAILED" : "SUCCESS");
         }
 
+        boolean rightCollision = false;
+        if (resultRight != null) {
+            double[] leftHome = { resultRight[0], 0, -10, 30, 0, 0 };
+            if (!isCollisionFree(resultRight, leftHome)) {
+                resultRight = null;
+                rightCollision = true;
+            }
+        }
+        boolean leftCollision = false;
+        if (resultLeft != null) {
+            double[] rightHome = { resultLeft[0], 0, 10, -30, 0, 0 };
+            if (!isCollisionFree(rightHome, resultLeft)) {
+                resultLeft = null;
+                leftCollision = true;
+            }
+        }
+
         boolean chooseRight = true;
         double[] chosenResult = null;
 
@@ -266,29 +306,102 @@ public class ArmPanel extends JPanel
         }
 
         if (chosenResult != null) {
+            suggestedPoints.clear(); // Clear suggestions on success
             robot.trajArmCombo.setSelectedIndex(chooseRight ? 0 : 1);
             if (chooseRight) {
                 robot.setTargetAnglesRight(chosenResult);
-                
-                // Retract Left arm to home, preserving shared Joint 1
                 double[] leftHome = { chosenResult[0], 0, -10, 30, 0, 0 };
                 robot.setTargetAnglesLeft(leftHome);
-                
                 robot.setGotoStatusRight(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
                 robot.setGotoStatusLeft("Về Home", Color.BLUE);
             } else {
                 robot.setTargetAnglesLeft(chosenResult);
-                
-                // Retract Right arm to home, preserving shared Joint 1
                 double[] rightHome = { chosenResult[0], 0, 10, -30, 0, 0 };
                 robot.setTargetAnglesRight(rightHome);
-                
                 robot.setGotoStatusLeft(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
                 robot.setGotoStatusRight("Về Home", Color.BLUE);
             }
         } else {
-            robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
-            robot.setGotoStatusLeft("Ngoài tầm (Click)", Color.RED);
+            // --- CSV Fallback: find nearest 3 reachable points and suggest them ---
+            suggestedPoints.clear();
+
+            boolean isRight = robot.isRightArmSelected;
+            double[] qRef = isRight ? robot.getAnglesRight() : robot.getAnglesLeft();
+            String prefCfg = isRight
+                    ? (robot.configComboRight.getSelectedIndex() == 0 ? "+" : "-")
+                    : (robot.configComboLeft.getSelectedIndex() == 0 ? "+" : "-");
+
+            WorkspaceMap map = loadWorkspaceMapIfNeeded();
+            if (map != null && map.size() > 0) {
+                // Collect all valid entries within 150mm, sorted by distance, take top 3
+                List<WorkspaceMap.Entry> candidates = new ArrayList<>();
+                String arm = isRight ? "R" : "L";
+
+                // Use reflection-free iteration via findBestReplacement with increasing radius
+                // Instead we build top-3 manually with a custom scan
+                // We iterate all entries visible via the map's API:
+                // WorkspaceMap doesn't expose the list directly, so we call findBestReplacement
+                // three times, each time increasing distance threshold
+                double[] radii = { 50.0, 100.0, 150.0 };
+                for (double radius : radii) {
+                    WorkspaceMap.Entry e = map.findBestReplacement(p0, p1, fixedZ, isRight, null, qRef,
+                            radius, MainFrame.WORKSPACE_FALLBACK_MAX_JOINT_JUMP);
+                    if (e != null) {
+                        boolean alreadyAdded = false;
+                        for (WorkspaceMap.Entry existing : candidates) {
+                            if (Math.abs(existing.x - e.x) < 1.0
+                                    && Math.abs(existing.y - e.y) < 1.0
+                                    && Math.abs(existing.z - e.z) < 1.0) {
+                                alreadyAdded = true;
+                                break;
+                            }
+                        }
+                        if (!alreadyAdded) {
+                            candidates.add(e);
+                        }
+                    }
+                    if (candidates.size() >= 3) break;
+                }
+
+                if (!candidates.isEmpty()) {
+                    // Store XYZ of each candidate as a suggestion point
+                    for (WorkspaceMap.Entry e : candidates) {
+                        suggestedPoints.add(new double[] { e.x, e.y, e.z });
+                    }
+
+                    // Move to the closest (first) candidate
+                    WorkspaceMap.Entry best = candidates.get(0);
+                    if (isRight) {
+                        double[] leftHome = { best.q[0], 0, -10, 30, 0, 0 };
+                        robot.setTargetAnglesRight(best.q);
+                        robot.setTargetAnglesLeft(leftHome);
+                        robot.setGotoStatusRight(
+                                String.format("Gợi ý gần nhất (%.1f,%.1f,%.1f)", best.x, best.y, best.z),
+                                new Color(0, 150, 50));
+                        robot.setGotoStatusLeft("Về Home", Color.BLUE);
+                    } else {
+                        double[] rightHome = { best.q[0], 0, 10, -30, 0, 0 };
+                        robot.setTargetAnglesLeft(best.q);
+                        robot.setTargetAnglesRight(rightHome);
+                        robot.setGotoStatusLeft(
+                                String.format("Gợi ý gần nhất (%.1f,%.1f,%.1f)", best.x, best.y, best.z),
+                                new Color(0, 150, 50));
+                        robot.setGotoStatusRight("Về Home", Color.BLUE);
+                    }
+                } else {
+                    // No CSV match either
+                    if (rightCollision) robot.setGotoStatusRight("Va chạm (Click)", Color.RED);
+                    else robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
+                    if (leftCollision) robot.setGotoStatusLeft("Va chạm (Click)", Color.RED);
+                    else robot.setGotoStatusLeft("Ngoài tầm (Click)", Color.RED);
+                }
+            } else {
+                // No workspace map available — original fallback
+                if (rightCollision) robot.setGotoStatusRight("Va chạm (Click)", Color.RED);
+                else robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
+                if (leftCollision) robot.setGotoStatusLeft("Va chạm (Click)", Color.RED);
+                else robot.setGotoStatusLeft("Ngoài tầm (Click)", Color.RED);
+            }
         }
 
         repaint();
@@ -395,12 +508,12 @@ public class ArmPanel extends JPanel
         java.util.List<Drawable> drawables = new java.util.ArrayList<>();
 
 
-        // Draw humanoid central vertical torso (spine) and base pedestal
-        drawables.add(new TubeSegment(new double[] { 0, 0, 10 }, new double[] { 0, 0, 125 }, 12, new Color(60, 65, 70)));
+        // Draw humanoid central vertical torso (square box torso) and base pedestal
+        drawables.add(new TorsoBox());
         drawables.add(new BasePedestal());
         
         // Neck and Head
-        drawables.add(new TubeSegment(new double[] { 0, 0, 125 }, new double[] { 0, 0, 138 }, 8, new Color(60, 60, 60)));
+        drawables.add(new TubeSegment(new double[] { 0, 0, 130 }, new double[] { 0, 0, 138 }, 8, new Color(60, 60, 60)));
         drawables.add(new JointSphere(new double[] { 0, 0, 138 }, 12, new Color(75, 80, 85)));
 
         int[] tubeWidths = { 9, 8, 7, 6, 5, 4, 4 };
@@ -457,6 +570,31 @@ public class ArmPanel extends JPanel
             int[] sc = project(clickTarget, cx, cy);
             g2.setColor(new Color(255, 0, 0, 180));
             g2.fillOval(sc[0] - 4, sc[1] - 4, 8, 8);
+        }
+
+        // Draw CSV suggestion points (green crosses + labels)
+        if (!suggestedPoints.isEmpty()) {
+            g2.setFont(new Font("Arial", Font.BOLD, 10));
+            for (int si = 0; si < suggestedPoints.size(); si++) {
+                double[] sp = suggestedPoints.get(si);
+                int[] sc = project(sp, cx, cy);
+                // Outer ring: brighter for the best candidate
+                Color suggestColor = (si == 0)
+                        ? new Color(0, 220, 60, 230)
+                        : new Color(0, 180, 80, 160);
+                int r = (si == 0) ? 7 : 5;
+                // Draw cross
+                g2.setColor(suggestColor);
+                g2.setStroke(new BasicStroke(2.0f));
+                g2.drawLine(sc[0] - r, sc[1], sc[0] + r, sc[1]);
+                g2.drawLine(sc[0], sc[1] - r, sc[0], sc[1] + r);
+                // Circle
+                g2.drawOval(sc[0] - r, sc[1] - r, r * 2, r * 2);
+                // Label
+                g2.setColor(si == 0 ? new Color(0, 180, 40) : new Color(30, 130, 60));
+                g2.drawString(String.format("%.0f,%.0f,%.0f", sp[0], sp[1], sp[2]),
+                        sc[0] + r + 2, sc[1] - 2);
+            }
         }
 
         g2.setColor(Color.BLACK);
@@ -660,6 +798,79 @@ public class ArmPanel extends JPanel
 
             // Draw the sorted faces
             for (PedestalFace f : faces) {
+                Polygon poly = new Polygon();
+                for (int idx : f.indices) {
+                    poly.addPoint(sc[idx][0], sc[idx][1]);
+                }
+                g2.setColor(f.color);
+                g2.fillPolygon(poly);
+                g2.setColor(Color.DARK_GRAY);
+                g2.setStroke(new BasicStroke(1.0f));
+                g2.drawPolygon(poly);
+            }
+        }
+    }
+
+    class TorsoBox implements Drawable {
+        double depth;
+
+        TorsoBox() {
+            this.depth = getVz(new double[] { 0, 0, 65 });
+        }
+
+        @Override
+        public double getDepth() {
+            return depth;
+        }
+
+        private class BoxFace {
+            int[] indices;
+            double depth;
+            Color color;
+
+            BoxFace(int[] idx, Color c, double[][] corners) {
+                this.indices = idx;
+                this.color = c;
+                double sum = 0;
+                for (int i : idx) {
+                    sum += getVz(corners[i]);
+                }
+                this.depth = sum / idx.length;
+            }
+        }
+
+        @Override
+        public void draw(Graphics2D g2, int cx, int cy) {
+            double halfW = 14.0;
+            double h = 130.0;
+            double[][] corners = {
+                { -halfW, -halfW, 0 },
+                {  halfW, -halfW, 0 },
+                {  halfW,  halfW, 0 },
+                { -halfW,  halfW, 0 },
+                { -halfW, -halfW, h },
+                {  halfW, -halfW, h },
+                {  halfW,  halfW, h },
+                { -halfW,  halfW, h }
+            };
+
+            int[][] sc = new int[8][2];
+            for (int i = 0; i < 8; i++) {
+                sc[i] = project(corners[i], cx, cy);
+            }
+
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            java.util.List<BoxFace> faces = new java.util.ArrayList<>();
+            faces.add(new BoxFace(new int[] { 0, 1, 5, 4 }, new Color(60, 65, 70), corners));
+            faces.add(new BoxFace(new int[] { 1, 2, 6, 5 }, new Color(65, 70, 75), corners));
+            faces.add(new BoxFace(new int[] { 2, 3, 7, 6 }, new Color(70, 75, 80), corners));
+            faces.add(new BoxFace(new int[] { 3, 0, 4, 7 }, new Color(55, 60, 65), corners));
+            faces.add(new BoxFace(new int[] { 4, 5, 6, 7 }, new Color(80, 85, 90), corners));
+
+            faces.sort((f1, f2) -> Double.compare(f2.depth, f1.depth));
+
+            for (BoxFace f : faces) {
                 Polygon poly = new Polygon();
                 for (int idx : f.indices) {
                     poly.addPoint(sc[idx][0], sc[idx][1]);
@@ -1210,5 +1421,112 @@ public class ArmPanel extends JPanel
             }
         }
 
+    }
+
+    public static boolean isCollisionFree(double[] qRight, double[] qLeft) {
+        // 1. Generate 3D check points for Right Arm
+        double[][] ptsRight = computeAllJoints3DForAngles(qRight, true);
+        java.util.List<double[]> pointsRight = getCheckPoints(ptsRight);
+
+        // 2. Generate 3D check points for Left Arm
+        double[][] ptsLeft = computeAllJoints3DForAngles(qLeft, false);
+        java.util.List<double[]> pointsLeft = getCheckPoints(ptsLeft);
+
+        // 3. Torso Collision Check (for both arms)
+        // Torso size: 28x28 (X in [-14, 14], Y in [-14, 14]) and height 130 (Z in [0, 130])
+        // Collision threshold: 5.0 mm from the surface of the torso box (Z < 140.0)
+        double safetyThreshold = 5.0;
+        double torsoHeightLimit = 140.0;
+
+        for (double[] pt : pointsRight) {
+            if (pt[2] < torsoHeightLimit) {
+                if (getDistanceToTorso(pt[0], pt[1], pt[2]) < safetyThreshold) {
+                    return false; // Collision with torso
+                }
+            }
+        }
+        for (double[] pt : pointsLeft) {
+            if (pt[2] < torsoHeightLimit) {
+                if (getDistanceToTorso(pt[0], pt[1], pt[2]) < safetyThreshold) {
+                    return false; // Collision with torso
+                }
+            }
+        }
+
+        // 4. Inter-Arm Collision Check
+        // Check distance between all check points of Right and Left arm
+        // Collision threshold: 25.0 mm
+        double armCollisionThreshold = 25.0;
+        for (double[] pr : pointsRight) {
+            for (double[] pl : pointsLeft) {
+                double dist = Math.sqrt(Math.pow(pr[0] - pl[0], 2) + Math.pow(pr[1] - pl[1], 2) + Math.pow(pr[2] - pl[2], 2));
+                if (dist < armCollisionThreshold) {
+                    return false; // Collision between arms
+                }
+            }
+        }
+
+        return true; // No collision!
+    }
+
+    private static java.util.List<double[]> getCheckPoints(double[][] pts) {
+        java.util.List<double[]> list = new java.util.ArrayList<>();
+        // We only check from Joint 3 to End-effector (indices 3 to 7)
+        for (int i = 3; i <= 7; i++) {
+            list.add(pts[i].clone());
+            if (i < 7) {
+                // Add midpoint of segment i -> i+1
+                list.add(new double[] {
+                    (pts[i][0] + pts[i+1][0]) / 2.0,
+                    (pts[i][1] + pts[i+1][1]) / 2.0,
+                    (pts[i][2] + pts[i+1][2]) / 2.0
+                });
+            }
+        }
+        return list;
+    }
+
+    private static double[][] computeAllJoints3DForAngles(double[] anglesDeg, boolean isRight) {
+        double[][] pts = new double[8][3];
+        double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
+        pts[0] = new double[] { 0, 0, 0 };
+
+        double d2 = isRight ? (L2 + L3) : -(L2 + L3);
+        double[][] params = {
+                { 0, L1 + L0, 0, -Math.PI / 2, Math.toRadians(anglesDeg[0]) },
+                { -Math.PI / 2, d2, 0, -Math.PI / 2, Math.toRadians(anglesDeg[1]) },
+                { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(anglesDeg[2]) },
+                { 0, 0, L4, -Math.PI / 2, Math.toRadians(anglesDeg[3]) },
+                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(anglesDeg[4]) },
+                { -Math.PI / 2, 0, 0, 0, Math.toRadians(anglesDeg[5]) }
+        };
+
+        for (int i = 0; i < 6; i++) {
+            T = multiply4x4(T, getMDHMatrix(params[i][0], params[i][1], params[i][2], params[i][3], params[i][4]));
+            pts[i + 1] = new double[] { T[0][3], T[1][3], T[2][3] };
+        }
+
+        T = multiply4x4(T, getToolMatrix());
+        pts[7] = new double[] { T[0][3], T[1][3], T[2][3] };
+
+        return pts;
+    }
+
+    private static double getDistanceToTorso(double x, double y, double z) {
+        double dx = 0.0;
+        if (x < -14.0) {
+            dx = -14.0 - x;
+        } else if (x > 14.0) {
+            dx = x - 14.0;
+        }
+
+        double dy = 0.0;
+        if (y < -14.0) {
+            dy = -14.0 - y;
+        } else if (y > 14.0) {
+            dy = y - 14.0;
+        }
+
+        return Math.sqrt(dx * dx + dy * dy);
     }
 }

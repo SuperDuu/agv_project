@@ -33,6 +33,7 @@
 #include "ls7366r.h"
 #include "motor.h"
 #include "sensor.h"
+#include <string.h>
 #include <stdlib.h> // Để sử dụng hàm atoi
 
 /* USER CODE END Includes */
@@ -174,6 +175,30 @@ static void MX_SPI3_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static void AGV_ForwardArmCommand(const char *arm_command) {
+  if (arm_command == NULL) {
+    return;
+  }
+
+  size_t cmd_len = strnlen(arm_command, ESP32_MAX_ARM_CMD_LEN);
+  if (cmd_len < 3) {
+    return;
+  }
+
+  if ((arm_command[0] != 'L' && arm_command[0] != 'R') || arm_command[1] != ':') {
+    return;
+  }
+
+  uint8_t tx_buffer[ESP32_MAX_ARM_CMD_LEN + 2];
+  memcpy(tx_buffer, arm_command, cmd_len);
+
+  if (tx_buffer[cmd_len - 1] != '\n') {
+    tx_buffer[cmd_len++] = '\n';
+  }
+
+  HAL_UART_Transmit(&huart3, tx_buffer, (uint16_t)cmd_len, 50);
+}
+
 static void AGV_HandleEsp32Safety(AGV_HandleTypeDef *hagv,
                                   const ESP32_SensorData_t *safe_esp32_data) {
   if (safe_esp32_data == NULL || hagv == NULL)
@@ -255,7 +280,7 @@ static void AGV_ServiceHeartbeat(uint32_t *last_led_time) {
                                      UART_CLEAR_FEF | UART_CLEAR_PEF);
 
   if (HAL_GetTick() - esp32_data.LastUpdateTick > 2000) {
-    extern uint8_t esp32_rx_buffer[15];
+    extern uint8_t esp32_rx_buffer[64];
     HAL_UART_AbortReceive(&huart5);
     HAL_UARTEx_ReceiveToIdle_DMA(&huart5, esp32_rx_buffer,
                                  sizeof(esp32_rx_buffer));
@@ -722,6 +747,13 @@ int main(void) {
     }
 
     ESP32_SensorData_t safe_esp32_data = ESP32_GetSafeData();
+    if (safe_esp32_data.HasNewArmCommand) {
+      __disable_irq();
+      esp32_data.HasNewArmCommand = false;
+      __enable_irq();
+      AGV_ForwardArmCommand(safe_esp32_data.ArmCommand);
+    }
+
     AGV_HandleEsp32Safety(&h_agv, &safe_esp32_data);
     if (safe_esp32_data.IsConnected &&
         (safe_esp32_data.Yaw == 65535.0f ||
@@ -1662,7 +1694,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
                                      UART_CLEAR_FEF | UART_CLEAR_PEF);
 
     HAL_UART_AbortReceive(huart);
-    extern uint8_t esp32_rx_buffer[15];
+    extern uint8_t esp32_rx_buffer[64];
     HAL_UARTEx_ReceiveToIdle_DMA(huart, esp32_rx_buffer,
                                  sizeof(esp32_rx_buffer));
   }
@@ -1703,7 +1735,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
     HAL_UART_AbortReceive(huart);
     __HAL_UART_CLEAR_FLAG(huart,
                           UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
-    extern uint8_t esp32_rx_buffer[15];
+    extern uint8_t esp32_rx_buffer[64];
     HAL_UARTEx_ReceiveToIdle_DMA(huart, esp32_rx_buffer,
                                  sizeof(esp32_rx_buffer));
   }

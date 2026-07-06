@@ -10,7 +10,7 @@ public class TestIK {
         }
 
         // 1. Initial angles in degrees: { 0, 0, 10, -30, 0, 0 }
-        double[] qDeg = { 0.0, 0.0, 15.0, 5.0, 0.0, 0.0 };
+        double[] qDeg = { 0.0, 0.0, 20.0, -35.0, 0.0, 0.0 };
         double[] qRad = new double[6];
         for (int i = 0; i < 6; i++) {
             qRad[i] = Math.toRadians(qDeg[i]);

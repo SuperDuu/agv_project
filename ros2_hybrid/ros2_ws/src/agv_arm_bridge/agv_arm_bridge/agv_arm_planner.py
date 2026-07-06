@@ -178,11 +178,11 @@ class AgvArmPlanner(Node):
         q = np.array([math.radians(deg) for deg in q_init_deg])
 
         if is_right:
-            min_lim = np.array([math.radians(deg) for deg in [-45, -90, -20, -15, -90, -90]])
-            max_lim = np.array([math.radians(deg) for deg in [45, 90, 150, 155, 90, 90]])
+            min_lim = np.array([math.radians(deg) for deg in [-45, -90, 20, -95, -90, -90]])
+            max_lim = np.array([math.radians(deg) for deg in [45, 90, 165, -15, 90, 90]])
         else:
-            min_lim = np.array([math.radians(deg) for deg in [-45, -90, -150, -155, -90, -90]])
-            max_lim = np.array([math.radians(deg) for deg in [45, 90, 20, 15, 90, 90]])
+            min_lim = np.array([math.radians(deg) for deg in [-45, -90, -165, 15, -90, -90]])
+            max_lim = np.array([math.radians(deg) for deg in [45, 90, -20, 95, 90, 90]])
 
         T_target = np.eye(4)
         T_target[0:3, 0:3] = R_target
@@ -270,14 +270,6 @@ class AgvArmPlanner(Node):
             rad = math.radians(joints[i])
             if rad < min_lim[i] - 0.01 or rad > max_lim[i] + 0.01:
                 return False
-        q3 = joints[2]
-        q4 = joints[3]
-        if is_right:
-            diff = q4 - q3
-        else:
-            diff = q3 - q4
-        if diff < 5.0 - 0.1 or diff > 90.0 + 0.1:
-            return False
         return True
 
     def solve_ik_smart(self, px, py, pz, current_joints, is_right, preferred_config="+", preferred_alpha=None, preferred_offset=None):
