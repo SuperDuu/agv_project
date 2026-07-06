@@ -1321,8 +1321,8 @@ public class ArmPanel extends JPanel
 
         // 3. Torso Collision Check (for both arms)
         // Torso size: 28x28 (X in [-14, 14], Y in [-14, 14]) and height 130 (Z in [0, 130])
-        // With safety margin: |X| < 24.0, |Y| < 24.0, Z < 140.0
-        double safetyMarginXY = 24.0;
+        // With safety margin: |X| < 16.0, |Y| < 16.0, Z < 140.0
+        double safetyMarginXY = 16.0;
         double torsoHeightLimit = 140.0;
 
         for (double[] pt : pointsRight) {
