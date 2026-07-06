@@ -296,50 +296,106 @@ class AgvArmPlanner(Node):
             request_id = request.get("request_id")
             arm = request.get("arm", "right")
             is_right = arm == "right"
-            target = request.get("target", {})
-            px = float(target.get("x", 0.0))
-            py = float(target.get("y", 0.0))
-            pz = float(target.get("z", 0.0))
-
+            req_type = request.get("type", "plan_pose")
             current_joints = request.get("current_joints", [0.0] * 6)
-            self.get_logger().info(f"Received request {request_id} for {arm} arm to ({px}, {py}, {pz})")
 
-            # Calculate target orientation
-            R_target = self.calculate_r_target(px, py, is_right)
-
-            # Solve Inverse Kinematics
-            solved_joints = self.solve_ik(px, py, pz, R_target, current_joints, is_right)
-
-            if solved_joints is None:
-                self.get_logger().warn(f"IK solver failed for ({px}, {py}, {pz})")
-                response = {
-                    "type": "plan_response",
-                    "request_id": request_id,
-                    "ok": False,
-                    "error": "IK solver failed to converge or target out of workspace",
-                    "stamp": time.time()
-                }
-            else:
-                self.get_logger().info(f"IK solved successfully: {solved_joints}")
-                # Generate joint-space trajectory by interpolating
+            if req_type == "plan_path":
+                path_pts = request.get("path", [])
+                self.get_logger().info(f"Received path request {request_id} for {arm} arm with {len(path_pts)} points")
+                
                 trajectory = []
-                steps = 25
-                for step in range(steps + 1):
-                    t = float(step) / steps
-                    q_step = [
-                        current_joints[i] + (solved_joints[i] - current_joints[i]) * t
-                        for i in range(6)
-                    ]
-                    trajectory.append(q_step)
+                current_q = list(current_joints)
+                ok = True
+                error_msg = ""
+                
+                for idx, pt in enumerate(path_pts):
+                    px = float(pt.get("x", 0.0))
+                    py = float(pt.get("y", 0.0))
+                    pz = float(pt.get("z", 0.0))
+                    
+                    R_target = self.calculate_r_target(px, py, is_right)
+                    solved_joints = self.solve_ik(px, py, pz, R_target, current_q, is_right)
+                    
+                    if solved_joints is None:
+                        ok = False
+                        error_msg = f"IK solver failed at point {idx} ({px}, {py}, {pz})"
+                        break
+                    
+                    # Interpolate from previous position to solved position
+                    steps = 5
+                    for step in range(1, steps + 1):
+                        t = float(step) / steps
+                        q_step = [
+                            current_q[i] + (solved_joints[i] - current_q[i]) * t
+                            for i in range(6)
+                        ]
+                        trajectory.append(q_step)
+                    
+                    current_q = solved_joints
 
-                response = {
-                    "type": "plan_response",
-                    "request_id": request_id,
-                    "ok": True,
-                    "status": "planned",
-                    "trajectory": trajectory,
-                    "stamp": time.time()
-                }
+                if not ok:
+                    self.get_logger().warn(f"Path planning failed: {error_msg}")
+                    response = {
+                        "type": "plan_response",
+                        "request_id": request_id,
+                        "ok": False,
+                        "error": error_msg,
+                        "stamp": time.time()
+                    }
+                else:
+                    self.get_logger().info(f"Path planned successfully with {len(trajectory)} steps")
+                    response = {
+                        "type": "plan_response",
+                        "request_id": request_id,
+                        "ok": True,
+                        "status": "planned",
+                        "trajectory": trajectory,
+                        "stamp": time.time()
+                    }
+            else:
+                target = request.get("target", {})
+                px = float(target.get("x", 0.0))
+                py = float(target.get("y", 0.0))
+                pz = float(target.get("z", 0.0))
+
+                self.get_logger().info(f"Received request {request_id} for {arm} arm to ({px}, {py}, {pz})")
+
+                # Calculate target orientation
+                R_target = self.calculate_r_target(px, py, is_right)
+
+                # Solve Inverse Kinematics
+                solved_joints = self.solve_ik(px, py, pz, R_target, current_joints, is_right)
+
+                if solved_joints is None:
+                    self.get_logger().warn(f"IK solver failed for ({px}, {py}, {pz})")
+                    response = {
+                        "type": "plan_response",
+                        "request_id": request_id,
+                        "ok": False,
+                        "error": "IK solver failed to converge or target out of workspace",
+                        "stamp": time.time()
+                    }
+                else:
+                    self.get_logger().info(f"IK solved successfully: {solved_joints}")
+                    # Generate joint-space trajectory by interpolating
+                    trajectory = []
+                    steps = 25
+                    for step in range(steps + 1):
+                        t = float(step) / steps
+                        q_step = [
+                            current_joints[i] + (solved_joints[i] - current_joints[i]) * t
+                            for i in range(6)
+                        ]
+                        trajectory.append(q_step)
+
+                    response = {
+                        "type": "plan_response",
+                        "request_id": request_id,
+                        "ok": True,
+                        "status": "planned",
+                        "trajectory": trajectory,
+                        "stamp": time.time()
+                    }
 
             # Publish response
             resp_msg = String()
