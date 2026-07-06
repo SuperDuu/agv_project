@@ -149,6 +149,31 @@ class AgvArmPlanner(Node):
             Je[3:6, j] = RT @ J0[3:6, j]
         return Je
 
+    def orthonormalize_3x3(self, R):
+        len0 = math.sqrt(R[0, 0]**2 + R[1, 0]**2 + R[2, 0]**2)
+        if len0 < 1e-9:
+            len0 = 1.0
+        R[0, 0] /= len0
+        R[1, 0] /= len0
+        R[2, 0] /= len0
+        
+        dot = R[0, 0]*R[0, 1] + R[1, 0]*R[1, 1] + R[2, 0]*R[2, 1]
+        R[0, 1] -= dot * R[0, 0]
+        R[1, 1] -= dot * R[1, 0]
+        R[2, 1] -= dot * R[2, 0]
+        
+        len1 = math.sqrt(R[0, 1]**2 + R[1, 1]**2 + R[2, 1]**2)
+        if len1 < 1e-9:
+            len1 = 1.0
+        R[0, 1] /= len1
+        R[1, 1] /= len1
+        R[2, 1] /= len1
+        
+        R[0, 2] = R[1, 0]*R[2, 1] - R[2, 0]*R[1, 1]
+        R[1, 2] = R[2, 0]*R[0, 1] - R[0, 0]*R[2, 1]
+        R[2, 2] = R[0, 0]*R[1, 1] - R[1, 0]*R[0, 1]
+        return R
+
     def solve_ik(self, px, py, pz, R_target, q_init_deg, is_right):
         q = np.array([math.radians(deg) for deg in q_init_deg])
 
@@ -178,12 +203,7 @@ class AgvArmPlanner(Node):
 
             R_curr = T_curr[0:3, 0:3]
             R_rel = R_curr.T @ R_target
-            # Orthonormalize relative rotation
-            try:
-                U, _, Vt = np.linalg.svd(R_rel)
-                R_rel = U @ Vt
-            except Exception:
-                pass
+            R_rel = self.orthonormalize_3x3(R_rel)
 
             trace = np.trace(R_rel)
             cos_theta = 0.5 * (trace - 1.0)
@@ -228,8 +248,8 @@ class AgvArmPlanner(Node):
             Je = self.compute_jacobian(q, is_right)
             lam = 0.05
             try:
-                inv_term = np.linalg.inv(Je @ Je.T + (lam**2) * np.eye(6))
-                dq = Je.T @ inv_term @ delta
+                A = Je @ Je.T + (lam**2) * np.eye(6)
+                dq = Je.T @ np.linalg.solve(A, delta)
             except Exception:
                 dq = np.zeros(6)
 
