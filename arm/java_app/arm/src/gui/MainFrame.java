@@ -152,6 +152,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
 
     comm.UartManager uartManager = new comm.UartManager();
+    private final comm.Ros2BridgeClient ros2BridgeClient = new comm.Ros2BridgeClient();
     private ControllerReceiver controllerReceiver;
     private Timer controllerTimer;
 
@@ -486,6 +487,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         topPanel.add(speedSlider);
         topPanel.add(speedLabel);
 
+        JButton btnRos2Plan = new JButton("ROS2 Plan");
+        btnRos2Plan.setToolTipText("Gui toa do hien tai sang ROS 2 bridge");
+        btnRos2Plan.addActionListener(e -> requestRos2Plan());
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        topPanel.add(btnRos2Plan);
+
         topPanel.add(new JSeparator(SwingConstants.VERTICAL));
         topPanel.add(fixedHeightCb);
         topPanel.add(new JLabel("Z:"));
@@ -546,6 +553,50 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         topPanel.add(comPortCombo);
         topPanel.add(btnRefreshCom);
         topPanel.add(btnConnect);
+    }
+
+    private void requestRos2Plan() {
+        final boolean isRight = isRightArmSelected;
+        final String armName = isRight ? "right" : "left";
+        final JTextField tX = isRight ? txXRight : txXLeft;
+        final JTextField tY = isRight ? txYRight : txYLeft;
+        final JTextField tZ = isRight ? txZRight : txZLeft;
+
+        final double x;
+        final double y;
+        final double z;
+        try {
+            x = Double.parseDouble(tX.getText().trim());
+            y = Double.parseDouble(tY.getText().trim());
+            z = Double.parseDouble(tZ.getText().trim());
+        } catch (NumberFormatException ex) {
+            setGotoStatus("ROS2: toa do khong hop le", Color.RED);
+            return;
+        }
+
+        setGotoStatus("ROS2: dang gui yeu cau...", new Color(0, 90, 180));
+        new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() throws Exception {
+                return ros2BridgeClient.requestPlanPose(armName, x, y, z);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    String response = get();
+                    setGotoStatus("ROS2: da nhan phan hoi", new Color(0, 140, 0));
+                    if (DEBUG) {
+                        System.out.println("[ROS2] " + response);
+                    }
+                } catch (Exception ex) {
+                    setGotoStatus("ROS2: khong ket noi bridge", Color.RED);
+                    if (DEBUG) {
+                        ex.printStackTrace();
+                    }
+                }
+            }
+        }.execute();
     }
 
     private void buildMenuBar() {
