@@ -25,6 +25,7 @@
 #include "encoder.h"
 #include "pid.h"
 #include "joint_control.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -60,6 +61,16 @@ DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
 int index,angle=0;
+volatile float servo0_deg = 96.43f;
+volatile float servo1_deg = 35.0f;
+volatile float servo2_deg = 0.0f;
+volatile float servo3_deg = 0.0f;
+volatile float servo4_deg = 60.0f;
+volatile float servo5_deg = 0.0f;
+
+uint8_t rx_byte;
+uint8_t rx_buffer[64];
+uint16_t rx_index = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -135,6 +146,7 @@ int main(void)
 
   Encoder_Init();
 //  JointControl_Init();
+  HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -149,8 +161,13 @@ int main(void)
 //    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_12);
 //    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
     Encoder_Update();
-  	Set_Servo_Angle(index,angle);
-     HAL_Delay(500);
+  	Set_Servo_Angle(0, servo0_deg);
+  	Set_Servo_Angle(1, servo1_deg);
+  	Set_Servo_Angle(2, servo2_deg);
+  	Set_Servo_Angle(3, servo3_deg);
+  	Set_Servo_Angle(4, servo4_deg);
+  	Set_Servo_Angle(5, servo5_deg);
+     HAL_Delay(10);
 
     // Call test pattern for PWM output testing
 //    Servo_Test_Patterns();
@@ -841,7 +858,32 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == USART1) {
+        if (rx_byte == '\n' || rx_byte == '\r') {
+            if (rx_index > 0) {
+                rx_buffer[rx_index] = '\0';
+                int q1, q2, q3, q4, q5, q6;
+                if (sscanf((char*)rx_buffer, "L:%d,%d,%d,%d,%d,%d", &q1, &q2, &q3, &q4, &q5, &q6) == 6) {
+                    servo0_deg = (float)q1;
+                    servo1_deg = (float)q2;
+                    servo2_deg = (float)q3;
+                    servo3_deg = (float)q4;
+                    servo4_deg = (float)q5;
+                    servo5_deg = (float)q6;
+                }
+                rx_index = 0;
+            }
+        } else {
+            if (rx_index < sizeof(rx_buffer) - 1) {
+                rx_buffer[rx_index++] = rx_byte;
+            } else {
+                rx_index = 0; // buffer overflow protection
+            }
+        }
+        HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
+    }
+}
 /* USER CODE END 4 */
 
 /**
