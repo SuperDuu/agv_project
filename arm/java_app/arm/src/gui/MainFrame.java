@@ -582,6 +582,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private void requestRos2Plan() {
         final boolean isRight = isRightArmSelected;
         final String armName = isRight ? "right" : "left";
+        
+        final boolean hasDrawnPath = cbEnableDrawing.isSelected() && !armPanel.referencePath.isEmpty();
+        final java.util.List<double[]> finalPath;
+        if (hasDrawnPath) {
+            double speed = Math.max(1.0, speedSlider.getValue() / 2.0); // units per sec
+            java.util.List<double[]> resampled = resamplePath(armPanel.referencePath, speed);
+            finalPath = resampled.isEmpty() ? armPanel.referencePath : resampled;
+            setGotoStatus("ROS2: dang gui yeu cau quy dao (" + finalPath.size() + " diem)...", new Color(0, 90, 180));
+        } else {
+            finalPath = null;
+            setGotoStatus("ROS2: dang gui yeu cau...", new Color(0, 90, 180));
+        }
+
         final JTextField tX = isRight ? txXRight : txXLeft;
         final JTextField tY = isRight ? txYRight : txYLeft;
         final JTextField tZ = isRight ? txZRight : txZLeft;
@@ -589,21 +602,28 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final double x;
         final double y;
         final double z;
-        try {
-            x = Double.parseDouble(tX.getText().trim());
-            y = Double.parseDouble(tY.getText().trim());
-            z = Double.parseDouble(tZ.getText().trim());
-        } catch (NumberFormatException ex) {
-            setGotoStatus("ROS2: toa do khong hop le", Color.RED);
-            return;
+        if (!hasDrawnPath) {
+            try {
+                x = Double.parseDouble(tX.getText().trim());
+                y = Double.parseDouble(tY.getText().trim());
+                z = Double.parseDouble(tZ.getText().trim());
+            } catch (NumberFormatException ex) {
+                setGotoStatus("ROS2: toa do khong hop le", Color.RED);
+                return;
+            }
+        } else {
+            x = 0; y = 0; z = 0;
         }
 
-        setGotoStatus("ROS2: dang gui yeu cau...", new Color(0, 90, 180));
         new SwingWorker<String, Void>() {
             @Override
             protected String doInBackground() throws Exception {
                 double[] currentAngles = isRight ? anglesRight : anglesLeft;
-                return ros2BridgeClient.requestPlanPose(armName, x, y, z, currentAngles);
+                if (hasDrawnPath) {
+                    return ros2BridgeClient.requestPlanPath(armName, finalPath, currentAngles);
+                } else {
+                    return ros2BridgeClient.requestPlanPose(armName, x, y, z, currentAngles);
+                }
             }
 
             @Override
