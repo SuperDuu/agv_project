@@ -238,6 +238,23 @@ public class ArmPanel extends JPanel
             System.out.printf("[DEBUG_CLICK] Left Arm Solver: %s\n", resultLeft == null ? "FAILED" : "SUCCESS");
         }
 
+        boolean rightCollision = false;
+        if (resultRight != null) {
+            double[] leftHome = { resultRight[0], 0, -10, 30, 0, 0 };
+            if (!isCollisionFree(resultRight, leftHome)) {
+                resultRight = null;
+                rightCollision = true;
+            }
+        }
+        boolean leftCollision = false;
+        if (resultLeft != null) {
+            double[] rightHome = { resultLeft[0], 0, 10, -30, 0, 0 };
+            if (!isCollisionFree(rightHome, resultLeft)) {
+                resultLeft = null;
+                leftCollision = true;
+            }
+        }
+
         boolean chooseRight = true;
         double[] chosenResult = null;
 
@@ -287,8 +304,16 @@ public class ArmPanel extends JPanel
                 robot.setGotoStatusRight("Về Home", Color.BLUE);
             }
         } else {
-            robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
-            robot.setGotoStatusLeft("Ngoài tầm (Click)", Color.RED);
+            if (rightCollision) {
+                robot.setGotoStatusRight("Va chạm (Click)", Color.RED);
+            } else {
+                robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
+            }
+            if (leftCollision) {
+                robot.setGotoStatusLeft("Va chạm (Click)", Color.RED);
+            } else {
+                robot.setGotoStatusLeft("Ngoài tầm (Click)", Color.RED);
+            }
         }
 
         repaint();
@@ -1283,5 +1308,90 @@ public class ArmPanel extends JPanel
             }
         }
 
+    }
+
+    public static boolean isCollisionFree(double[] qRight, double[] qLeft) {
+        // 1. Generate 3D check points for Right Arm
+        double[][] ptsRight = computeAllJoints3DForAngles(qRight, true);
+        java.util.List<double[]> pointsRight = getCheckPoints(ptsRight);
+
+        // 2. Generate 3D check points for Left Arm
+        double[][] ptsLeft = computeAllJoints3DForAngles(qLeft, false);
+        java.util.List<double[]> pointsLeft = getCheckPoints(ptsLeft);
+
+        // 3. Torso Collision Check (for both arms)
+        // Torso size: 28x28 (X in [-14, 14], Y in [-14, 14]) and height 120 (Z in [0, 120])
+        // With safety margin: |X| < 24.0, |Y| < 24.0, Z < 125.0
+        double safetyMarginXY = 24.0;
+        double torsoHeightLimit = 125.0;
+
+        for (double[] pt : pointsRight) {
+            if (Math.abs(pt[0]) < safetyMarginXY && Math.abs(pt[1]) < safetyMarginXY && pt[2] < torsoHeightLimit) {
+                return false; // Collision with torso
+            }
+        }
+        for (double[] pt : pointsLeft) {
+            if (Math.abs(pt[0]) < safetyMarginXY && Math.abs(pt[1]) < safetyMarginXY && pt[2] < torsoHeightLimit) {
+                return false; // Collision with torso
+            }
+        }
+
+        // 4. Inter-Arm Collision Check
+        // Check distance between all check points of Right and Left arm
+        // Collision threshold: 25.0 mm
+        double armCollisionThreshold = 25.0;
+        for (double[] pr : pointsRight) {
+            for (double[] pl : pointsLeft) {
+                double dist = Math.sqrt(Math.pow(pr[0] - pl[0], 2) + Math.pow(pr[1] - pl[1], 2) + Math.pow(pr[2] - pl[2], 2));
+                if (dist < armCollisionThreshold) {
+                    return false; // Collision between arms
+                }
+            }
+        }
+
+        return true; // No collision!
+    }
+
+    private static java.util.List<double[]> getCheckPoints(double[][] pts) {
+        java.util.List<double[]> list = new java.util.ArrayList<>();
+        // We only check from Joint 3 to End-effector (indices 3 to 7)
+        for (int i = 3; i <= 7; i++) {
+            list.add(pts[i].clone());
+            if (i < 7) {
+                // Add midpoint of segment i -> i+1
+                list.add(new double[] {
+                    (pts[i][0] + pts[i+1][0]) / 2.0,
+                    (pts[i][1] + pts[i+1][1]) / 2.0,
+                    (pts[i][2] + pts[i+1][2]) / 2.0
+                });
+            }
+        }
+        return list;
+    }
+
+    private static double[][] computeAllJoints3DForAngles(double[] anglesDeg, boolean isRight) {
+        double[][] pts = new double[8][3];
+        double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
+        pts[0] = new double[] { 0, 0, 0 };
+
+        double d2 = isRight ? (L2 + L3) : -(L2 + L3);
+        double[][] params = {
+                { 0, L1 + L0, 0, -Math.PI / 2, Math.toRadians(anglesDeg[0]) },
+                { -Math.PI / 2, d2, 0, -Math.PI / 2, Math.toRadians(anglesDeg[1]) },
+                { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(anglesDeg[2]) },
+                { 0, 0, L4, -Math.PI / 2, Math.toRadians(anglesDeg[3]) },
+                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(anglesDeg[4]) },
+                { -Math.PI / 2, 0, 0, 0, Math.toRadians(anglesDeg[5]) }
+        };
+
+        for (int i = 0; i < 6; i++) {
+            T = multiply4x4(T, getMDHMatrix(params[i][0], params[i][1], params[i][2], params[i][3], params[i][4]));
+            pts[i + 1] = new double[] { T[0][3], T[1][3], T[2][3] };
+        }
+
+        T = multiply4x4(T, getToolMatrix());
+        pts[7] = new double[] { T[0][3], T[1][3], T[2][3] };
+
+        return pts;
     }
 }
