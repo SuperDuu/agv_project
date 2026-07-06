@@ -21,6 +21,7 @@ setup(
     entry_points={
         "console_scripts": [
             "java_udp_bridge = agv_arm_bridge.java_udp_bridge:main",
+            "agv_arm_planner = agv_arm_bridge.agv_arm_planner:main",
         ],
     },
 )
