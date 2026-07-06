@@ -27,12 +27,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final double WORKSPACE_FALLBACK_MAX_DISTANCE = 2.0;
     private static final double WORKSPACE_FALLBACK_MAX_JOINT_JUMP = 25.0;
     private static final double WORKSPACE_SEED_MAX_DISTANCE = 1.0;
-    double[] anglesRight = { 0, 0, 10, -30, 0, 0 };
-    double[] targetAnglesRight = { 0, 0, 10, -30, 0, 0 };
+    // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
+    double[] anglesRight = { 0, 0, 20, -35, 0, 0 };
+    double[] targetAnglesRight = { 0, 0, 20, -35, 0, 0 };
     double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
 
-    double[] anglesLeft = { 0, 0, -10, 30, 0, 0 };
-    double[] targetAnglesLeft = { 0, 0, -10, 30, 0, 0 };
+    // θ-space: θ₃=q₃=-20, θ₄=q₄-q₃=15-(-20)=35 (Left)
+    double[] anglesLeft = { 0, 0, -20, 35, 0, 0 };
+    double[] targetAnglesLeft = { 0, 0, -20, 35, 0, 0 };
     double[] lastSentAnglesLeft = { -999, -999, -999, -999, -999, -999 };
 
     public double[] angles = anglesRight;
@@ -1071,7 +1073,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (changedRight) {
                 StringBuilder sb = new StringBuilder("R:");
                 for (int i = 0; i < NUM_JOINTS; i++) {
-                    sb.append(String.format("%d", (int) Math.round(anglesRight[i])));
+                    double val = anglesRight[i];
+                    if (i == 3) {
+                        // q₄ = θ₄ + θ₃ (parallelogram: θ→q)
+                        val = anglesRight[3] + anglesRight[2];
+                    }
+                    sb.append(String.format("%d", (int) Math.round(val)));
                     if (i < NUM_JOINTS - 1) {
                         sb.append(",");
                     }
@@ -1097,7 +1104,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (changedLeft) {
                 StringBuilder sb = new StringBuilder("L:");
                 for (int i = 0; i < NUM_JOINTS; i++) {
-                    sb.append(String.format("%d", (int) Math.round(anglesLeft[i])));
+                    double val = anglesLeft[i];
+                    if (i == 3) {
+                        // q₄ = θ₄ + θ₃ (parallelogram coupling: θ→q)
+                        val = anglesLeft[3] + anglesLeft[2];
+                    }
+                    sb.append(String.format("%d", (int) Math.round(val)));
                     if (i < NUM_JOINTS - 1) {
                         sb.append(",");
                     }
@@ -1278,7 +1290,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 // Prevent gripper from going under floor
                 double[][] pts3d = armPanel.computeAllJoints3DRight();
                 double[] ee = pts3d[NUM_JOINTS + 1];
-                if (ee[2] < 0) {
+                // Parallelogram constraint: 5° ≤ |q₃+q₄| ≤ 90° where q₃=θ₃, q₄=θ₄+θ₃
+                double q3 = anglesRight[2];
+                double q4 = anglesRight[3] + anglesRight[2];
+                double absSum = Math.abs(q3 + q4);
+                if (ee[2] < 0 || absSum < 5.0 - 0.1 || absSum > 90.0 + 0.1) {
                     anglesRight[i] = oldVal;
                     slidersRight[i].setValue((int) Math.round(oldVal));
                 }
@@ -1312,7 +1328,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 // Prevent gripper from going under floor
                 double[][] pts3d = armPanel.computeAllJoints3DLeft();
                 double[] ee = pts3d[NUM_JOINTS + 1];
-                if (ee[2] < 0) {
+                // Parallelogram constraint: 5° ≤ |q₃+q₄| ≤ 90° where q₃=θ₃, q₄=θ₄+θ₃
+                double q3 = anglesLeft[2];
+                double q4 = anglesLeft[3] + anglesLeft[2];
+                double absSum = Math.abs(q3 + q4);
+                if (ee[2] < 0 || absSum < 5.0 - 0.1 || absSum > 90.0 + 0.1) {
                     anglesLeft[i] = oldVal;
                     slidersLeft[i].setValue((int) Math.round(oldVal));
                 }
