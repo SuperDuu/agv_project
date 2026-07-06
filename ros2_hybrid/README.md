@@ -79,7 +79,9 @@ Start the Java/ROS 2 UDP bridge:
 ros2 launch agv_arm_bridge java_udp_bridge.launch.py
 ```
 
-Java can send a UDP JSON packet to port `5010`:
+The Docker compose file publishes UDP port `5010` to Windows. Java can send a
+UDP JSON packet to `127.0.0.1:5010`. For replies from the container back to
+Windows, set `reply_host` to `host.docker.internal`:
 
 ```json
 {
@@ -87,7 +89,7 @@ Java can send a UDP JSON packet to port `5010`:
   "request_id": "demo-001",
   "arm": "right",
   "target": { "x": 120.0, "y": 0.0, "z": 20.0 },
-  "reply_host": "127.0.0.1",
+  "reply_host": "host.docker.internal",
   "reply_port": 5011
 }
 ```

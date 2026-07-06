@@ -5,8 +5,11 @@ services:
       dockerfile: docker/Dockerfile
     image: agv-ros2-hybrid:jazzy
     container_name: agv_ros2_hybrid
-    network_mode: host
     ipc: host
+    ports:
+      - "5010:5010/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
