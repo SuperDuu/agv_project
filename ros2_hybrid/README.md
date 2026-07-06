@@ -8,6 +8,19 @@ limits kept in editable config files.
 
 ## Docker
 
+On Windows, install and start Docker Desktop before running the commands below.
+Docker Desktop should use the WSL 2 backend. After installation, restart
+PowerShell and verify:
+
+```powershell
+docker --version
+docker compose version
+```
+
+If PowerShell says `docker` is not recognized, Docker Desktop is not installed,
+is not running, or its CLI path has not been added to the current terminal
+session.
+
 Build the container:
 
 ```bash
