@@ -2,25 +2,34 @@ package kinematics;
 
 public class Kinematics {
     public static final boolean IK_AUDIT_ENABLED = false;
-    public static int solverMode = JniKinematics.isLoaded() ? 1 : 0; // 0 = Java Numerical, 1 = C++ JNI Numerical, 2 = C++ JNI IKFast
+    public static int solverMode = JniKinematics.isLoaded() ? 1 : 0; // 0 = Java Numerical, 1 = C++ JNI Numerical, 2 =
+                                                                     // C++ JNI IKFast
 
     // Các thông số của Robot 6DOF từ ARM.m
     public static final int NUM_JOINTS = 6;
-    public static final double L0 = 120.0;
-    public static final double L1 = 5.0;
-    public static final double L2 = 10.0;
-    public static final double L3 = 10.0;
+    public static final double L0 = 130.0;
+    public static final double L1 = 0.0;
+    public static final double L2 = 32.0;
+    public static final double L3 = 0.0;
     public static final double L4 = 20.0;
-    public static final double L5 = 20.0;
-    public static final double L6 = 10.0;
-    public static final double L7 = 10.0;
+    public static final double L5 = 25.0;
+    public static final double L6 = 0.0;
+    public static final double L7 = 15.0;
 
     public static final String[] JOINT_NAMES = { "Khớp 1", "Khớp 2", "Khớp 3", "Khớp 4", "Khớp 5", "Khớp 6" };
-    public static final double[] JOINT_MIN_RIGHT = { -45, -90, -90, -140, -90, -90 };
-    public static final double[] JOINT_MAX_RIGHT = { 45, 90, 90, -30, 90, 90 };
+    // θ-space limits (actual joint angles, used by IK solver)
+    // θ₃ = q₃, so same limits. θ₄ constrained by parallelogram: |θ₄| ∈ [5°,90°]
+    public static final double[] JOINT_MIN_RIGHT = { -45, -90, -20, -90, -90, -90 };
+    public static final double[] JOINT_MAX_RIGHT = { 45, 90, 165, 90, 90, 90 };
 
-    public static final double[] JOINT_MIN_LEFT = { -45, -90, -90, 30, -90, -90 };
-    public static final double[] JOINT_MAX_LEFT = { 45, 90, 90, 140, 90, 90 };
+    public static final double[] JOINT_MIN_LEFT = { -45, -90, -165, -90, -90, -90 };
+    public static final double[] JOINT_MAX_LEFT = { 45, 90, 20, 90, 90, 90 };
+
+    // q-space limits (motor angles, sent to STM32)
+    public static final double[] Q_MIN_RIGHT = { -45, -90, -20, -45, -90, -90 };
+    public static final double[] Q_MAX_RIGHT = { 45, 90, 165, 75, 90, 90 };
+    public static final double[] Q_MIN_LEFT = { -45, -90, -165, -75, -90, -90 };
+    public static final double[] Q_MAX_LEFT = { 45, 90, 20, 45, 90, 90 };
 
     public static final double[] JOINT_MIN = JOINT_MIN_RIGHT;
     public static final double[] JOINT_MAX = JOINT_MAX_RIGHT;
@@ -32,11 +41,14 @@ public class Kinematics {
         return solveIK(px, py, pz, R_target, qInitRad, true); // default to Right arm
     }
 
-    public static double[] solveIK(double px, double py, double pz, double[][] R_target, double[] qInitRad, boolean isRight) {
+    public static double[] solveIK(double px, double py, double pz, double[][] R_target, double[] qInitRad,
+            boolean isRight) {
         if (solverMode > 0 && JniKinematics.isLoaded()) {
             double[] sol = JniKinematics.solveIKNative(px, py, pz, R_target, qInitRad, isRight, solverMode);
             if (sol != null) {
-                return sol;
+                if (isWithinLimits(sol, isRight)) {
+                    return sol;
+                }
             }
         }
         IKWorkspace ws = new IKWorkspace();
@@ -91,14 +103,14 @@ public class Kinematics {
             }
 
             computeJacobianEE(q, isRight, ws);
-            
+
             // Adaptive DLS
             double detJ = compute6x6Determinant(ws.Je);
             double manipulability = Math.abs(detJ);
             double lambda = 0.01;
             if (manipulability < 0.008) {
                 double ratio = manipulability / 0.008;
-                lambda = Math.sqrt(0.01*0.01 + 0.4*0.4 * (1 - ratio)*(1 - ratio));
+                lambda = Math.sqrt(0.01 * 0.01 + 0.4 * 0.4 * (1 - ratio) * (1 - ratio));
             }
 
             solveDLS(ws.Je, ws.delta, lambda, ws);
@@ -119,13 +131,47 @@ public class Kinematics {
         double dx = ws.T[0][3] - px;
         double dy = ws.T[1][3] - py;
         double dz = ws.T[2][3] - pz;
-        double posErr = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        double posErr = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
         if (posErr <= 0.30) {
-            return convertToDegreesWrap(bestQ);
+            double[] res = convertToDegreesWrap(bestQ);
+            if (isWithinLimits(res, isRight)) {
+                return res;
+            }
         }
 
         return null;
+    }
+
+    /**
+     * Check if θ-space angles are within limits.
+     * Also converts θ→q to validate motor limits and parallelogram constraint.
+     * θ₃ = q₃, q₄ = θ₄ + θ₃
+     */
+    public static boolean isWithinLimits(double[] thetaDeg, boolean isRight) {
+        // 1. Check θ-space limits (IK solver bounds)
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            double min = isRight ? JOINT_MIN_RIGHT[i] : JOINT_MIN_LEFT[i];
+            double max = isRight ? JOINT_MAX_RIGHT[i] : JOINT_MAX_LEFT[i];
+            if (thetaDeg[i] < min - 0.1 || thetaDeg[i] > max + 0.1) {
+                return false;
+            }
+        }
+        // 2. Convert θ→q for joints 3,4 and check motor limits
+        double q3 = thetaDeg[2]; // q₃ = θ₃
+        double q4 = thetaDeg[3] + thetaDeg[2]; // q₄ = θ₄ + θ₃
+        double q3Min = isRight ? Q_MIN_RIGHT[2] : Q_MIN_LEFT[2];
+        double q3Max = isRight ? Q_MAX_RIGHT[2] : Q_MAX_LEFT[2];
+        double q4Min = isRight ? Q_MIN_RIGHT[3] : Q_MIN_LEFT[3];
+        double q4Max = isRight ? Q_MAX_RIGHT[3] : Q_MAX_LEFT[3];
+        if (q3 < q3Min - 0.1 || q3 > q3Max + 0.1) return false;
+        if (q4 < q4Min - 0.1 || q4 > q4Max + 0.1) return false;
+        // 3. Parallelogram constraint: 5° ≤ |q₃+q₄| ≤ 90°
+        double absSum = Math.abs(q3 + q4);
+        if (absSum < 5.0 - 0.1 || absSum > 90.0 + 0.1) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -280,7 +326,7 @@ public class Kinematics {
         double dx = T1[0][3] - T0[0][3];
         double dy = T1[1][3] - T0[1][3];
         double dz = T1[2][3] - T0[2][3];
-        
+
         // Translate world displacement to local frame
         double[] dp = {
                 R0T[0][0] * dx + R0T[0][1] * dy + R0T[0][2] * dz,
@@ -296,17 +342,22 @@ public class Kinematics {
 
         double[] dw = new double[3];
         if (theta < 1e-6) {
-            dw[0] = 0; dw[1] = 0; dw[2] = 0;
+            dw[0] = 0;
+            dw[1] = 0;
+            dw[2] = 0;
         } else if (theta > 3.0) {
             // Tìm trục xoay dựa trên đường chéo chính của ma trận R khi theta -> pi
             dw[0] = theta * Math.sqrt(Math.max(0.0, 0.5 * (R[0][0] + 1.0)));
             dw[1] = theta * Math.sqrt(Math.max(0.0, 0.5 * (R[1][1] + 1.0)));
             dw[2] = theta * Math.sqrt(Math.max(0.0, 0.5 * (R[2][2] + 1.0)));
-            
+
             // Khôi phục dấu từ các phần tử chéo phụ
-            if (R[2][1] - R[1][2] < 0) dw[0] = -dw[0];
-            if (R[0][2] - R[2][0] < 0) dw[1] = -dw[1];
-            if (R[1][0] - R[0][1] < 0) dw[2] = -dw[2];
+            if (R[2][1] - R[1][2] < 0)
+                dw[0] = -dw[0];
+            if (R[0][2] - R[2][0] < 0)
+                dw[1] = -dw[1];
+            if (R[1][0] - R[0][1] < 0)
+                dw[2] = -dw[2];
         } else {
             double sinTheta = Math.sin(theta);
             double s = (Math.abs(sinTheta) > 1e-4) ? (0.5 * theta / sinTheta) : 0.5;
@@ -448,26 +499,28 @@ public class Kinematics {
 
     public static double[][] orthonormalize3x3(double[][] R) {
         double[][] Q = new double[3][3];
-        double len0 = Math.sqrt(R[0][0]*R[0][0] + R[1][0]*R[1][0] + R[2][0]*R[2][0]);
-        if (len0 < 1e-9) len0 = 1.0;
+        double len0 = Math.sqrt(R[0][0] * R[0][0] + R[1][0] * R[1][0] + R[2][0] * R[2][0]);
+        if (len0 < 1e-9)
+            len0 = 1.0;
         Q[0][0] = R[0][0] / len0;
         Q[1][0] = R[1][0] / len0;
         Q[2][0] = R[2][0] / len0;
-        
-        double dot = Q[0][0]*R[0][1] + Q[1][0]*R[1][1] + Q[2][0]*R[2][1];
+
+        double dot = Q[0][0] * R[0][1] + Q[1][0] * R[1][1] + Q[2][0] * R[2][1];
         double v1_x = R[0][1] - dot * Q[0][0];
         double v1_y = R[1][1] - dot * Q[1][0];
         double v1_z = R[2][1] - dot * Q[2][0];
-        double len1 = Math.sqrt(v1_x*v1_x + v1_y*v1_y + v1_z*v1_z);
-        if (len1 < 1e-9) len1 = 1.0;
+        double len1 = Math.sqrt(v1_x * v1_x + v1_y * v1_y + v1_z * v1_z);
+        if (len1 < 1e-9)
+            len1 = 1.0;
         Q[0][1] = v1_x / len1;
         Q[1][1] = v1_y / len1;
         Q[2][1] = v1_z / len1;
-        
-        Q[0][2] = Q[1][0]*Q[2][1] - Q[2][0]*Q[1][1];
-        Q[1][2] = Q[2][0]*Q[0][1] - Q[0][0]*Q[2][1];
-        Q[2][2] = Q[0][0]*Q[1][1] - Q[1][0]*Q[0][1];
-        
+
+        Q[0][2] = Q[1][0] * Q[2][1] - Q[2][0] * Q[1][1];
+        Q[1][2] = Q[2][0] * Q[0][1] - Q[0][0] * Q[2][1];
+        Q[2][2] = Q[0][0] * Q[1][1] - Q[1][0] * Q[0][1];
+
         return Q;
     }
 
@@ -495,8 +548,10 @@ public class Kinematics {
         double[] q_deg = new double[NUM_JOINTS];
         for (int i = 0; i < NUM_JOINTS; i++) {
             double deg = Math.toDegrees(q[i]);
-            while (deg > 180) deg -= 360;
-            while (deg < -180) deg += 360;
+            while (deg > 180)
+                deg -= 360;
+            while (deg < -180)
+                deg += 360;
             q_deg[i] = deg;
         }
         return q_deg;
@@ -504,9 +559,9 @@ public class Kinematics {
 
     public static double[] crossProduct(double[] u, double[] v) {
         return new double[] {
-            u[1] * v[2] - u[2] * v[1],
-            u[2] * v[0] - u[0] * v[2],
-            u[0] * v[1] - u[1] * v[0]
+                u[1] * v[2] - u[2] * v[1],
+                u[2] * v[0] - u[0] * v[2],
+                u[0] * v[1] - u[1] * v[0]
         };
     }
 
@@ -559,12 +614,36 @@ public class Kinematics {
         }
         double d2 = isRight ? (L2 + L3) : -(L2 + L3);
         double[][] params = ws.params;
-        params[0][0] = 0;             params[0][1] = L1 + L0; params[0][2] = 0;  params[0][3] = -Math.PI / 2; params[0][4] = q[0];
-        params[1][0] = -Math.PI / 2; params[1][1] = d2;      params[1][2] = 0;  params[1][3] = -Math.PI / 2; params[1][4] = q[1];
-        params[2][0] = -Math.PI / 2; params[2][1] = 0;       params[2][2] = 0;  params[2][3] = -Math.PI;      params[2][4] = q[2];
-        params[3][0] = 0;             params[3][1] = 0;       params[3][2] = L4; params[3][3] = -Math.PI / 2; params[3][4] = q[3];
-        params[4][0] = -Math.PI / 2; params[4][1] = L5 + L6; params[4][2] = 0;  params[4][3] = -Math.PI / 2; params[4][4] = q[4];
-        params[5][0] = -Math.PI / 2; params[5][1] = 0;       params[5][2] = 0;  params[5][3] = 0;             params[5][4] = q[5];
+        params[0][0] = 0;
+        params[0][1] = L1 + L0;
+        params[0][2] = 0;
+        params[0][3] = -Math.PI / 2;
+        params[0][4] = q[0];
+        params[1][0] = -Math.PI / 2;
+        params[1][1] = d2;
+        params[1][2] = 0;
+        params[1][3] = -Math.PI / 2;
+        params[1][4] = q[1];
+        params[2][0] = -Math.PI / 2;
+        params[2][1] = 0;
+        params[2][2] = 0;
+        params[2][3] = -Math.PI;
+        params[2][4] = q[2];
+        params[3][0] = 0;
+        params[3][1] = 0;
+        params[3][2] = L4;
+        params[3][3] = -Math.PI / 2;
+        params[3][4] = q[3];
+        params[4][0] = -Math.PI / 2;
+        params[4][1] = L5 + L6;
+        params[4][2] = 0;
+        params[4][3] = -Math.PI / 2;
+        params[4][4] = q[4];
+        params[5][0] = -Math.PI / 2;
+        params[5][1] = 0;
+        params[5][2] = 0;
+        params[5][3] = 0;
+        params[5][4] = q[5];
 
         for (int i = 0; i < NUM_JOINTS; i++) {
             getMDHMatrix(params[i][0], params[i][1], params[i][2], params[i][3], params[i][4], ws.MDH);
@@ -573,7 +652,7 @@ public class Kinematics {
                 System.arraycopy(ws.T_next[r], 0, ws.T[r], 0, 4);
             }
         }
-        
+
         getToolMatrix(ws.MDH);
         multiply4x4(ws.T, ws.MDH, ws.T_next);
         for (int r = 0; r < 4; r++) {
@@ -586,17 +665,41 @@ public class Kinematics {
         double ct = Math.cos(theta), st = Math.sin(theta);
         double ca = Math.cos(alpha), sa = Math.sin(alpha);
 
-        out[0][0] = ct;      out[0][1] = -st;     out[0][2] = 0;   out[0][3] = a;
-        out[1][0] = st * ca; out[1][1] = ct * ca; out[1][2] = -sa;  out[1][3] = -sa * d;
-        out[2][0] = st * sa; out[2][1] = ct * sa; out[2][2] = ca;   out[2][3] = ca * d;
-        out[3][0] = 0;       out[3][1] = 0;       out[3][2] = 0;   out[3][3] = 1;
+        out[0][0] = ct;
+        out[0][1] = -st;
+        out[0][2] = 0;
+        out[0][3] = a;
+        out[1][0] = st * ca;
+        out[1][1] = ct * ca;
+        out[1][2] = -sa;
+        out[1][3] = -sa * d;
+        out[2][0] = st * sa;
+        out[2][1] = ct * sa;
+        out[2][2] = ca;
+        out[2][3] = ca * d;
+        out[3][0] = 0;
+        out[3][1] = 0;
+        out[3][2] = 0;
+        out[3][3] = 1;
     }
 
     public static void getToolMatrix(double[][] out) {
-        out[0][0] = 1; out[0][1] = 0;  out[0][2] = 0;  out[0][3] = 0;
-        out[1][0] = 0; out[1][1] = 0;  out[1][2] = -1; out[1][3] = -L7;
-        out[2][0] = 0; out[2][1] = 1;  out[2][2] = 0;  out[2][3] = 0;
-        out[3][0] = 0; out[3][1] = 0;  out[3][2] = 0;  out[3][3] = 1;
+        out[0][0] = 1;
+        out[0][1] = 0;
+        out[0][2] = 0;
+        out[0][3] = 0;
+        out[1][0] = 0;
+        out[1][1] = 0;
+        out[1][2] = -1;
+        out[1][3] = -L7;
+        out[2][0] = 0;
+        out[2][1] = 1;
+        out[2][2] = 0;
+        out[2][3] = 0;
+        out[3][0] = 0;
+        out[3][1] = 0;
+        out[3][2] = 0;
+        out[3][3] = 1;
     }
 
     public static void multiply4x4(double[][] A, double[][] B, double[][] C) {
@@ -646,15 +749,20 @@ public class Kinematics {
         double theta = Math.acos(cosTheta);
 
         if (theta < 1e-6) {
-            ws.dw[0] = 0; ws.dw[1] = 0; ws.dw[2] = 0;
+            ws.dw[0] = 0;
+            ws.dw[1] = 0;
+            ws.dw[2] = 0;
         } else if (theta > 3.0) {
             ws.dw[0] = theta * Math.sqrt(Math.max(0.0, 0.5 * (ws.R[0][0] + 1.0)));
             ws.dw[1] = theta * Math.sqrt(Math.max(0.0, 0.5 * (ws.R[1][1] + 1.0)));
             ws.dw[2] = theta * Math.sqrt(Math.max(0.0, 0.5 * (ws.R[2][2] + 1.0)));
-            
-            if (ws.R[2][1] - ws.R[1][2] < 0) ws.dw[0] = -ws.dw[0];
-            if (ws.R[0][2] - ws.R[2][0] < 0) ws.dw[1] = -ws.dw[1];
-            if (ws.R[1][0] - ws.R[0][1] < 0) ws.dw[2] = -ws.dw[2];
+
+            if (ws.R[2][1] - ws.R[1][2] < 0)
+                ws.dw[0] = -ws.dw[0];
+            if (ws.R[0][2] - ws.R[2][0] < 0)
+                ws.dw[1] = -ws.dw[1];
+            if (ws.R[1][0] - ws.R[0][1] < 0)
+                ws.dw[2] = -ws.dw[2];
         } else {
             double sinTheta = Math.sin(theta);
             double s = (Math.abs(sinTheta) > 1e-4) ? (0.5 * theta / sinTheta) : 0.5;
@@ -683,25 +791,27 @@ public class Kinematics {
     }
 
     public static void orthonormalize3x3InPlace(double[][] R) {
-        double len0 = Math.sqrt(R[0][0]*R[0][0] + R[1][0]*R[1][0] + R[2][0]*R[2][0]);
-        if (len0 < 1e-9) len0 = 1.0;
+        double len0 = Math.sqrt(R[0][0] * R[0][0] + R[1][0] * R[1][0] + R[2][0] * R[2][0]);
+        if (len0 < 1e-9)
+            len0 = 1.0;
         R[0][0] /= len0;
         R[1][0] /= len0;
         R[2][0] /= len0;
-        
-        double dot = R[0][0]*R[0][1] + R[1][0]*R[1][1] + R[2][0]*R[2][1];
+
+        double dot = R[0][0] * R[0][1] + R[1][0] * R[1][1] + R[2][0] * R[2][1];
         R[0][1] -= dot * R[0][0];
         R[1][1] -= dot * R[1][0];
         R[2][1] -= dot * R[2][0];
-        double len1 = Math.sqrt(R[0][1]*R[0][1] + R[1][1]*R[1][1] + R[2][1]*R[2][1]);
-        if (len1 < 1e-9) len1 = 1.0;
+        double len1 = Math.sqrt(R[0][1] * R[0][1] + R[1][1] * R[1][1] + R[2][1] * R[2][1]);
+        if (len1 < 1e-9)
+            len1 = 1.0;
         R[0][1] /= len1;
         R[1][1] /= len1;
         R[2][1] /= len1;
-        
-        R[0][2] = R[1][0]*R[2][1] - R[2][0]*R[1][1];
-        R[1][2] = R[2][0]*R[0][1] - R[0][0]*R[2][1];
-        R[2][2] = R[0][0]*R[1][1] - R[1][0]*R[0][1];
+
+        R[0][2] = R[1][0] * R[2][1] - R[2][0] * R[1][1];
+        R[1][2] = R[2][0] * R[0][1] - R[0][0] * R[2][1];
+        R[2][2] = R[0][0] * R[1][1] - R[1][0] * R[0][1];
     }
 
     public static void computeJacobianEE(double[] q, boolean isRight, IKWorkspace ws) {
@@ -712,12 +822,36 @@ public class Kinematics {
         }
         double d2 = isRight ? (L2 + L3) : -(L2 + L3);
         double[][] params = ws.params;
-        params[0][0] = 0;             params[0][1] = L1 + L0; params[0][2] = 0;  params[0][3] = -Math.PI / 2; params[0][4] = q[0];
-        params[1][0] = -Math.PI / 2; params[1][1] = d2;      params[1][2] = 0;  params[1][3] = -Math.PI / 2; params[1][4] = q[1];
-        params[2][0] = -Math.PI / 2; params[2][1] = 0;       params[2][2] = 0;  params[2][3] = -Math.PI;      params[2][4] = q[2];
-        params[3][0] = 0;             params[3][1] = 0;       params[3][2] = L4; params[3][3] = -Math.PI / 2; params[3][4] = q[3];
-        params[4][0] = -Math.PI / 2; params[4][1] = L5 + L6; params[4][2] = 0;  params[4][3] = -Math.PI / 2; params[4][4] = q[4];
-        params[5][0] = -Math.PI / 2; params[5][1] = 0;       params[5][2] = 0;  params[5][3] = 0;             params[5][4] = q[5];
+        params[0][0] = 0;
+        params[0][1] = L1 + L0;
+        params[0][2] = 0;
+        params[0][3] = -Math.PI / 2;
+        params[0][4] = q[0];
+        params[1][0] = -Math.PI / 2;
+        params[1][1] = d2;
+        params[1][2] = 0;
+        params[1][3] = -Math.PI / 2;
+        params[1][4] = q[1];
+        params[2][0] = -Math.PI / 2;
+        params[2][1] = 0;
+        params[2][2] = 0;
+        params[2][3] = -Math.PI;
+        params[2][4] = q[2];
+        params[3][0] = 0;
+        params[3][1] = 0;
+        params[3][2] = L4;
+        params[3][3] = -Math.PI / 2;
+        params[3][4] = q[3];
+        params[4][0] = -Math.PI / 2;
+        params[4][1] = L5 + L6;
+        params[4][2] = 0;
+        params[4][3] = -Math.PI / 2;
+        params[4][4] = q[4];
+        params[5][0] = -Math.PI / 2;
+        params[5][1] = 0;
+        params[5][2] = 0;
+        params[5][3] = 0;
+        params[5][4] = q[5];
 
         for (int i = 0; i < NUM_JOINTS; i++) {
             double alpha = params[i][0];
@@ -727,10 +861,22 @@ public class Kinematics {
             double qi = params[i][4];
 
             double ca = Math.cos(alpha), sa = Math.sin(alpha);
-            ws.RxTx[0][0] = 1; ws.RxTx[0][1] = 0;  ws.RxTx[0][2] = 0;   ws.RxTx[0][3] = a;
-            ws.RxTx[1][0] = 0; ws.RxTx[1][1] = ca; ws.RxTx[1][2] = -sa;  ws.RxTx[1][3] = 0;
-            ws.RxTx[2][0] = 0; ws.RxTx[2][1] = sa; ws.RxTx[2][2] = ca;   ws.RxTx[2][3] = 0;
-            ws.RxTx[3][0] = 0; ws.RxTx[3][1] = 0;  ws.RxTx[3][2] = 0;   ws.RxTx[3][3] = 1;
+            ws.RxTx[0][0] = 1;
+            ws.RxTx[0][1] = 0;
+            ws.RxTx[0][2] = 0;
+            ws.RxTx[0][3] = a;
+            ws.RxTx[1][0] = 0;
+            ws.RxTx[1][1] = ca;
+            ws.RxTx[1][2] = -sa;
+            ws.RxTx[1][3] = 0;
+            ws.RxTx[2][0] = 0;
+            ws.RxTx[2][1] = sa;
+            ws.RxTx[2][2] = ca;
+            ws.RxTx[2][3] = 0;
+            ws.RxTx[3][0] = 0;
+            ws.RxTx[3][1] = 0;
+            ws.RxTx[3][2] = 0;
+            ws.RxTx[3][3] = 1;
 
             multiply4x4(ws.T, ws.RxTx, ws.T_i_prime);
 
@@ -744,10 +890,22 @@ public class Kinematics {
 
             double theta = qi + offset;
             double ct = Math.cos(theta), st = Math.sin(theta);
-            ws.RzTz[0][0] = ct; ws.RzTz[0][1] = -st; ws.RzTz[0][2] = 0; ws.RzTz[0][3] = 0;
-            ws.RzTz[1][0] = st; ws.RzTz[1][1] = ct;  ws.RzTz[1][2] = 0; ws.RzTz[1][3] = 0;
-            ws.RzTz[2][0] = 0;  ws.RzTz[2][1] = 0;   ws.RzTz[2][2] = 1; ws.RzTz[2][3] = d;
-            ws.RzTz[3][0] = 0;  ws.RzTz[3][1] = 0;   ws.RzTz[3][2] = 0; ws.RzTz[3][3] = 1;
+            ws.RzTz[0][0] = ct;
+            ws.RzTz[0][1] = -st;
+            ws.RzTz[0][2] = 0;
+            ws.RzTz[0][3] = 0;
+            ws.RzTz[1][0] = st;
+            ws.RzTz[1][1] = ct;
+            ws.RzTz[1][2] = 0;
+            ws.RzTz[1][3] = 0;
+            ws.RzTz[2][0] = 0;
+            ws.RzTz[2][1] = 0;
+            ws.RzTz[2][2] = 1;
+            ws.RzTz[2][3] = d;
+            ws.RzTz[3][0] = 0;
+            ws.RzTz[3][1] = 0;
+            ws.RzTz[3][2] = 0;
+            ws.RzTz[3][3] = 1;
 
             multiply4x4(ws.T_i_prime, ws.RzTz, ws.T);
         }
@@ -811,7 +969,8 @@ public class Kinematics {
 
         boolean success = solveLinearSystem(ws.JJT, e, ws.x, ws.M);
         if (!success) {
-            for (int i = 0; i < NUM_JOINTS; i++) ws.dq[i] = 0.0;
+            for (int i = 0; i < NUM_JOINTS; i++)
+                ws.dq[i] = 0.0;
             return;
         }
 
@@ -869,7 +1028,7 @@ public class Kinematics {
         final double[][] T_next = new double[4][4];
         final double[][] MDH = new double[4][4];
         final double[][] params = new double[6][5];
-        
+
         final double[][] R0 = new double[3][3];
         final double[][] R1 = new double[3][3];
         final double[][] R0T = new double[3][3];
@@ -877,7 +1036,7 @@ public class Kinematics {
         final double[] dp = new double[3];
         final double[] dw = new double[3];
         final double[] delta = new double[6];
-        
+
         final double[][] z0 = new double[6][3];
         final double[][] p0 = new double[6][3];
         final double[][] J0 = new double[6][6];
@@ -888,7 +1047,7 @@ public class Kinematics {
         final double[][] T_tool = new double[4][4];
         final double[][] R_tool = new double[3][3];
         final double[][] RT = new double[3][3];
-        
+
         final double[][] JJT = new double[6][6];
         final double[] x = new double[6];
         final double[] dq = new double[6];
