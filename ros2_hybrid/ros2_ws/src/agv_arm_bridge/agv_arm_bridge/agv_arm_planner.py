@@ -252,9 +252,12 @@ class AgvArmPlanner(Node):
                 return False
         return True
 
-    def solve_ik_smart(self, px, py, pz, current_joints, is_right):
+    def solve_ik_smart(self, px, py, pz, current_joints, is_right, preferred_alpha=None, preferred_offset=None):
         alpha_scan = [0.0, -15.0, 15.0, -30.0, 30.0, -45.0, -60.0, -75.0, -90.0]
-        
+        if preferred_alpha is not None and preferred_alpha in alpha_scan:
+            alpha_scan.remove(preferred_alpha)
+            alpha_scan.insert(0, preferred_alpha)
+            
         q1_min = -45.0
         q1_max = 45.0
         
@@ -262,6 +265,9 @@ class AgvArmPlanner(Node):
         q1_base = max(math.radians(q1_min), min(math.radians(q1_max), q1_base))
         
         yaw_offsets = [0.0, -15.0, 15.0, -30.0, 30.0, -45.0, 45.0, -60.0, 60.0, -75.0, 75.0, -90.0, 90.0]
+        if preferred_offset is not None and preferred_offset in yaw_offsets:
+            yaw_offsets.remove(preferred_offset)
+            yaw_offsets.insert(0, preferred_offset)
         
         for alpha in alpha_scan:
             alpha_rad = math.radians(alpha)
@@ -302,8 +308,8 @@ class AgvArmPlanner(Node):
                 
                 sol = self.solve_ik(px, py, pz, R_target, current_joints, is_right)
                 if sol is not None:
-                    return sol
-        return None
+                    return sol, alpha, offset_deg
+        return None, None, None
 
     def handle_plan_request(self, msg):
         try:
@@ -323,17 +329,23 @@ class AgvArmPlanner(Node):
                 ok = True
                 error_msg = ""
                 
+                pref_alpha = None
+                pref_offset = None
+                
                 for idx, pt in enumerate(path_pts):
                     px = float(pt.get("x", 0.0))
                     py = float(pt.get("y", 0.0))
                     pz = float(pt.get("z", 0.0))
                     
-                    solved_joints = self.solve_ik_smart(px, py, pz, current_q, is_right)
+                    solved_joints, alpha, offset = self.solve_ik_smart(px, py, pz, current_q, is_right, pref_alpha, pref_offset)
                     
                     if solved_joints is None:
                         ok = False
                         error_msg = f"IK solver failed at point {idx} ({px}, {py}, {pz})"
                         break
+                    
+                    pref_alpha = alpha
+                    pref_offset = offset
                     
                     # Interpolate from previous position to solved position
                     steps = 5
@@ -375,7 +387,7 @@ class AgvArmPlanner(Node):
                 self.get_logger().info(f"Received request {request_id} for {arm} arm to ({px}, {py}, {pz})")
 
                 # Solve Inverse Kinematics
-                solved_joints = self.solve_ik_smart(px, py, pz, current_joints, is_right)
+                solved_joints, _, _ = self.solve_ik_smart(px, py, pz, current_joints, is_right)
 
                 if solved_joints is None:
                     self.get_logger().warn(f"IK solver failed for ({px}, {py}, {pz})")
