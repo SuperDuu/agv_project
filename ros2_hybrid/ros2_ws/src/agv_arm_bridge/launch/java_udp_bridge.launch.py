@@ -21,4 +21,9 @@ def generate_launch_description():
             }],
             output="screen",
         ),
+        Node(
+            package="agv_arm_bridge",
+            executable="agv_arm_planner",
+            output="screen",
+        ),
     ])
