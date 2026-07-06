@@ -51,9 +51,9 @@ class JavaUdpBridge(Node):
         self.get_logger().info(f"Listening for Java UDP requests on {self.listen_host}:{self.listen_port}")
 
     def poll_socket(self):
-        # Clean up stale requests (timeout > 5.0 seconds)
+        # Clean up stale requests (timeout > 10.0 seconds)
         now = time.time()
-        stale_ids = [rid for rid, (_, _, _, t) in self.pending_requests.items() if now - t > 5.0]
+        stale_ids = [rid for rid, (_, _, _, t) in self.pending_requests.items() if now - t > 10.0]
         for rid in stale_ids:
             _, reply_host, reply_port, _ = self.pending_requests.pop(rid)
             timeout_response = {
