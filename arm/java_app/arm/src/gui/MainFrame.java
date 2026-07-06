@@ -26,9 +26,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final double MAX_IK_POSITION_ERROR = 0.20; // General IK threshold
     private static final double TRAJ_RELAXED_ERROR = 0.25; // Trajectory fallback threshold
     private static final double TRAJ_STRICT_ERROR = 0.10; // Trajectory strict tracking threshold
-    private static final double WORKSPACE_FALLBACK_MAX_DISTANCE = 2.0;
-    private static final double WORKSPACE_FALLBACK_MAX_JOINT_JUMP = 25.0;
-    private static final double WORKSPACE_SEED_MAX_DISTANCE = 1.0;
+    static final double WORKSPACE_FALLBACK_MAX_DISTANCE = 2.0;
+    static final double WORKSPACE_FALLBACK_MAX_JOINT_JUMP = 25.0;
+    static final double WORKSPACE_SEED_MAX_DISTANCE = 1.0;
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = { 0, 0, 20, -35, 0, 0 };
     double[] targetAnglesRight = { 0, 0, 20, -35, 0, 0 };
@@ -2937,25 +2937,38 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
                                     if (z >= -5) { // Floor limit
                                         double[] qSample = new double[] { q1, q2, q3, q4, q5, 0 };
-                                        armPanel.addWorkspacePoint(new double[] { x, y, z }, isRight);
-                                        workspaceLogger.logRecord(
-                                                isRight ? "R" : "L",
-                                                x,
-                                                y,
-                                                z,
-                                                qSample,
-                                                Double.NaN,
-                                                getYawOffsetFromQ(qSample, x, y, isRight),
-                                                "ANY",
-                                                getActualConfig(qSample, isRight),
-                                                1,
-                                                0.0,
-                                                computeJointMargin(qSample, isRight),
-                                                computeManipulability(qSample, isRight));
-                                        loggedCount[0]++;
-                                    }
-                                }
-                            }
+
+                                        // Collision check against torso and opposite arm home
+                                        boolean collisionOk;
+                                        if (isRight) {
+                                            double[] leftHome = { q1, 0, -10, 30, 0, 0 };
+                                            collisionOk = ArmPanel.isCollisionFree(qSample, leftHome);
+                                        } else {
+                                            double[] rightHome = { q1, 0, 10, -30, 0, 0 };
+                                            collisionOk = ArmPanel.isCollisionFree(rightHome, qSample);
+                                        }
+
+                                        if (collisionOk) {
+                                            armPanel.addWorkspacePoint(new double[] { x, y, z }, isRight);
+                                            workspaceLogger.logRecord(
+                                                    isRight ? "R" : "L",
+                                                    x,
+                                                    y,
+                                                    z,
+                                                    qSample,
+                                                    Double.NaN,
+                                                    getYawOffsetFromQ(qSample, x, y, isRight),
+                                                    "ANY",
+                                                    getActualConfig(qSample, isRight),
+                                                    1,
+                                                    0.0,
+                                                    computeJointMargin(qSample, isRight),
+                                                    computeManipulability(qSample, isRight));
+                                            loggedCount[0]++;
+                                        } // end if(collisionOk)
+                                    } // end if(z >= -5)
+                                } // end for q1
+                            } // end for q2
                             if (Thread.interrupted())
                                 return;
 

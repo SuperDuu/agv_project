@@ -5,6 +5,10 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Comparator;
+import utils.WorkspaceMap;
+import java.io.IOException;
 
 public class ArmPanel extends JPanel
         implements MouseListener, MouseMotionListener, MouseWheelListener {
@@ -18,6 +22,25 @@ public class ArmPanel extends JPanel
     int lastX, lastY;
     int demoStep = 0;
     double[] clickTarget = null; // To draw where we clicked
+    /** Up to 3 nearest reachable CSV suggestions (drawn in green when click is out-of-range). */
+    List<double[]> suggestedPoints = new ArrayList<>();
+
+    /** Lazily-loaded workspace map from CSV file. */
+    private WorkspaceMap workspaceMap = null;
+    private boolean workspaceMapLoaded = false;
+
+    private WorkspaceMap loadWorkspaceMapIfNeeded() {
+        if (!workspaceMapLoaded) {
+            workspaceMapLoaded = true;
+            try {
+                workspaceMap = WorkspaceMap.loadDefault();
+            } catch (IOException e) {
+                System.err.println("[ArmPanel] Cannot load workspace CSV: " + e.getMessage());
+                workspaceMap = null;
+            }
+        }
+        return workspaceMap;
+    }
     ArrayList<double[]> workspacePoints = new ArrayList<>();
     ArrayList<double[]> workspacePointsRight = new ArrayList<>();
     ArrayList<double[]> workspacePointsLeft = new ArrayList<>();
@@ -283,36 +306,101 @@ public class ArmPanel extends JPanel
         }
 
         if (chosenResult != null) {
+            suggestedPoints.clear(); // Clear suggestions on success
             robot.trajArmCombo.setSelectedIndex(chooseRight ? 0 : 1);
             if (chooseRight) {
                 robot.setTargetAnglesRight(chosenResult);
-                
-                // Retract Left arm to home, preserving shared Joint 1
                 double[] leftHome = { chosenResult[0], 0, -10, 30, 0, 0 };
                 robot.setTargetAnglesLeft(leftHome);
-                
                 robot.setGotoStatusRight(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
                 robot.setGotoStatusLeft("Về Home", Color.BLUE);
             } else {
                 robot.setTargetAnglesLeft(chosenResult);
-                
-                // Retract Right arm to home, preserving shared Joint 1
                 double[] rightHome = { chosenResult[0], 0, 10, -30, 0, 0 };
                 robot.setTargetAnglesRight(rightHome);
-                
                 robot.setGotoStatusLeft(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
                 robot.setGotoStatusRight("Về Home", Color.BLUE);
             }
         } else {
-            if (rightCollision) {
-                robot.setGotoStatusRight("Va chạm (Click)", Color.RED);
+            // --- CSV Fallback: find nearest 3 reachable points and suggest them ---
+            suggestedPoints.clear();
+
+            boolean isRight = robot.isRightArmSelected;
+            double[] qRef = isRight ? robot.getAnglesRight() : robot.getAnglesLeft();
+            String prefCfg = isRight
+                    ? (robot.configComboRight.getSelectedIndex() == 0 ? "+" : "-")
+                    : (robot.configComboLeft.getSelectedIndex() == 0 ? "+" : "-");
+
+            WorkspaceMap map = loadWorkspaceMapIfNeeded();
+            if (map != null && map.size() > 0) {
+                // Collect all valid entries within 150mm, sorted by distance, take top 3
+                List<WorkspaceMap.Entry> candidates = new ArrayList<>();
+                String arm = isRight ? "R" : "L";
+
+                // Use reflection-free iteration via findBestReplacement with increasing radius
+                // Instead we build top-3 manually with a custom scan
+                // We iterate all entries visible via the map's API:
+                // WorkspaceMap doesn't expose the list directly, so we call findBestReplacement
+                // three times, each time increasing distance threshold
+                double[] radii = { 50.0, 100.0, 150.0 };
+                for (double radius : radii) {
+                    WorkspaceMap.Entry e = map.findBestReplacement(p0, p1, fixedZ, isRight, null, qRef,
+                            radius, MainFrame.WORKSPACE_FALLBACK_MAX_JOINT_JUMP);
+                    if (e != null) {
+                        boolean alreadyAdded = false;
+                        for (WorkspaceMap.Entry existing : candidates) {
+                            if (Math.abs(existing.x - e.x) < 1.0
+                                    && Math.abs(existing.y - e.y) < 1.0
+                                    && Math.abs(existing.z - e.z) < 1.0) {
+                                alreadyAdded = true;
+                                break;
+                            }
+                        }
+                        if (!alreadyAdded) {
+                            candidates.add(e);
+                        }
+                    }
+                    if (candidates.size() >= 3) break;
+                }
+
+                if (!candidates.isEmpty()) {
+                    // Store XYZ of each candidate as a suggestion point
+                    for (WorkspaceMap.Entry e : candidates) {
+                        suggestedPoints.add(new double[] { e.x, e.y, e.z });
+                    }
+
+                    // Move to the closest (first) candidate
+                    WorkspaceMap.Entry best = candidates.get(0);
+                    if (isRight) {
+                        double[] leftHome = { best.q[0], 0, -10, 30, 0, 0 };
+                        robot.setTargetAnglesRight(best.q);
+                        robot.setTargetAnglesLeft(leftHome);
+                        robot.setGotoStatusRight(
+                                String.format("Gợi ý gần nhất (%.1f,%.1f,%.1f)", best.x, best.y, best.z),
+                                new Color(0, 150, 50));
+                        robot.setGotoStatusLeft("Về Home", Color.BLUE);
+                    } else {
+                        double[] rightHome = { best.q[0], 0, 10, -30, 0, 0 };
+                        robot.setTargetAnglesLeft(best.q);
+                        robot.setTargetAnglesRight(rightHome);
+                        robot.setGotoStatusLeft(
+                                String.format("Gợi ý gần nhất (%.1f,%.1f,%.1f)", best.x, best.y, best.z),
+                                new Color(0, 150, 50));
+                        robot.setGotoStatusRight("Về Home", Color.BLUE);
+                    }
+                } else {
+                    // No CSV match either
+                    if (rightCollision) robot.setGotoStatusRight("Va chạm (Click)", Color.RED);
+                    else robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
+                    if (leftCollision) robot.setGotoStatusLeft("Va chạm (Click)", Color.RED);
+                    else robot.setGotoStatusLeft("Ngoài tầm (Click)", Color.RED);
+                }
             } else {
-                robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
-            }
-            if (leftCollision) {
-                robot.setGotoStatusLeft("Va chạm (Click)", Color.RED);
-            } else {
-                robot.setGotoStatusLeft("Ngoài tầm (Click)", Color.RED);
+                // No workspace map available — original fallback
+                if (rightCollision) robot.setGotoStatusRight("Va chạm (Click)", Color.RED);
+                else robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
+                if (leftCollision) robot.setGotoStatusLeft("Va chạm (Click)", Color.RED);
+                else robot.setGotoStatusLeft("Ngoài tầm (Click)", Color.RED);
             }
         }
 
@@ -482,6 +570,31 @@ public class ArmPanel extends JPanel
             int[] sc = project(clickTarget, cx, cy);
             g2.setColor(new Color(255, 0, 0, 180));
             g2.fillOval(sc[0] - 4, sc[1] - 4, 8, 8);
+        }
+
+        // Draw CSV suggestion points (green crosses + labels)
+        if (!suggestedPoints.isEmpty()) {
+            g2.setFont(new Font("Arial", Font.BOLD, 10));
+            for (int si = 0; si < suggestedPoints.size(); si++) {
+                double[] sp = suggestedPoints.get(si);
+                int[] sc = project(sp, cx, cy);
+                // Outer ring: brighter for the best candidate
+                Color suggestColor = (si == 0)
+                        ? new Color(0, 220, 60, 230)
+                        : new Color(0, 180, 80, 160);
+                int r = (si == 0) ? 7 : 5;
+                // Draw cross
+                g2.setColor(suggestColor);
+                g2.setStroke(new BasicStroke(2.0f));
+                g2.drawLine(sc[0] - r, sc[1], sc[0] + r, sc[1]);
+                g2.drawLine(sc[0], sc[1] - r, sc[0], sc[1] + r);
+                // Circle
+                g2.drawOval(sc[0] - r, sc[1] - r, r * 2, r * 2);
+                // Label
+                g2.setColor(si == 0 ? new Color(0, 180, 40) : new Color(30, 130, 60));
+                g2.drawString(String.format("%.0f,%.0f,%.0f", sp[0], sp[1], sp[2]),
+                        sc[0] + r + 2, sc[1] - 2);
+            }
         }
 
         g2.setColor(Color.BLACK);
