@@ -252,43 +252,58 @@ class AgvArmPlanner(Node):
                 return False
         return True
 
-    def calculate_r_target(self, px, py, is_right):
-        alpha_rad = 0.0
-        ca = math.cos(math.pi + alpha_rad)
-        sa = math.sin(math.pi + alpha_rad)
-        R_y = np.array([
-            [ca, 0.0, sa],
-            [0.0, 1.0, 0.0],
-            [-sa, 0.0, ca]
-        ])
-
-        if is_right:
-            yaw = math.atan2(py, px)
-            cy = math.cos(yaw)
-            sy = math.sin(yaw)
-            R_z = np.array([
-                [cy, -sy, 0.0],
-                [sy, cy, 0.0],
-                [0.0, 0.0, 1.0]
+    def solve_ik_smart(self, px, py, pz, current_joints, is_right):
+        alpha_scan = [0.0, -15.0, 15.0, -30.0, 30.0, -45.0, -60.0, -75.0, -90.0]
+        
+        q1_min = -45.0
+        q1_max = 45.0
+        
+        q1_base = math.atan2(py, px) if is_right else -math.atan2(py, -px)
+        q1_base = max(math.radians(q1_min), min(math.radians(q1_max), q1_base))
+        
+        yaw_offsets = [0.0, -15.0, 15.0, -30.0, 30.0, -45.0, 45.0, -60.0, 60.0, -75.0, 75.0, -90.0, 90.0]
+        
+        for alpha in alpha_scan:
+            alpha_rad = math.radians(alpha)
+            ca = math.cos(math.pi + alpha_rad)
+            sa = math.sin(math.pi + alpha_rad)
+            R_y = np.array([
+                [ca, 0.0, sa],
+                [0.0, 1.0, 0.0],
+                [-sa, 0.0, ca]
             ])
-            R_target = R_z @ R_y
-        else:
-            yaw = -math.atan2(py, -px)
-            yawR = -yaw
-            cyR = math.cos(yawR)
-            syR = math.sin(yawR)
-            R_z_right = np.array([
-                [cyR, -syR, 0.0],
-                [syR, cyR, 0.0],
-                [0.0, 0.0, 1.0]
-            ])
-            R_target_right = R_z_right @ R_y
-            R_target = np.array([
-                [R_target_right[0, 0], -R_target_right[0, 1], -R_target_right[0, 2]],
-                [-R_target_right[1, 0], R_target_right[1, 1], R_target_right[1, 2]],
-                [-R_target_right[2, 0], R_target_right[2, 1], R_target_right[2, 2]]
-            ])
-        return R_target
+            
+            for offset_deg in yaw_offsets:
+                yaw = q1_base + math.radians(offset_deg)
+                if is_right:
+                    cy = math.cos(yaw)
+                    sy = math.sin(yaw)
+                    R_z = np.array([
+                        [cy, -sy, 0.0],
+                        [sy, cy, 0.0],
+                        [0.0, 0.0, 1.0]
+                    ])
+                    R_target = R_z @ R_y
+                else:
+                    yawR = -yaw
+                    cyR = math.cos(yawR)
+                    syR = math.sin(yawR)
+                    R_z_right = np.array([
+                        [cyR, -syR, 0.0],
+                        [syR, cyR, 0.0],
+                        [0.0, 0.0, 1.0]
+                    ])
+                    R_target_right = R_z_right @ R_y
+                    R_target = np.array([
+                        [R_target_right[0, 0], -R_target_right[0, 1], -R_target_right[0, 2]],
+                        [-R_target_right[1, 0], R_target_right[1, 1], R_target_right[1, 2]],
+                        [-R_target_right[2, 0], R_target_right[2, 1], R_target_right[2, 2]]
+                    ])
+                
+                sol = self.solve_ik(px, py, pz, R_target, current_joints, is_right)
+                if sol is not None:
+                    return sol
+        return None
 
     def handle_plan_request(self, msg):
         try:
@@ -313,8 +328,7 @@ class AgvArmPlanner(Node):
                     py = float(pt.get("y", 0.0))
                     pz = float(pt.get("z", 0.0))
                     
-                    R_target = self.calculate_r_target(px, py, is_right)
-                    solved_joints = self.solve_ik(px, py, pz, R_target, current_q, is_right)
+                    solved_joints = self.solve_ik_smart(px, py, pz, current_q, is_right)
                     
                     if solved_joints is None:
                         ok = False
@@ -360,11 +374,8 @@ class AgvArmPlanner(Node):
 
                 self.get_logger().info(f"Received request {request_id} for {arm} arm to ({px}, {py}, {pz})")
 
-                # Calculate target orientation
-                R_target = self.calculate_r_target(px, py, is_right)
-
                 # Solve Inverse Kinematics
-                solved_joints = self.solve_ik(px, py, pz, R_target, current_joints, is_right)
+                solved_joints = self.solve_ik_smart(px, py, pz, current_joints, is_right)
 
                 if solved_joints is None:
                     self.get_logger().warn(f"IK solver failed for ({px}, {py}, {pz})")
