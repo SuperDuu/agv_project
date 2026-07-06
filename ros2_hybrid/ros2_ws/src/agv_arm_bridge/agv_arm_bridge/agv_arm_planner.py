@@ -289,6 +289,57 @@ class AgvArmPlanner(Node):
             yaw_offsets.remove(preferred_offset)
             yaw_offsets.insert(0, preferred_offset)
         
+        # --- PASS 1: Search for preferred configuration ---
+        for alpha in alpha_scan:
+            alpha_rad = math.radians(alpha)
+            ca = math.cos(math.pi + alpha_rad)
+            sa = math.sin(math.pi + alpha_rad)
+            R_y = np.array([
+                [ca, 0.0, sa],
+                [0.0, 1.0, 0.0],
+                [-sa, 0.0, ca]
+            ])
+            
+            for offset_deg in yaw_offsets:
+                yaw = q1_base + math.radians(offset_deg)
+                if is_right:
+                    cy = math.cos(yaw)
+                    sy = math.sin(yaw)
+                    R_z = np.array([
+                        [cy, -sy, 0.0],
+                        [sy, cy, 0.0],
+                        [0.0, 0.0, 1.0]
+                    ])
+                    R_target = R_z @ R_y
+                else:
+                    yawR = -yaw
+                    cyR = math.cos(yawR)
+                    syR = math.sin(yawR)
+                    R_z_right = np.array([
+                        [cyR, -syR, 0.0],
+                        [syR, cyR, 0.0],
+                        [0.0, 0.0, 1.0]
+                    ])
+                    R_target_right = R_z_right @ R_y
+                    R_target = np.array([
+                        [R_target_right[0, 0], -R_target_right[0, 1], -R_target_right[0, 2]],
+                        [-R_target_right[1, 0], R_target_right[1, 1], R_target_right[1, 2]],
+                        [-R_target_right[2, 0], R_target_right[2, 1], R_target_right[2, 2]]
+                    ])
+                
+                sol = self.solve_ik(px, py, pz, R_target, current_joints, is_right)
+                if sol is not None:
+                    actual_cfg = "+"
+                    if is_right:
+                        actual_cfg = "+" if sol[2] >= 0 else "-"
+                    else:
+                        actual_cfg = "+" if sol[2] <= 0 else "-"
+                    
+                    if actual_cfg == preferred_config:
+                        # Found a matching configuration! We can early exit immediately!
+                        return sol, alpha, offset_deg
+
+        # --- PASS 2 (FALLBACK): Search for any configuration ---
         best_sol = None
         best_cost = float('inf')
         best_alpha = None
@@ -333,30 +384,12 @@ class AgvArmPlanner(Node):
                 
                 sol = self.solve_ik(px, py, pz, R_target, current_joints, is_right)
                 if sol is not None:
-                    # Calculate cost
-                    # 1. Config penalty
-                    actual_cfg = "+"
-                    if is_right:
-                        actual_cfg = "+" if sol[2] >= 0 else "-"
-                    else:
-                        actual_cfg = "+" if sol[2] <= 0 else "-"
-                    
-                    config_penalty = 0.0 if actual_cfg == preferred_config else 10000.0
-                    
-                    # 2. Joint jump penalty (sum of squared difference in degrees)
                     jump_penalty = sum((sol[i] - current_joints[i])**2 for i in range(6))
-                    
-                    total_cost = config_penalty + jump_penalty
-                    
-                    if total_cost < best_cost:
-                        best_cost = total_cost
+                    if jump_penalty < best_cost:
+                        best_cost = jump_penalty
                         best_sol = sol
                         best_alpha = alpha
                         best_offset = offset_deg
-                        
-                    # Early exit if we find a matching configuration with very small jump
-                    if total_cost < 300.0:
-                        return sol, alpha, offset_deg
                         
         if best_sol is not None:
             return best_sol, best_alpha, best_offset
