@@ -3,6 +3,7 @@
 #include <Preferences.h>
 #include <FirebaseESP32.h> // Cài đặt thư viện "Firebase ESP32 Client" của Mobizt
 #include <Wire.h>
+#include <string.h>
 #include "src/bno055.h"
 #include "src/SparkFun_VL53L5CX_Library.h"
 
@@ -21,6 +22,11 @@
 #define RXD2 33
 #define TXD2 26
 #define UART_BAUDRATE 115200
+#define HC12_RXD 16
+#define HC12_TXD 17
+#define HC12_BAUDRATE 115200
+#define RS485_CMD_ARM_TEXT 0x02
+#define ARM_CMD_MAX_LEN 48
 
 #define RS485_ADDR 0x63  // Địa chỉ 99 cho Master-Slave IMU
 
@@ -97,6 +103,9 @@ unsigned long lastSensorDebugTime = 0;
 const unsigned long SENSOR_DEBUG_INTERVAL_MS = 100;
 unsigned long lastRs485TestTxTime = 0;
 const unsigned long RS485_TEST_TX_INTERVAL_MS = 200;
+HardwareSerial HC12Serial(1);
+char arm_cmd_buffer[ARM_CMD_MAX_LEN + 1];
+uint8_t arm_cmd_index = 0;
 
 // Hàm tính XOR Checksum cho khung nhị phân
 uint8_t calculate_checksum(uint8_t *data, uint8_t start, uint8_t end) {
@@ -106,6 +115,58 @@ uint8_t calculate_checksum(uint8_t *data, uint8_t start, uint8_t end) {
 }
 
 // Xử lý gói tin nhị phân nhận từ STM32
+bool is_arm_command_line_valid(const char *cmd) {
+  if (cmd == nullptr) return false;
+
+  size_t len = strlen(cmd);
+  if (len < 4 || len > ARM_CMD_MAX_LEN) return false;
+  if ((cmd[0] != 'L' && cmd[0] != 'R') || cmd[1] != ':') return false;
+
+  return true;
+}
+
+void send_arm_command_frame(const char *cmd) {
+  if (!is_arm_command_line_valid(cmd)) return;
+
+  uint8_t payload_len = (uint8_t)strlen(cmd);
+  uint8_t tx_frame[ARM_CMD_MAX_LEN + 6];
+
+  tx_frame[0] = 0xAA;
+  tx_frame[1] = 0x55;
+  tx_frame[2] = RS485_ADDR;
+  tx_frame[3] = RS485_CMD_ARM_TEXT;
+  tx_frame[4] = payload_len;
+  memcpy(&tx_frame[5], cmd, payload_len);
+  tx_frame[5 + payload_len] =
+      calculate_checksum(tx_frame, 2, (uint8_t)(4 + payload_len));
+
+  Serial2.write(tx_frame, payload_len + 6);
+  Serial2.flush();
+}
+
+void process_hc12_uart() {
+  while (HC12Serial.available() > 0) {
+    char c = (char)HC12Serial.read();
+
+    if (c == '\r') continue;
+
+    if (c == '\n') {
+      if (arm_cmd_index > 0) {
+        arm_cmd_buffer[arm_cmd_index] = '\0';
+        send_arm_command_frame(arm_cmd_buffer);
+        arm_cmd_index = 0;
+      }
+      continue;
+    }
+
+    if (arm_cmd_index < ARM_CMD_MAX_LEN) {
+      arm_cmd_buffer[arm_cmd_index++] = c;
+    } else {
+      arm_cmd_index = 0;
+    }
+  }
+}
+
 void parse_rs485_frame() {
   if (rs485_rx_index == 8) {
     // --- DEBUG RX ---
@@ -563,6 +624,7 @@ void FirebaseTask(void *pvParameters) {
 void setup() {
   Serial.begin(115200);
   Serial2.begin(UART_BAUDRATE, SERIAL_8N1, RXD2, TXD2);
+  HC12Serial.begin(HC12_BAUDRATE, SERIAL_8N1, HC12_RXD, HC12_TXD);
   
   // Khởi tạo I2C cho các cảm biến
   Wire.begin(I2C_SDA, I2C_SCL); 
@@ -693,6 +755,7 @@ void setup() {
 }
 
 void loop() {
+  process_hc12_uart();
   // NẾU ĐANG Ở CHẾ ĐỘ CẤU HÌNH -> CHỈ CHẠY WEBSERVER
   if (isConfigMode) {
     server.handleClient();
