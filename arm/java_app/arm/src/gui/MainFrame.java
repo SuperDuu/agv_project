@@ -9,6 +9,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import java.nio.ByteBuffer;
 
 import static kinematics.Kinematics.*;
 import kinematics.RobotTransmission;
@@ -58,8 +59,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     ArmPanel armPanel;
     JLabel endEffectorLabelRight = new JLabel("Tọa độ kẹp (R): 0, 0, 0");
     JLabel endEffectorLabelLeft = new JLabel("Tọa độ kẹp (L): 0, 0, 0");
-    JTextField txUartRight = new JTextField("R:0,0,0,0,0,0");
-    JTextField txUartLeft = new JTextField("L:0,0,0,0,0,0");
+    /** Display: last binary frame summary sent to each arm (hex, for debug). */
+    JTextField txUartRight = new JTextField("[V2.1] --");
+    JTextField txUartLeft  = new JTextField("[V2.1] --");
 
     JCheckBox showGridCb = new JCheckBox("Hiện Lưới", true);
     JCheckBox showTrailCb = new JCheckBox("Hiện Vết Quỹ Đạo", false);
@@ -1097,8 +1099,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
      * Formats current joint angles and sends them to STM32 via UART.
      * Format: R:q1,q2,... and L:q1,q2,...
      */
+    /**
+     * Builds and sends Protocol V2.1 Arm Joint Command frames to STM32.
+     *
+     * Key changes from legacy text protocol:
+     *   - Binary frame: [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H][CMD][SEQ][PAYLOAD][CRC_L][CRC_H]
+     *   - All multi-byte fields: Little-Endian (ByteBuffer.LITTLE_ENDIAN)
+     *   - DEST = 0x03 (Right arm) or 0x02 (Left arm) — arm_id field removed from payload
+     *   - max_delta_x100 = 300 in every frame (3.00 deg/frame safety guard at 50 Hz)
+     *   - Angles converted to int16 x100 fixed-point via round() in UartManager
+     */
     private void sendJointsToUart() {
-        // Check Right Arm
+        // --- Right Arm ---
         boolean changedRight = false;
         for (int i = 0; i < NUM_JOINTS; i++) {
             if (Math.abs(anglesRight[i] - lastSentAnglesRight[i]) > 0.01) {
@@ -1108,35 +1120,31 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         if (changedRight) {
-            StringBuilder sb = new StringBuilder("R:");
+            // Convert joint-space (theta) to actuator-space (q) for joints 3 & 4
             double[] q34 = RobotTransmission.jointToActuator(anglesRight[2], anglesRight[3], true);
+            double[] qActuator = new double[NUM_JOINTS];
             for (int i = 0; i < NUM_JOINTS; i++) {
-                double val = anglesRight[i];
-                if (i == 2) {
-                    val = q34[0];
-                } else if (i == 3) {
-                    val = q34[1];
-                }
-                sb.append(String.format("%d", (int) Math.round(val)));
-                if (i < NUM_JOINTS - 1) {
-                    sb.append(",");
-                }
-                lastSentAnglesRight[i] = anglesRight[i];
+                qActuator[i] = (i == 2) ? q34[0] : (i == 3) ? q34[1] : anglesRight[i];
             }
-            sb.append("\n");
-            String data = sb.toString();
+
+            // Build V2.1 binary frame: DEST = 0x03 (Right arm)
+            byte[] frame = uartManager.buildArmJointFrame(comm.UartManager.ADDR_ARM_RIGHT, qActuator);
+
             if (txUartRight != null) {
-                txUartRight.setText(data.trim());
+                // Show first 10 header bytes as hex for live debug
+                txUartRight.setText(frameHexSummary(frame, qActuator));
             }
             if (uartManager != null && uartManager.isConnected()) {
-                uartManager.sendData(data);
+                uartManager.sendBytes(frame);
                 if (DEBUG) {
-                    System.out.print("Sent UART: " + data);
+                    System.out.printf("[V2.1] Sent Right arm frame: %d bytes | q=%s%n",
+                        frame.length, Arrays.toString(qActuator));
                 }
             }
+            System.arraycopy(anglesRight, 0, lastSentAnglesRight, 0, NUM_JOINTS);
         }
 
-        // Check Left Arm
+        // --- Left Arm ---
         boolean changedLeft = false;
         for (int i = 0; i < NUM_JOINTS; i++) {
             if (Math.abs(anglesLeft[i] - lastSentAnglesLeft[i]) > 0.01) {
@@ -1146,33 +1154,45 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         if (changedLeft) {
-            StringBuilder sb = new StringBuilder("L:");
             double[] q34 = RobotTransmission.jointToActuator(anglesLeft[2], anglesLeft[3], false);
+            double[] qActuator = new double[NUM_JOINTS];
             for (int i = 0; i < NUM_JOINTS; i++) {
-                double val = anglesLeft[i];
-                if (i == 2) {
-                    val = q34[0];
-                } else if (i == 3) {
-                    val = q34[1];
-                }
-                sb.append(String.format("%d", (int) Math.round(val)));
-                if (i < NUM_JOINTS - 1) {
-                    sb.append(",");
-                }
-                lastSentAnglesLeft[i] = anglesLeft[i];
+                qActuator[i] = (i == 2) ? q34[0] : (i == 3) ? q34[1] : anglesLeft[i];
             }
-            sb.append("\n");
-            String data = sb.toString();
+
+            // Build V2.1 binary frame: DEST = 0x02 (Left arm)
+            byte[] frame = uartManager.buildArmJointFrame(comm.UartManager.ADDR_ARM_LEFT, qActuator);
+
             if (txUartLeft != null) {
-                txUartLeft.setText(data.trim());
+                txUartLeft.setText(frameHexSummary(frame, qActuator));
             }
             if (uartManager != null && uartManager.isConnected()) {
-                uartManager.sendData(data);
+                uartManager.sendBytes(frame);
                 if (DEBUG) {
-                    System.out.print("Sent UART: " + data);
+                    System.out.printf("[V2.1] Sent Left  arm frame: %d bytes | q=%s%n",
+                        frame.length, Arrays.toString(qActuator));
                 }
             }
+            System.arraycopy(anglesLeft, 0, lastSentAnglesLeft, 0, NUM_JOINTS);
         }
+    }
+
+    /**
+     * Creates a short hex string summarising a V2.1 arm joint frame for the debug display field.
+     * Format: "DEST=03 SEQ=xx | q=[q0,q1,q2,q3,q4,q5]"
+     */
+    private static String frameHexSummary(byte[] frame, double[] qDeg) {
+        if (frame == null || frame.length < 8) return "[invalid]";
+        int dest = frame[2] & 0xFF;
+        int seq  = frame[7] & 0xFF;
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("DEST=%02X SEQ=%02X | q=[", dest, seq));
+        for (int i = 0; i < qDeg.length; i++) {
+            sb.append(String.format("%d", (int) Math.round(qDeg[i])));
+            if (i < qDeg.length - 1) sb.append(",");
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     /**
