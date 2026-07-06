@@ -119,8 +119,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JSpinner fixedHeightSpinner = new JSpinner(new SpinnerNumberModel(100.0, -200.0, 500.0, 1.0));
     boolean fixedHeightMode = false;
     JCheckBoxMenuItem clickModeItem;
-    JSlider speedSlider = new JSlider(0, 120, 60);
-    JLabel speedLabel = new JLabel("60 °/s");
+    JSlider speedSlider = new JSlider(0, 120, 20);
+    JLabel speedLabel = new JLabel("20 °/s");
     private static final int MOTION_DT_MS = 30;
     Timer motionTimer;
 

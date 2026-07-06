@@ -395,12 +395,12 @@ public class ArmPanel extends JPanel
         java.util.List<Drawable> drawables = new java.util.ArrayList<>();
 
 
-        // Draw humanoid central vertical torso (spine) and base pedestal
-        drawables.add(new TubeSegment(new double[] { 0, 0, 10 }, new double[] { 0, 0, 125 }, 12, new Color(60, 65, 70)));
+        // Draw humanoid central vertical torso (square box torso) and base pedestal
+        drawables.add(new TorsoBox());
         drawables.add(new BasePedestal());
         
         // Neck and Head
-        drawables.add(new TubeSegment(new double[] { 0, 0, 125 }, new double[] { 0, 0, 138 }, 8, new Color(60, 60, 60)));
+        drawables.add(new TubeSegment(new double[] { 0, 0, 120 }, new double[] { 0, 0, 138 }, 8, new Color(60, 60, 60)));
         drawables.add(new JointSphere(new double[] { 0, 0, 138 }, 12, new Color(75, 80, 85)));
 
         int[] tubeWidths = { 9, 8, 7, 6, 5, 4, 4 };
@@ -660,6 +660,79 @@ public class ArmPanel extends JPanel
 
             // Draw the sorted faces
             for (PedestalFace f : faces) {
+                Polygon poly = new Polygon();
+                for (int idx : f.indices) {
+                    poly.addPoint(sc[idx][0], sc[idx][1]);
+                }
+                g2.setColor(f.color);
+                g2.fillPolygon(poly);
+                g2.setColor(Color.DARK_GRAY);
+                g2.setStroke(new BasicStroke(1.0f));
+                g2.drawPolygon(poly);
+            }
+        }
+    }
+
+    class TorsoBox implements Drawable {
+        double depth;
+
+        TorsoBox() {
+            this.depth = getVz(new double[] { 0, 0, 60 });
+        }
+
+        @Override
+        public double getDepth() {
+            return depth;
+        }
+
+        private class BoxFace {
+            int[] indices;
+            double depth;
+            Color color;
+
+            BoxFace(int[] idx, Color c, double[][] corners) {
+                this.indices = idx;
+                this.color = c;
+                double sum = 0;
+                for (int i : idx) {
+                    sum += getVz(corners[i]);
+                }
+                this.depth = sum / idx.length;
+            }
+        }
+
+        @Override
+        public void draw(Graphics2D g2, int cx, int cy) {
+            double halfW = 14.0;
+            double h = 120.0;
+            double[][] corners = {
+                { -halfW, -halfW, 0 },
+                {  halfW, -halfW, 0 },
+                {  halfW,  halfW, 0 },
+                { -halfW,  halfW, 0 },
+                { -halfW, -halfW, h },
+                {  halfW, -halfW, h },
+                {  halfW,  halfW, h },
+                { -halfW,  halfW, h }
+            };
+
+            int[][] sc = new int[8][2];
+            for (int i = 0; i < 8; i++) {
+                sc[i] = project(corners[i], cx, cy);
+            }
+
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            java.util.List<BoxFace> faces = new java.util.ArrayList<>();
+            faces.add(new BoxFace(new int[] { 0, 1, 5, 4 }, new Color(60, 65, 70), corners));
+            faces.add(new BoxFace(new int[] { 1, 2, 6, 5 }, new Color(65, 70, 75), corners));
+            faces.add(new BoxFace(new int[] { 2, 3, 7, 6 }, new Color(70, 75, 80), corners));
+            faces.add(new BoxFace(new int[] { 3, 0, 4, 7 }, new Color(55, 60, 65), corners));
+            faces.add(new BoxFace(new int[] { 4, 5, 6, 7 }, new Color(80, 85, 90), corners));
+
+            faces.sort((f1, f2) -> Double.compare(f2.depth, f1.depth));
+
+            for (BoxFace f : faces) {
                 Polygon poly = new Polygon();
                 for (int idx : f.indices) {
                     poly.addPoint(sc[idx][0], sc[idx][1]);
