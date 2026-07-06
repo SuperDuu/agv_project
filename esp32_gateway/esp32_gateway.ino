@@ -145,18 +145,28 @@ uint16_t proto_crc16(const uint8_t *data, uint16_t length) {
   return crc;
 }
 
-void write_u16_be(uint8_t *dst, uint16_t value) {
-  dst[0] = (uint8_t)((value >> 8) & 0xFF);
-  dst[1] = (uint8_t)(value & 0xFF);
+/* --- Protocol V2.1: Little-Endian helpers -------------------------------- */
+void write_u16_le(uint8_t *dst, uint16_t value) {
+  dst[0] = (uint8_t)(value & 0xFF);
+  dst[1] = (uint8_t)((value >> 8) & 0xFF);
 }
 
-void write_s16_be(uint8_t *dst, int16_t value) {
-  write_u16_be(dst, (uint16_t)value);
+void write_s16_le(uint8_t *dst, int16_t value) {
+  write_u16_le(dst, (uint16_t)value);
 }
 
-uint16_t read_u16_be(const uint8_t *src) {
-  return (uint16_t)(((uint16_t)src[0] << 8) | src[1]);
+uint16_t read_u16_le(const uint8_t *src) {
+  return (uint16_t)((uint16_t)src[0] | ((uint16_t)src[1] << 8));
 }
+
+int16_t read_s16_le(const uint8_t *src) {
+  return (int16_t)read_u16_le(src);
+}
+
+/* Compatibility aliases — remove once all call sites are updated */
+#define write_u16_be write_u16_le
+#define write_s16_be write_s16_le
+#define read_u16_be  read_u16_le
 
 int16_t deg_to_x100(float angle_deg) {
   if (angle_deg >= 0.0f) return (int16_t)(angle_deg * 100.0f + 0.5f);
@@ -199,6 +209,11 @@ bool parse_arm_command_line(const char *cmd, uint8_t *dest, int16_t joints_x100[
   return token == nullptr;
 }
 
+/* --- V2.1 frame layout ---------------------------------------------------
+ * [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H][CMD][SEQ][PAYLOAD...][CRC_L][CRC_H]
+ *   0     1     2    3     4      5      6    7     8..        -2    -1
+ * LEN = payload_len (LE), CRC covers bytes [2 .. 8+payload_len-1]
+ * ----------------------------------------------------------------------- */
 void send_proto_frame(uint8_t dest, uint8_t cmd, const uint8_t *payload, uint16_t payload_len) {
   uint8_t tx_frame[PROTO_MAX_FRAME_LEN];
   if (payload_len > PROTO_MAX_PAYLOAD_LEN) return;
@@ -207,40 +222,50 @@ void send_proto_frame(uint8_t dest, uint8_t cmd, const uint8_t *payload, uint16_
   tx_frame[1] = PROTO_SOF2;
   tx_frame[2] = dest;
   tx_frame[3] = PROTO_ADDR_ESP32;
-  tx_frame[4] = cmd;
-  tx_frame[5] = esp32_seq_counter++;
-  write_u16_be(&tx_frame[6], payload_len);
+  write_u16_le(&tx_frame[4], payload_len);   /* LEN at [4:5] — LE */
+  tx_frame[6] = cmd;                         /* CMD at [6]        */
+  tx_frame[7] = esp32_seq_counter++;         /* SEQ at [7]        */
   if (payload_len > 0 && payload != nullptr) {
     memcpy(&tx_frame[8], payload, payload_len);
   }
 
+  /* CRC covers: DEST, SRC, LEN_L, LEN_H, CMD, SEQ, PAYLOAD = 6 + payload_len bytes */
   uint16_t crc = proto_crc16(&tx_frame[2], (uint16_t)(6 + payload_len));
-  write_u16_be(&tx_frame[8 + payload_len], crc);
+  write_u16_le(&tx_frame[8 + payload_len], crc);   /* CRC: LE */
 
   Serial2.write(tx_frame, payload_len + 10);
   Serial2.flush();
 }
 
+/* V2.1 joint command: arm_id REMOVED, payload 22 bytes, max_delta_x100 added.
+ * DEST field identifies arm (0x02=left, 0x03=right) — no arm_id in payload.
+ * max_delta_x100 = 300 → 3.00°/frame safety limit at 50Hz. */
 void send_arm_command_frame(const char *cmd) {
   uint8_t dest = 0;
   int16_t joints_x100[6];
-  uint8_t payload[18];
+  uint8_t payload[22];   /* 22 bytes: no arm_id, + max_delta_x100 */
 
   if (!parse_arm_command_line(cmd, &dest, joints_x100)) return;
 
-  payload[0] = (dest == PROTO_ADDR_ARM_RIGHT) ? 1 : 0;
-  payload[1] = PROTO_MOTION_ABSOLUTE;
-  write_s16_be(&payload[2], joints_x100[0]);
-  write_s16_be(&payload[4], joints_x100[1]);
-  write_s16_be(&payload[6], joints_x100[2]);
-  write_s16_be(&payload[8], joints_x100[3]);
-  write_s16_be(&payload[10], joints_x100[4]);
-  write_s16_be(&payload[12], joints_x100[5]);
-  write_u16_be(&payload[14], 0);
-  payload[16] = 0x01;
-  payload[17] = 0;
+  /* [0] motion_mode  [1] arm_flags */
+  payload[0] = PROTO_MOTION_ABSOLUTE;
+  payload[1] = 0x01;                         /* arm_flags: payload valid */
+  /* [2..13] joint angles, Little-Endian */
+  write_s16_le(&payload[2],  joints_x100[0]);
+  write_s16_le(&payload[4],  joints_x100[1]);
+  write_s16_le(&payload[6],  joints_x100[2]);
+  write_s16_le(&payload[8],  joints_x100[3]);
+  write_s16_le(&payload[10], joints_x100[4]);
+  write_s16_le(&payload[12], joints_x100[5]);
+  /* [14..15] move_time_ms = 0 (use arm default) */
+  write_u16_le(&payload[14], 0);
+  /* [16..17] max_delta_x100 = 300 (3.00° max per frame at 50Hz) */
+  write_u16_le(&payload[16], 300);
+  /* [18..21] reserved */
+  payload[18] = 0; payload[19] = 0; payload[20] = 0; payload[21] = 0;
 
-  send_proto_frame(PROTO_ADDR_MAIN, PROTO_CMD_ARM_JOINT_COMMAND, payload, sizeof(payload));
+  /* DEST encodes which arm: 0x02=left, 0x03=right (from parse_arm_command_line) */
+  send_proto_frame(dest, PROTO_CMD_ARM_JOINT_COMMAND, payload, sizeof(payload));
 }
 
 void process_hc12_uart() {
@@ -368,9 +393,9 @@ void send_sensor_report_frame() {
     sensor_flags |= PROTO_SENSOR_FLAG_NEW_TARGET;
   }
 
-  write_s16_be(&payload[0], yaw_x100);
-  write_u16_be(&payload[2], obstacle_distance);
-  write_u16_be(&payload[4], firebase_node == 255 ? 0xFFFF : firebase_node);
+  write_s16_le(&payload[0], yaw_x100);
+  write_u16_le(&payload[2], obstacle_distance);
+  write_u16_le(&payload[4], firebase_node == 255 ? 0xFFFF : (uint16_t)firebase_node);
   payload[6] = firebase_h_cmd;
   payload[7] = sensor_flags;
 
@@ -386,19 +411,24 @@ void send_sensor_report_frame() {
   }
 }
 
+/* V2.1 frame layout received from AGV main:
+ * [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H][CMD][SEQ][PAYLOAD...][CRC_L][CRC_H]
+ *   0     1     2    3     4      5      6    7     8..        -2    -1      */
 void process_main_frame(const uint8_t *frame, uint16_t frame_len) {
   if (frame_len < 10 || frame[0] != PROTO_SOF1 || frame[1] != PROTO_SOF2) return;
   if (frame[2] != PROTO_ADDR_ESP32) return;
 
-  uint16_t payload_len = read_u16_be(&frame[6]);
+  uint16_t payload_len = read_u16_le(&frame[4]);   /* LEN at [4:5] LE */
   if ((uint16_t)(payload_len + 10) != frame_len) return;
 
-  uint16_t rx_crc = read_u16_be(&frame[8 + payload_len]);
+  uint16_t rx_crc   = read_u16_le(&frame[8 + payload_len]);
   uint16_t calc_crc = proto_crc16(&frame[2], (uint16_t)(6 + payload_len));
   if (rx_crc != calc_crc) return;
 
-  if (frame[4] == PROTO_CMD_SYNC_REQUEST && payload_len == 4) {
-    current_node = read_u16_be(&frame[8]);
+  uint8_t cmd = frame[6];   /* CMD at [6], SEQ at [7] */
+
+  if (cmd == PROTO_CMD_SYNC_REQUEST && payload_len == 4) {
+    current_node = read_u16_le(&frame[8]);
     uint8_t is_arrived = frame[10];
     if (is_arrived != current_arrived_status && is_arrived <= 1) {
       current_arrived_status = is_arrived;
@@ -445,8 +475,9 @@ void process_main_uart() {
 
         main_rx_frame[main_rx_index++] = b;
 
-        if (main_rx_index == 8) {
-          uint16_t payload_len = read_u16_be(&main_rx_frame[6]);
+        /* LEN at offset [4:5] (LE) — known after receiving 6 bytes (index==6) */
+        if (main_rx_index == 6) {
+          uint16_t payload_len = read_u16_le(&main_rx_frame[4]);
           if (payload_len > PROTO_MAX_PAYLOAD_LEN) {
             main_rx_state = 0;
             main_rx_index = 0;
