@@ -425,7 +425,7 @@ public class ArmPanel extends JPanel
         drawables.add(new BasePedestal());
         
         // Neck and Head
-        drawables.add(new TubeSegment(new double[] { 0, 0, 120 }, new double[] { 0, 0, 138 }, 8, new Color(60, 60, 60)));
+        drawables.add(new TubeSegment(new double[] { 0, 0, 130 }, new double[] { 0, 0, 138 }, 8, new Color(60, 60, 60)));
         drawables.add(new JointSphere(new double[] { 0, 0, 138 }, 12, new Color(75, 80, 85)));
 
         int[] tubeWidths = { 9, 8, 7, 6, 5, 4, 4 };
@@ -702,7 +702,7 @@ public class ArmPanel extends JPanel
         double depth;
 
         TorsoBox() {
-            this.depth = getVz(new double[] { 0, 0, 60 });
+            this.depth = getVz(new double[] { 0, 0, 65 });
         }
 
         @Override
@@ -729,7 +729,7 @@ public class ArmPanel extends JPanel
         @Override
         public void draw(Graphics2D g2, int cx, int cy) {
             double halfW = 14.0;
-            double h = 120.0;
+            double h = 130.0;
             double[][] corners = {
                 { -halfW, -halfW, 0 },
                 {  halfW, -halfW, 0 },
@@ -1320,10 +1320,10 @@ public class ArmPanel extends JPanel
         java.util.List<double[]> pointsLeft = getCheckPoints(ptsLeft);
 
         // 3. Torso Collision Check (for both arms)
-        // Torso size: 28x28 (X in [-14, 14], Y in [-14, 14]) and height 120 (Z in [0, 120])
-        // With safety margin: |X| < 24.0, |Y| < 24.0, Z < 125.0
+        // Torso size: 28x28 (X in [-14, 14], Y in [-14, 14]) and height 130 (Z in [0, 130])
+        // With safety margin: |X| < 24.0, |Y| < 24.0, Z < 140.0
         double safetyMarginXY = 24.0;
-        double torsoHeightLimit = 125.0;
+        double torsoHeightLimit = 140.0;
 
         for (double[] pt : pointsRight) {
             if (Math.abs(pt[0]) < safetyMarginXY && Math.abs(pt[1]) < safetyMarginXY && pt[2] < torsoHeightLimit) {
