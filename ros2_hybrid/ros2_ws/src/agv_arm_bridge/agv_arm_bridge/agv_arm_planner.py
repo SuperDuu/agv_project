@@ -252,7 +252,7 @@ class AgvArmPlanner(Node):
                 return False
         return True
 
-    def solve_ik_smart(self, px, py, pz, current_joints, is_right, preferred_alpha=None, preferred_offset=None):
+    def solve_ik_smart(self, px, py, pz, current_joints, is_right, preferred_config="+", preferred_alpha=None, preferred_offset=None):
         alpha_scan = [0.0, -15.0, 15.0, -30.0, 30.0, -45.0, -60.0, -75.0, -90.0]
         if preferred_alpha is not None and preferred_alpha in alpha_scan:
             alpha_scan.remove(preferred_alpha)
@@ -268,6 +268,11 @@ class AgvArmPlanner(Node):
         if preferred_offset is not None and preferred_offset in yaw_offsets:
             yaw_offsets.remove(preferred_offset)
             yaw_offsets.insert(0, preferred_offset)
+        
+        best_sol = None
+        best_cost = float('inf')
+        best_alpha = None
+        best_offset = None
         
         for alpha in alpha_scan:
             alpha_rad = math.radians(alpha)
@@ -308,7 +313,34 @@ class AgvArmPlanner(Node):
                 
                 sol = self.solve_ik(px, py, pz, R_target, current_joints, is_right)
                 if sol is not None:
-                    return sol, alpha, offset_deg
+                    # Calculate cost
+                    # 1. Config penalty
+                    actual_cfg = "+"
+                    if is_right:
+                        actual_cfg = "+" if sol[2] >= 0 else "-"
+                    else:
+                        actual_cfg = "+" if sol[2] <= 0 else "-"
+                    
+                    config_penalty = 0.0 if actual_cfg == preferred_config else 10000.0
+                    
+                    # 2. Joint jump penalty (sum of squared difference in degrees)
+                    jump_penalty = sum((sol[i] - current_joints[i])**2 for i in range(6))
+                    
+                    total_cost = config_penalty + jump_penalty
+                    
+                    if total_cost < best_cost:
+                        best_cost = total_cost
+                        best_sol = sol
+                        best_alpha = alpha
+                        best_offset = offset_deg
+                        
+                    # Early exit if we find a matching configuration with very small jump
+                    if total_cost < 300.0:
+                        return sol, alpha, offset_deg
+                        
+        if best_sol is not None:
+            return best_sol, best_alpha, best_offset
+            
         return None, None, None
 
     def handle_plan_request(self, msg):
@@ -319,6 +351,7 @@ class AgvArmPlanner(Node):
             is_right = arm == "right"
             req_type = request.get("type", "plan_pose")
             current_joints = request.get("current_joints", [0.0] * 6)
+            preferred_config = request.get("preferred_config", "+")
 
             if req_type == "plan_path":
                 path_pts = request.get("path", [])
@@ -337,7 +370,7 @@ class AgvArmPlanner(Node):
                     py = float(pt.get("y", 0.0))
                     pz = float(pt.get("z", 0.0))
                     
-                    solved_joints, alpha, offset = self.solve_ik_smart(px, py, pz, current_q, is_right, pref_alpha, pref_offset)
+                    solved_joints, alpha, offset = self.solve_ik_smart(px, py, pz, current_q, is_right, preferred_config, pref_alpha, pref_offset)
                     
                     if solved_joints is None:
                         ok = False
@@ -387,7 +420,7 @@ class AgvArmPlanner(Node):
                 self.get_logger().info(f"Received request {request_id} for {arm} arm to ({px}, {py}, {pz})")
 
                 # Solve Inverse Kinematics
-                solved_joints, _, _ = self.solve_ik_smart(px, py, pz, current_joints, is_right)
+                solved_joints, _, _ = self.solve_ik_smart(px, py, pz, current_joints, is_right, preferred_config)
 
                 if solved_joints is None:
                     self.get_logger().warn(f"IK solver failed for ({px}, {py}, {pz})")
