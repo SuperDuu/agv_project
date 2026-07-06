@@ -6,11 +6,9 @@ extern "C" {
 #endif
 
 #include "main.h"
+#include "agv_link_protocol.h"
 #include <stdbool.h>
 
-#define ESP32_ADDR 0x63  // 99
-#define ESP32_CMD_READ_IMU 0x01
-#define ESP32_CMD_ARM_TEXT 0x02
 #define ESP32_MAX_ARM_CMD_LEN 48
 
 // Cấu trúc lưu trữ dữ liệu từ ESP32
