@@ -434,7 +434,10 @@ class AgvArmPlanner(Node):
                     pref_offset = offset
                     
                     # Interpolate from previous position to solved position
-                    steps = 5
+                    # Limit joint speed to max_joint_vel = 30 deg/sec.
+                    # With DT = 0.03s, max change per step is 30.0 * 0.03 = 0.9 degrees.
+                    max_diff = max(abs(solved_joints[i] - current_q[i]) for i in range(6))
+                    steps = max(5, int(math.ceil(max_diff / 0.9)))
                     for step in range(1, steps + 1):
                         t = float(step) / steps
                         q_step = [
@@ -487,8 +490,11 @@ class AgvArmPlanner(Node):
                 else:
                     self.get_logger().info(f"IK solved successfully: {solved_joints}")
                     # Generate joint-space trajectory by interpolating
+                    # Limit joint speed to max_joint_vel = 30 deg/sec.
+                    # With DT = 0.03s, max change per step is 30.0 * 0.03 = 0.9 degrees.
+                    max_diff = max(abs(solved_joints[i] - current_joints[i]) for i in range(6))
+                    steps = max(25, int(math.ceil(max_diff / 0.9)))
                     trajectory = []
-                    steps = 25
                     for step in range(steps + 1):
                         t = float(step) / steps
                         q_step = [
