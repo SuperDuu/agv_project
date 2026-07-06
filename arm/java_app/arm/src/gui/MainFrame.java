@@ -615,14 +615,17 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             x = 0; y = 0; z = 0;
         }
 
+        final JComboBox<String> armConfigCombo = isRight ? configComboRight : configComboLeft;
+        final String preferredConfig = armConfigCombo.getSelectedIndex() == 0 ? "+" : "-";
+
         new SwingWorker<String, Void>() {
             @Override
             protected String doInBackground() throws Exception {
                 double[] currentAngles = isRight ? anglesRight : anglesLeft;
                 if (hasDrawnPath) {
-                    return ros2BridgeClient.requestPlanPath(armName, finalPath, currentAngles);
+                    return ros2BridgeClient.requestPlanPath(armName, finalPath, currentAngles, preferredConfig);
                 } else {
-                    return ros2BridgeClient.requestPlanPose(armName, x, y, z, currentAngles);
+                    return ros2BridgeClient.requestPlanPose(armName, x, y, z, currentAngles, preferredConfig);
                 }
             }
 
