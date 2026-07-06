@@ -17,19 +17,11 @@ public class Kinematics {
     public static final double L7 = 15.0;
 
     public static final String[] JOINT_NAMES = { "Khớp 1", "Khớp 2", "Khớp 3", "Khớp 4", "Khớp 5", "Khớp 6" };
-    // θ-space limits (actual joint angles, used by IK solver)
-    // θ₃ = q₃, so same limits. θ₄ constrained by parallelogram: |θ₄| ∈ [5°,90°]
-    public static final double[] JOINT_MIN_RIGHT = { -45, -90, -20, -90, -90, -90 };
-    public static final double[] JOINT_MAX_RIGHT = { 45, 90, 165, 90, 90, 90 };
+    public static final double[] JOINT_MIN_RIGHT = { -45, -90, 20, -95, -90, -90 };
+    public static final double[] JOINT_MAX_RIGHT = { 45, 90, 165, -15, 90, 90 };
 
-    public static final double[] JOINT_MIN_LEFT = { -45, -90, -165, -90, -90, -90 };
-    public static final double[] JOINT_MAX_LEFT = { 45, 90, 20, 90, 90, 90 };
-
-    // q-space limits (motor angles, sent to STM32)
-    public static final double[] Q_MIN_RIGHT = { -45, -90, -20, -45, -90, -90 };
-    public static final double[] Q_MAX_RIGHT = { 45, 90, 165, 75, 90, 90 };
-    public static final double[] Q_MIN_LEFT = { -45, -90, -165, -75, -90, -90 };
-    public static final double[] Q_MAX_LEFT = { 45, 90, 20, 45, 90, 90 };
+    public static final double[] JOINT_MIN_LEFT = { -45, -90, -165, 15, -90, -90 };
+    public static final double[] JOINT_MAX_LEFT = { 45, 90, -20, 95, 90, 90 };
 
     public static final double[] JOINT_MIN = JOINT_MIN_RIGHT;
     public static final double[] JOINT_MAX = JOINT_MAX_RIGHT;
@@ -132,7 +124,6 @@ public class Kinematics {
         double dy = ws.T[1][3] - py;
         double dz = ws.T[2][3] - pz;
         double posErr = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
         if (posErr <= 0.30) {
             double[] res = convertToDegreesWrap(bestQ);
             if (isWithinLimits(res, isRight)) {
@@ -145,11 +136,8 @@ public class Kinematics {
 
     /**
      * Check if θ-space angles are within limits.
-     * Also converts θ→q to validate motor limits and parallelogram constraint.
-     * θ₃ = q₃, q₄ = θ₄ + θ₃
      */
     public static boolean isWithinLimits(double[] thetaDeg, boolean isRight) {
-        // 1. Check θ-space limits (IK solver bounds)
         for (int i = 0; i < NUM_JOINTS; i++) {
             double min = isRight ? JOINT_MIN_RIGHT[i] : JOINT_MIN_LEFT[i];
             double max = isRight ? JOINT_MAX_RIGHT[i] : JOINT_MAX_LEFT[i];
@@ -157,22 +145,9 @@ public class Kinematics {
                 return false;
             }
         }
-        // 2. Convert θ→q for joints 3,4 and check motor limits
-        double q3 = thetaDeg[2]; // q₃ = θ₃
-        double q4 = thetaDeg[3] + thetaDeg[2]; // q₄ = θ₄ + θ₃
-        double q3Min = isRight ? Q_MIN_RIGHT[2] : Q_MIN_LEFT[2];
-        double q3Max = isRight ? Q_MAX_RIGHT[2] : Q_MAX_LEFT[2];
-        double q4Min = isRight ? Q_MIN_RIGHT[3] : Q_MIN_LEFT[3];
-        double q4Max = isRight ? Q_MAX_RIGHT[3] : Q_MAX_LEFT[3];
-        if (q3 < q3Min - 0.1 || q3 > q3Max + 0.1) return false;
-        if (q4 < q4Min - 0.1 || q4 > q4Max + 0.1) return false;
-        // 3. Parallelogram constraint: 5° ≤ |q₃+q₄| ≤ 90°
-        double absSum = Math.abs(q3 + q4);
-        if (absSum < 5.0 - 0.1 || absSum > 90.0 + 0.1) {
-            return false;
-        }
         return true;
     }
+
 
     /**
      * Overloaded solveIK for compatibility with the existing calling convention.
