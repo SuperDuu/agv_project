@@ -25,7 +25,9 @@
 #include "encoder.h"
 #include "pid.h"
 #include "joint_control.h"
+#include "arm_protocol.h"
 #include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -61,18 +63,36 @@ DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
 extern Encoder_t encoders[NUM_ENCODERS];
-int index,angle=0;
+
+/* Current servo target angles (joint space, degrees) */
 volatile float servo0_deg = 96.43f;
 volatile float servo1_deg = 35.0f;
 volatile float servo2_deg = 0.0f;
 volatile float servo3_deg = 0.0f;
 volatile float servo4_deg = 60.0f;
 volatile float servo5_deg = 0.0f;
-volatile int32_t dbg_enc0, dbg_enc1, dbg_enc2, dbg_enc3, dbg_enc4;
 
-uint8_t rx_byte;
-uint8_t rx_buffer[64];
-uint16_t rx_index = 0;
+/* -----------------------------------------------------------------------
+ * Protocol V2.1 binary parser state (replaces legacy text "R:" parser)
+ * Frame layout:
+ *   [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H][CMD][SEQ][PAYLOAD...][CRC_L][CRC_H]
+ * ----------------------------------------------------------------------- */
+static uint8_t  arm_rx_byte;
+static uint8_t  arm_frame_buf[ARM_PROTO_MAX_FRAME];
+static uint16_t arm_frame_idx   = 0;
+static uint16_t arm_expected_len = 0;
+static uint8_t  arm_parser_state = 0;  /* 0=SOF1, 1=SOF2, 2=ACCUMULATE */
+static uint8_t  arm_last_seq     = 0xFF;  /* for duplicate / stale drop  */
+
+/* Last accepted joint positions in x100 (for Δθ guard) */
+static int16_t arm_q_last[6] = {9643, 3500, 0, 0, 6000, 0};
+/* Initial values match servo init: q0=96.43°, q1=35°, q2=0°, q3=0°, q4=60°, q5=0° */
+
+/* Debug counters */
+volatile uint32_t dbg_rx_ok    = 0;
+volatile uint32_t dbg_rx_delta = 0;   /* frames dropped by Δθ guard */
+volatile uint32_t dbg_rx_crc   = 0;
+volatile uint32_t dbg_rx_len   = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -148,7 +168,8 @@ int main(void)
   Encoder_Init();
 
 //  JointControl_Init();
-  HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
+  ARM_Proto_ResetParser();
+  HAL_UART_Receive_IT(&huart1, &arm_rx_byte, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -872,31 +893,208 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    if (huart->Instance == USART1) {
-        if (rx_byte == '\n' || rx_byte == '\r') {
-            if (rx_index > 0) {
-                rx_buffer[rx_index] = '\0';
-                int q1, q2, q3, q4, q5, q6;
-                if (sscanf((char*)rx_buffer, "R:%d,%d,%d,%d,%d,%d", &q1, &q2, &q3, &q4, &q5, &q6) == 6) {
-                    servo0_deg = (float)q1;
-                    servo1_deg = (float)q2;
-                    servo2_deg = (float)q3;
-                    servo3_deg = (float)q4;
-                    servo4_deg = (float)q5;
-                    servo5_deg = (float)q6;
+
+/* -------------------------------------------------------------------------
+ * ARM_Proto_ResetParser — restart state machine from scratch
+ * ------------------------------------------------------------------------- */
+static void ARM_Proto_ResetParser(void) {
+    arm_parser_state  = 0;
+    arm_frame_idx     = 0;
+    arm_expected_len  = 0;
+}
+
+/* -------------------------------------------------------------------------
+ * ARM_Proto_ProcessFrame — called once a complete, length-validated frame
+ * has been buffered.  Performs CRC check, DEST filter, SEQ dedup, Δθ guard,
+ * then applies joint angles to servos.
+ * ------------------------------------------------------------------------- */
+static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
+    /* Basic sanity */
+    if (frame_len < ARM_PROTO_FRAME_OVERHEAD) return;
+    if (frame[ARM_PROTO_OFF_SOF1] != ARM_PROTO_SOF1) return;
+    if (frame[ARM_PROTO_OFF_SOF2] != ARM_PROTO_SOF2) return;
+
+    uint8_t  dest        = frame[ARM_PROTO_OFF_DEST];
+    uint8_t  cmd         = frame[ARM_PROTO_OFF_CMD];
+    uint8_t  seq         = frame[ARM_PROTO_OFF_SEQ];
+    uint16_t payload_len = ARM_Proto_ReadU16LE(&frame[ARM_PROTO_OFF_LEN_L]);
+
+    /* DEST filter — accept own address or broadcast */
+    if (dest != ARM_PROTO_MY_ADDR && dest != ARM_PROTO_ADDR_BROADCAST) return;
+
+    /* SEQ dedup: drop frames with same SEQ as last processed (duplicate TX) */
+    if (seq == arm_last_seq && cmd == ARM_PROTO_CMD_ARM_JOINT) return;
+
+    /* CRC: covers bytes [DEST .. last PAYLOAD byte] = 6 + payload_len bytes */
+    uint16_t rx_crc   = ARM_Proto_ReadU16LE(&frame[8u + payload_len]);
+    uint16_t calc_crc = ARM_Proto_Crc16(&frame[2], (uint16_t)(6u + payload_len));
+    if (rx_crc != calc_crc) {
+        dbg_rx_crc++;
+        return;
+    }
+
+    const uint8_t *payload = &frame[ARM_PROTO_OFF_PAYLOAD];
+
+    switch (cmd) {
+
+    /* ------------------------------------------------------------------
+     * CMD 0x20 — Arm Joint Command
+     * Payload (22 bytes, LE):
+     *   [0]  motion_mode
+     *   [1]  arm_flags
+     *   [2..3]  q1_x100
+     *   [4..5]  q2_x100
+     *   [6..7]  q3_x100
+     *   [8..9]  q4_x100
+     *   [10..11] q5_x100
+     *   [12..13] q6_x100
+     *   [14..15] move_time_ms
+     *   [16..17] max_delta_x100  ← Δθ safety guard
+     *   [18..21] reserved
+     * ------------------------------------------------------------------ */
+    case ARM_PROTO_CMD_ARM_JOINT: {
+        if (payload_len != ARM_PROTO_PAYLOAD_JOINT) {
+            dbg_rx_len++;
+            return;
+        }
+
+        uint8_t  motion_mode    = payload[0];
+        uint16_t max_delta_x100 = ARM_Proto_ReadU16LE(&payload[16]);
+
+        int16_t q_new[6];
+        q_new[0] = ARM_Proto_ReadS16LE(&payload[2]);
+        q_new[1] = ARM_Proto_ReadS16LE(&payload[4]);
+        q_new[2] = ARM_Proto_ReadS16LE(&payload[6]);
+        q_new[3] = ARM_Proto_ReadS16LE(&payload[8]);
+        q_new[4] = ARM_Proto_ReadS16LE(&payload[10]);
+        q_new[5] = ARM_Proto_ReadS16LE(&payload[12]);
+
+        /* Δθ guard — drop frame if any joint exceeds max_delta_x100 */
+        if (max_delta_x100 > 0u) {
+            for (int i = 0; i < 6; i++) {
+                int32_t delta = (int32_t)q_new[i] - (int32_t)arm_q_last[i];
+                if (delta < 0) delta = -delta;
+                if ((uint16_t)delta > max_delta_x100) {
+                    dbg_rx_delta++;
+                    return;  /* DROP — keep servos at q_last, protect linkage */
                 }
-                rx_index = 0;
-            }
-        } else {
-            if (rx_index < sizeof(rx_buffer) - 1) {
-                rx_buffer[rx_index++] = rx_byte;
-            } else {
-                rx_index = 0; // buffer overflow protection
             }
         }
-        HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
+
+        /* Apply motion */
+        if (motion_mode == ARM_PROTO_MOTION_ABS ||
+            motion_mode == ARM_PROTO_MOTION_HOME) {
+
+            servo0_deg = ARM_Proto_X100ToDeg(q_new[0]);
+            servo1_deg = ARM_Proto_X100ToDeg(q_new[1]);
+            servo2_deg = ARM_Proto_X100ToDeg(q_new[2]);
+            servo3_deg = ARM_Proto_X100ToDeg(q_new[3]);
+            servo4_deg = ARM_Proto_X100ToDeg(q_new[4]);
+            servo5_deg = ARM_Proto_X100ToDeg(q_new[5]);
+
+            /* Update last accepted position */
+            for (int i = 0; i < 6; i++) arm_q_last[i] = q_new[i];
+            arm_last_seq = seq;
+            dbg_rx_ok++;
+
+        } else if (motion_mode == ARM_PROTO_MOTION_ESTOP) {
+            /* ESTOP: freeze all servos at current position — do nothing */
+            arm_last_seq = seq;
+        }
+        break;
     }
+
+    /* ------------------------------------------------------------------
+     * CMD 0x21 — Arm Gripper Command
+     * Payload (4 bytes): [0] grip_action, [1..3] reserved
+     * ------------------------------------------------------------------ */
+    case ARM_PROTO_CMD_ARM_GRIPPER: {
+        if (payload_len != ARM_PROTO_PAYLOAD_GRIPPER) {
+            dbg_rx_len++;
+            return;
+        }
+        /* TODO: implement gripper hardware control here */
+        arm_last_seq = seq;
+        dbg_rx_ok++;
+        break;
+    }
+
+    default:
+        break;
+    }
+}
+
+/* -------------------------------------------------------------------------
+ * HAL_UART_RxCpltCallback — Protocol V2.1 byte-by-byte state machine
+ *
+ * States:
+ *   0 = WAIT_SOF1
+ *   1 = WAIT_SOF2
+ *   2 = ACCUMULATE (DEST..CRC)
+ *
+ * LEN is at offsets [4:5] — total expected length is known after receiving
+ * 6 bytes (index == 6), so no stall waiting for CMD/SEQ to pass.
+ * ------------------------------------------------------------------------- */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance != USART1) return;
+
+    uint8_t b = arm_rx_byte;
+
+    switch (arm_parser_state) {
+
+    case 0:  /* WAIT_SOF1 */
+        if (b == ARM_PROTO_SOF1) {
+            arm_frame_buf[0] = b;
+            arm_frame_idx    = 1;
+            arm_parser_state = 1;
+        }
+        break;
+
+    case 1:  /* WAIT_SOF2 */
+        if (b == ARM_PROTO_SOF2) {
+            arm_frame_buf[1] = b;
+            arm_frame_idx    = 2;
+            arm_parser_state = 2;
+        } else if (b == ARM_PROTO_SOF1) {
+            arm_frame_buf[0] = b;   /* consecutive SOF1 — stay */
+            arm_frame_idx    = 1;
+        } else {
+            ARM_Proto_ResetParser();
+        }
+        break;
+
+    case 2:  /* ACCUMULATE */
+        if (arm_frame_idx >= ARM_PROTO_MAX_FRAME) {
+            dbg_rx_len++;
+            ARM_Proto_ResetParser();
+            break;
+        }
+        arm_frame_buf[arm_frame_idx++] = b;
+
+        /* After [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H] — index reaches 6.
+         * Compute total frame size immediately for DMA-friendly pre-sizing. */
+        if (arm_frame_idx == 6u) {
+            uint16_t plen = ARM_Proto_ReadU16LE(&arm_frame_buf[ARM_PROTO_OFF_LEN_L]);
+            if (plen > ARM_PROTO_MAX_PAYLOAD) {
+                dbg_rx_len++;
+                ARM_Proto_ResetParser();
+                break;
+            }
+            arm_expected_len = (uint16_t)(ARM_PROTO_FRAME_OVERHEAD + plen);
+        }
+
+        if (arm_expected_len != 0u && arm_frame_idx == arm_expected_len) {
+            ARM_Proto_ProcessFrame(arm_frame_buf, arm_expected_len);
+            ARM_Proto_ResetParser();
+        }
+        break;
+
+    default:
+        ARM_Proto_ResetParser();
+        break;
+    }
+
+    HAL_UART_Receive_IT(&huart1, &arm_rx_byte, 1);
 }
 /* USER CODE END 4 */
 
