@@ -79,6 +79,13 @@ Start the Java/ROS 2 UDP bridge:
 ros2 launch agv_arm_bridge java_udp_bridge.launch.py
 ```
 
+If you changed `docker-compose.yml`, recreate the container before testing:
+
+```powershell
+docker compose down
+docker compose run --rm ros2
+```
+
 The Docker compose file publishes UDP port `5010` to Windows. Java can send a
 UDP JSON packet to `127.0.0.1:5010`. For replies from the container back to
 Windows, set `reply_host` to `host.docker.internal`:
@@ -99,6 +106,10 @@ The bridge publishes the request to:
 ```text
 /agv_arm/plan_requests
 ```
+
+The Java app has a `ROS2 Plan` button in the top toolbar. It sends the selected
+arm's current X/Y/Z fields to the bridge. The current bridge returns an ACK; it
+does not yet return a MoveIt trajectory.
 
 The next integration step is to add a MoveIt 2 planner node that subscribes to
 that topic, plans a `JointTrajectory`, and sends the joint list back to Java or
