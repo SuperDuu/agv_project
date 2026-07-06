@@ -1321,18 +1321,22 @@ public class ArmPanel extends JPanel
 
         // 3. Torso Collision Check (for both arms)
         // Torso size: 28x28 (X in [-14, 14], Y in [-14, 14]) and height 130 (Z in [0, 130])
-        // With safety margin: |X| < 16.0, |Y| < 16.0, Z < 140.0
-        double safetyMarginXY = 16.0;
+        // Collision threshold: 5.0 mm from the surface of the torso box (Z < 140.0)
+        double safetyThreshold = 5.0;
         double torsoHeightLimit = 140.0;
 
         for (double[] pt : pointsRight) {
-            if (Math.abs(pt[0]) < safetyMarginXY && Math.abs(pt[1]) < safetyMarginXY && pt[2] < torsoHeightLimit) {
-                return false; // Collision with torso
+            if (pt[2] < torsoHeightLimit) {
+                if (getDistanceToTorso(pt[0], pt[1], pt[2]) < safetyThreshold) {
+                    return false; // Collision with torso
+                }
             }
         }
         for (double[] pt : pointsLeft) {
-            if (Math.abs(pt[0]) < safetyMarginXY && Math.abs(pt[1]) < safetyMarginXY && pt[2] < torsoHeightLimit) {
-                return false; // Collision with torso
+            if (pt[2] < torsoHeightLimit) {
+                if (getDistanceToTorso(pt[0], pt[1], pt[2]) < safetyThreshold) {
+                    return false; // Collision with torso
+                }
             }
         }
 
@@ -1393,5 +1397,23 @@ public class ArmPanel extends JPanel
         pts[7] = new double[] { T[0][3], T[1][3], T[2][3] };
 
         return pts;
+    }
+
+    private static double getDistanceToTorso(double x, double y, double z) {
+        double dx = 0.0;
+        if (x < -14.0) {
+            dx = -14.0 - x;
+        } else if (x > 14.0) {
+            dx = x - 14.0;
+        }
+
+        double dy = 0.0;
+        if (y < -14.0) {
+            dy = -14.0 - y;
+        } else if (y > 14.0) {
+            dy = y - 14.0;
+        }
+
+        return Math.sqrt(dx * dx + dy * dy);
     }
 }
