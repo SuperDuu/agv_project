@@ -25,11 +25,11 @@ public class TestTrajectoryIK {
 
         System.out.println("Comparing Java and JNI step by step...");
 
-        double[] qJava = { 0.0, Math.toRadians(30.0), Math.toRadians(-30.0), Math.toRadians(-45.0), Math.toRadians(30.0), 0.0 };
-        double[] qJni = { 0.0, Math.toRadians(30.0), Math.toRadians(-30.0), Math.toRadians(-45.0), Math.toRadians(30.0), 0.0 };
+        double[] qJava = { 0.0, Math.toRadians(30.0), Math.toRadians(15.0), Math.toRadians(5.0), Math.toRadians(30.0), 0.0 };
+        double[] qJni = { 0.0, Math.toRadians(30.0), Math.toRadians(15.0), Math.toRadians(5.0), Math.toRadians(30.0), 0.0 };
 
         double[][] R_target = new double[3][3];
-        double[] initialQ = { 0.0, Math.toRadians(30.0), Math.toRadians(-30.0), Math.toRadians(-45.0), Math.toRadians(30.0), 0.0 };
+        double[] initialQ = { 0.0, Math.toRadians(30.0), Math.toRadians(15.0), Math.toRadians(5.0), Math.toRadians(30.0), 0.0 };
         double[][] T_init = Kinematics.computeFKMatrix(initialQ, true);
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
@@ -58,6 +58,11 @@ public class TestTrajectoryIK {
             if (qSolJava == null || qSolJni == null) {
                 System.out.printf("Step %d mismatch: Java is %s, JNI is %s\n",
                     i, qSolJava == null ? "FAILED" : "SUCCESS", qSolJni == null ? "FAILED" : "SUCCESS");
+                if (qSolJni != null) {
+                    System.out.printf("  JNI solution: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]\n",
+                        qSolJni[0], qSolJni[1], qSolJni[2], qSolJni[3], qSolJni[4], qSolJni[5]);
+                    System.out.println("  JNI within limits: " + Kinematics.isWithinLimits(qSolJni, true));
+                }
                 
                 // Keep tracking if one succeeded
                 if (qSolJava != null) {
