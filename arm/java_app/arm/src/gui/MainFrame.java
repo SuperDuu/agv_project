@@ -555,6 +555,30 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         topPanel.add(btnConnect);
     }
 
+    private java.util.List<double[]> parseTrajectory(String json) {
+        java.util.List<double[]> trajectory = new java.util.ArrayList<>();
+        int trajIndex = json.indexOf("\"trajectory\"");
+        if (trajIndex == -1) return trajectory;
+
+        int start = json.indexOf("[[", trajIndex);
+        int end = json.indexOf("]]", trajIndex);
+        if (start == -1 || end == -1 || start >= end) return trajectory;
+
+        String content = json.substring(start + 2, end);
+        String[] steps = content.split("\\]\\s*,\\s*\\[");
+        for (String step : steps) {
+            String[] parts = step.split(",");
+            if (parts.length >= 6) {
+                double[] q = new double[6];
+                for (int i = 0; i < 6; i++) {
+                    q[i] = Double.parseDouble(parts[i].trim());
+                }
+                trajectory.add(q);
+            }
+        }
+        return trajectory;
+    }
+
     private void requestRos2Plan() {
         final boolean isRight = isRightArmSelected;
         final String armName = isRight ? "right" : "left";
@@ -578,16 +602,37 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         new SwingWorker<String, Void>() {
             @Override
             protected String doInBackground() throws Exception {
-                return ros2BridgeClient.requestPlanPose(armName, x, y, z);
+                double[] currentAngles = isRight ? anglesRight : anglesLeft;
+                return ros2BridgeClient.requestPlanPose(armName, x, y, z, currentAngles);
             }
 
             @Override
             protected void done() {
                 try {
                     String response = get();
-                    setGotoStatus("ROS2: da nhan phan hoi", new Color(0, 140, 0));
-                    if (DEBUG) {
-                        System.out.println("[ROS2] " + response);
+                    if (response.contains("\"ok\":true") || response.contains("\"ok\": true")) {
+                        java.util.List<double[]> traj = parseTrajectory(response);
+                        if (!traj.isEmpty()) {
+                            setGotoStatus("ROS2: Lap quy dao thanh cong!", new Color(0, 140, 0));
+                            double[] armAngles = isRight ? anglesRight : anglesLeft;
+                            double[] armTargetAngles = isRight ? targetAnglesRight : targetAnglesLeft;
+                            JSlider[] armSliders = isRight ? slidersRight : slidersLeft;
+                            JLabel[] armAngleLbls = isRight ? angleLblsRight : angleLblsLeft;
+                            runPlayback(traj, "ROS2 Path", isRight, armAngles, armTargetAngles, armSliders, armAngleLbls);
+                        } else {
+                            setGotoStatus("ROS2: da nhan phan hoi nhung rong", new Color(180, 110, 0));
+                        }
+                    } else {
+                        // Extract error
+                        int errStart = response.indexOf("\"error\":\"");
+                        String errMsg = "Thất bại";
+                        if (errStart != -1) {
+                            int errEnd = response.indexOf("\"", errStart + 9);
+                            if (errEnd != -1) {
+                                errMsg = response.substring(errStart + 9, errEnd);
+                            }
+                        }
+                        setGotoStatus("ROS2: " + errMsg, Color.RED);
                     }
                 } catch (Exception ex) {
                     setGotoStatus("ROS2: khong ket noi bridge", Color.RED);
