@@ -58,6 +58,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     ArmPanel armPanel;
     JLabel endEffectorLabelRight = new JLabel("Tọa độ kẹp (R): 0, 0, 0");
     JLabel endEffectorLabelLeft = new JLabel("Tọa độ kẹp (L): 0, 0, 0");
+    JTextField txUartRight = new JTextField("R:0,0,0,0,0,0");
+    JTextField txUartLeft = new JTextField("L:0,0,0,0,0,0");
 
     JCheckBox showGridCb = new JCheckBox("Hiện Lưới", true);
     JCheckBox showTrailCb = new JCheckBox("Hiện Vết Quỹ Đạo", false);
@@ -392,12 +394,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         configPanel.setBorder(BorderFactory.createTitledBorder("Cấu hình & Hướng kẹp"));
 
         JComboBox<String> comb = isRight ? configComboRight : configComboLeft;
-        configPanel.add(comb);
-
         JComboBox<String> gCombo = isRight ? gripperModeComboRight : gripperModeComboLeft;
-        JPanel alphaRow = new JPanel(new BorderLayout());
-        alphaRow.add(new JLabel("Chế độ hướng kẹp:"), BorderLayout.NORTH);
-        alphaRow.add(gCombo, BorderLayout.CENTER);
 
         gCombo.addActionListener(e -> {
             gotoCoordinate(isRight);
@@ -406,7 +403,27 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             gotoCoordinate(isRight);
         });
 
-        configPanel.add(alphaRow);
+        JPanel comboRow = new JPanel(new GridLayout(1, 2, 5, 0));
+        JPanel col1 = new JPanel(new BorderLayout());
+        col1.add(new JLabel("Cấu hình IK:"), BorderLayout.NORTH);
+        col1.add(comb, BorderLayout.CENTER);
+
+        JPanel col2 = new JPanel(new BorderLayout());
+        col2.add(new JLabel("Hướng kẹp:"), BorderLayout.NORTH);
+        col2.add(gCombo, BorderLayout.CENTER);
+
+        comboRow.add(col1);
+        comboRow.add(col2);
+        configPanel.add(comboRow);
+
+        JPanel uartRow = new JPanel(new BorderLayout(5, 0));
+        uartRow.setBorder(BorderFactory.createEmptyBorder(5, 0, 0, 0));
+        uartRow.add(new JLabel("Gửi STM32:"), BorderLayout.WEST);
+        JTextField txUart = isRight ? txUartRight : txUartLeft;
+        txUart.setEditable(false);
+        txUart.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        uartRow.add(txUart, BorderLayout.CENTER);
+        configPanel.add(uartRow);
 
         panel.add(configPanel);
 
@@ -1081,69 +1098,77 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
      * Format: R:q1,q2,... and L:q1,q2,...
      */
     private void sendJointsToUart() {
-        if (uartManager != null && uartManager.isConnected()) {
-            // Check Right Arm
-            boolean changedRight = false;
-            for (int i = 0; i < NUM_JOINTS; i++) {
-                if (Math.abs(anglesRight[i] - lastSentAnglesRight[i]) > 0.01) {
-                    changedRight = true;
-                    break;
-                }
+        // Check Right Arm
+        boolean changedRight = false;
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            if (Math.abs(anglesRight[i] - lastSentAnglesRight[i]) > 0.01) {
+                changedRight = true;
+                break;
             }
+        }
 
-            if (changedRight) {
-                StringBuilder sb = new StringBuilder("R:");
-                double[] q34 = RobotTransmission.jointToActuator(anglesRight[2], anglesRight[3], true);
-                for (int i = 0; i < NUM_JOINTS; i++) {
-                    double val = anglesRight[i];
-                    if (i == 2) {
-                        val = q34[0];
-                    } else if (i == 3) {
-                        val = q34[1];
-                    }
-                    sb.append(String.format("%d", (int) Math.round(val)));
-                    if (i < NUM_JOINTS - 1) {
-                        sb.append(",");
-                    }
-                    lastSentAnglesRight[i] = anglesRight[i];
+        if (changedRight) {
+            StringBuilder sb = new StringBuilder("R:");
+            double[] q34 = RobotTransmission.jointToActuator(anglesRight[2], anglesRight[3], true);
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                double val = anglesRight[i];
+                if (i == 2) {
+                    val = q34[0];
+                } else if (i == 3) {
+                    val = q34[1];
                 }
-                sb.append("\n");
-                String data = sb.toString();
+                sb.append(String.format("%d", (int) Math.round(val)));
+                if (i < NUM_JOINTS - 1) {
+                    sb.append(",");
+                }
+                lastSentAnglesRight[i] = anglesRight[i];
+            }
+            sb.append("\n");
+            String data = sb.toString();
+            if (txUartRight != null) {
+                txUartRight.setText(data.trim());
+            }
+            if (uartManager != null && uartManager.isConnected()) {
                 uartManager.sendData(data);
-                if (DEBUG && uartManager.isConnected()) {
+                if (DEBUG) {
                     System.out.print("Sent UART: " + data);
                 }
             }
+        }
 
-            // Check Left Arm
-            boolean changedLeft = false;
-            for (int i = 0; i < NUM_JOINTS; i++) {
-                if (Math.abs(anglesLeft[i] - lastSentAnglesLeft[i]) > 0.01) {
-                    changedLeft = true;
-                    break;
-                }
+        // Check Left Arm
+        boolean changedLeft = false;
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            if (Math.abs(anglesLeft[i] - lastSentAnglesLeft[i]) > 0.01) {
+                changedLeft = true;
+                break;
             }
+        }
 
-            if (changedLeft) {
-                StringBuilder sb = new StringBuilder("L:");
-                double[] q34 = RobotTransmission.jointToActuator(anglesLeft[2], anglesLeft[3], false);
-                for (int i = 0; i < NUM_JOINTS; i++) {
-                    double val = anglesLeft[i];
-                    if (i == 2) {
-                        val = q34[0];
-                    } else if (i == 3) {
-                        val = q34[1];
-                    }
-                    sb.append(String.format("%d", (int) Math.round(val)));
-                    if (i < NUM_JOINTS - 1) {
-                        sb.append(",");
-                    }
-                    lastSentAnglesLeft[i] = anglesLeft[i];
+        if (changedLeft) {
+            StringBuilder sb = new StringBuilder("L:");
+            double[] q34 = RobotTransmission.jointToActuator(anglesLeft[2], anglesLeft[3], false);
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                double val = anglesLeft[i];
+                if (i == 2) {
+                    val = q34[0];
+                } else if (i == 3) {
+                    val = q34[1];
                 }
-                sb.append("\n");
-                String data = sb.toString();
+                sb.append(String.format("%d", (int) Math.round(val)));
+                if (i < NUM_JOINTS - 1) {
+                    sb.append(",");
+                }
+                lastSentAnglesLeft[i] = anglesLeft[i];
+            }
+            sb.append("\n");
+            String data = sb.toString();
+            if (txUartLeft != null) {
+                txUartLeft.setText(data.trim());
+            }
+            if (uartManager != null && uartManager.isConnected()) {
                 uartManager.sendData(data);
-                if (DEBUG && uartManager.isConnected()) {
+                if (DEBUG) {
                     System.out.print("Sent UART: " + data);
                 }
             }
