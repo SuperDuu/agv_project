@@ -34,9 +34,9 @@ void Servo_Init(void) {
         } else if (i == 1) {
             init_angle = 10.0f;   // 10 degrees joint (14 degrees servo)
         } else if (i == 2) {
-            init_angle = 0.0f;    // Start at 0 degrees
+            init_angle = 0.0f;    // Home q3 = 0 (maps to 192.86 deg joint angle)
         } else if (i == 3) {
-            init_angle = 90.0f;   // Middle of 180-degree servo
+            init_angle = 0.0f;    // Home q4 = 0 (maps to 90.0 deg joint angle)
         } else if (i == 5) {
             init_angle = 0.0f;    // Default to 0 degrees as requested
         } else if (i == 4) {
@@ -53,22 +53,30 @@ void Servo_Init(void) {
 
 void Set_Servo_Angle(uint8_t index, float angle) {
     if (index >= MAX_SERVOS) return;
-    if (angle < 0.0f) angle = 0.0f;
     
     float target_angle = angle;
-    if (index <= 2) {
-        // Invert joint angle for left arm: joint_angle_inverted = 192.86f - joint_angle
-        float inverted_angle = 192.86f - angle;
+    if (index == 2) {
+        // Joint 3 (Left Arm): reversed, 5:7 scaling, home q3=0 maps to 192.86f joint angle
+        target_angle = (192.86f - angle) * 7.0f / 5.0f;
+    } else if (index == 3) {
+        // Joint 4 (Left Arm): reversed, 1:1 scaling, home q4=0 maps to 90.0f joint angle
+        target_angle = 90.0f - angle;
+    } else if (index <= 1) {
+        // Joints 1 & 2 (Left Arm): normal, 5:7 scaling, inverted mapping
+        float inverted_angle = 192.86f - target_angle;
         if (inverted_angle < 0.0f) inverted_angle = 0.0f;
         if (inverted_angle > 192.86f) inverted_angle = 192.86f;
-        
-        // Apply 5:7 gearbox scaling: servo_angle = joint_angle * 7 / 5
         target_angle = inverted_angle * 7.0f / 5.0f;
     } else if (index == 4) {
-        // Apply 2:3 gearbox scaling: servo_angle = joint_angle * 3 / 2
-        target_angle = angle * 3.0f / 2.0f;
+        // Joint 5 (Left Arm): normal, 2:3 scaling
+        if (target_angle < 0.0f) target_angle = 0.0f;
+        target_angle = target_angle * 3.0f / 2.0f;
+    } else {
+        // Other joints: normal, 1:1 scaling
+        if (target_angle < 0.0f) target_angle = 0.0f;
     }
     
+    if (target_angle < 0.0f) target_angle = 0.0f;
     if (target_angle > (float)servos[index].max_angle) {
         target_angle = (float)servos[index].max_angle;
     }
