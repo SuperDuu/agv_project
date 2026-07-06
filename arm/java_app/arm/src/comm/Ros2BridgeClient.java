@@ -25,7 +25,7 @@ public class Ros2BridgeClient {
         this.timeoutMs = timeoutMs;
     }
 
-    public String requestPlanPose(String arm, double x, double y, double z, double[] currentAngles) throws Exception {
+    public String requestPlanPose(String arm, double x, double y, double z, double[] currentAngles, String preferredConfig) throws Exception {
         try (DatagramSocket socket = new DatagramSocket()) {
             socket.setSoTimeout(timeoutMs);
             String requestId = UUID.randomUUID().toString();
@@ -47,10 +47,11 @@ public class Ros2BridgeClient {
                             + "\"arm\":\"%s\","
                             + "\"target\":{\"x\":%.4f,\"y\":%.4f,\"z\":%.4f},"
                             + "\"current_joints\":%s,"
+                            + "\"preferred_config\":\"%s\","
                             + "\"reply_host\":\"host.docker.internal\","
                             + "\"reply_port\":%d"
                             + "}",
-                    escape(requestId), escape(arm), x, y, z, jointsBuilder.toString(), replyPort);
+                    escape(requestId), escape(arm), x, y, z, jointsBuilder.toString(), escape(preferredConfig), replyPort);
 
             byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
             DatagramPacket packet = new DatagramPacket(bytes, bytes.length, InetAddress.getByName(host), port);
@@ -63,7 +64,7 @@ public class Ros2BridgeClient {
         }
     }
 
-    public String requestPlanPath(String arm, java.util.List<double[]> path, double[] currentAngles) throws Exception {
+    public String requestPlanPath(String arm, java.util.List<double[]> path, double[] currentAngles, String preferredConfig) throws Exception {
         try (DatagramSocket socket = new DatagramSocket()) {
             socket.setSoTimeout(timeoutMs);
             String requestId = UUID.randomUUID().toString();
@@ -95,10 +96,11 @@ public class Ros2BridgeClient {
                             + "\"arm\":\"%s\","
                             + "\"path\":%s,"
                             + "\"current_joints\":%s,"
+                            + "\"preferred_config\":\"%s\","
                             + "\"reply_host\":\"host.docker.internal\","
                             + "\"reply_port\":%d"
                             + "}",
-                    escape(requestId), escape(arm), pathBuilder.toString(), jointsBuilder.toString(), replyPort);
+                    escape(requestId), escape(arm), pathBuilder.toString(), jointsBuilder.toString(), escape(preferredConfig), replyPort);
 
             byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
             DatagramPacket packet = new DatagramPacket(bytes, bytes.length, InetAddress.getByName(host), port);
