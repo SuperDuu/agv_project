@@ -26,6 +26,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final double TRAJ_STRICT_ERROR = 0.10; // Trajectory strict tracking threshold
     private static final double WORKSPACE_FALLBACK_MAX_DISTANCE = 2.0;
     private static final double WORKSPACE_FALLBACK_MAX_JOINT_JUMP = 25.0;
+    private static final double WORKSPACE_SEED_MAX_DISTANCE = 1.0;
     double[] anglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] targetAnglesRight = { 0, 0, 10, -30, 0, 0 };
     double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
@@ -138,6 +139,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private java.util.List<java.util.List<double[]>> lastCandidatesPerStep = null;
     private int[] lastSelectedIndices = null;
     private boolean trajectoryNeedsRecalculation = true;
+    private WorkspaceMap activeWorkspaceMapForTrajectory = null;
 
     public void notifyPathChanged() {
         trajectoryNeedsRecalculation = true;
@@ -1441,6 +1443,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             @Override
             protected java.util.List<double[]> doInBackground() throws Exception {
                 java.util.List<double[]> rawJointTrajectory;
+                activeWorkspaceMapForTrajectory = loadWorkspaceFallbackMap();
                 
                 if (useDescartesIK) {
                     publish("Đang phân tích đồ thị toàn cục (Descartes ROS-Industrial)...");
@@ -1538,9 +1541,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     }
                 } // End of else block (Sequential Warm-Start)
 
-                WorkspaceMap workspaceMap = loadWorkspaceFallbackMap();
                 int[] workspaceReplacementCount = { 0 };
-                rawJointTrajectory = applyWorkspaceMapFallback(rawJointTrajectory, finalPath, isRight, workspaceMap, workspaceReplacementCount);
+                rawJointTrajectory = applyWorkspaceMapFallback(rawJointTrajectory, finalPath, isRight, activeWorkspaceMapForTrajectory, workspaceReplacementCount);
                 if (workspaceReplacementCount[0] > 0) {
                     publish(String.format("Da thay %d diem loi bang workspace CSV.", workspaceReplacementCount[0]));
                 }
@@ -1890,6 +1892,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         
         double[] activeA = isRight ? anglesRight : anglesLeft;
         double prefY = getYawOffsetFromQ(activeA, px, py, isRight);
+
+        WorkspaceMap.Entry csvSeed = findWorkspaceSeed(px, py, pz, isRight, activeA);
+        if (csvSeed != null) {
+            double seedErr = computePositionError(csvSeed.q, px, py, pz, isRight);
+            if (seedErr <= TRAJ_STRICT_ERROR) {
+                allSolutions.add(new DescartesNode(csvSeed.q.clone(), csvSeed.alphaDeg, csvSeed.yawOffsetDeg));
+                return allSolutions;
+            }
+        }
+
         for (double alphaDeg : alphaGrid) {
             java.util.List<double[]> sols = tryAlpha(px, py, pz, alphaDeg, isRight, activeA, prefY, false);
             for (double[] q : sols) {
@@ -2083,6 +2095,26 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
     }
 
+    private String getGripperModeName(boolean isRight) {
+        return (isRight ? gripperModeComboRight : gripperModeComboLeft).getSelectedIndex() == 0
+                ? "FIXED_GROUND" : "FREE";
+    }
+
+    private WorkspaceMap.Entry findWorkspaceSeed(double px, double py, double pz, boolean isRight, double[] qRef) {
+        if (activeWorkspaceMapForTrajectory == null) {
+            return null;
+        }
+        return activeWorkspaceMapForTrajectory.findBestReplacement(
+                px,
+                py,
+                pz,
+                isRight,
+                getGripperModeName(isRight),
+                qRef,
+                WORKSPACE_SEED_MAX_DISTANCE,
+                WORKSPACE_FALLBACK_MAX_JOINT_JUMP);
+    }
+
     private java.util.List<double[]> applyWorkspaceMapFallback(
             java.util.List<double[]> rawJointTraj,
             java.util.List<double[]> cartesianPath,
@@ -2094,8 +2126,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         java.util.List<double[]> result = new java.util.ArrayList<>(rawJointTraj);
-        String gripperMode = (isRight ? gripperModeComboRight : gripperModeComboLeft).getSelectedIndex() == 0
-                ? "FIXED_GROUND" : "FREE";
+        String gripperMode = getGripperModeName(isRight);
         double[] defaultQ = isRight ? anglesRight : anglesLeft;
 
         for (int i = 0; i < result.size() && i < cartesianPath.size(); i++) {
@@ -2283,6 +2314,38 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         String[] cfgCandidates = new String[] { trajectoryLockedCfg, altCfg }; // Luôn thử cả 2 cấu hình để bám được quỹ đạo
 
         double preferredYaw = isFirstWaypoint ? Double.NaN : trajectoryLastYawOffset;
+        double[] qSearchRef = qRef;
+        WorkspaceMap.Entry csvSeed = findWorkspaceSeed(px, py, pz, isRightArmSelected, qRef);
+        if (csvSeed != null) {
+            double seedErr = computePositionError(csvSeed.q, px, py, pz, isRightArmSelected);
+            boolean seedJumpOk = true;
+            if (enforceJumpLimit && !isFirstWaypoint) {
+                for (int i = 0; i < NUM_JOINTS; i++) {
+                    if (Math.abs(wrappedDegDiff(csvSeed.q[i], qRef[i])) > WORKSPACE_FALLBACK_MAX_JOINT_JUMP) {
+                        seedJumpOk = false;
+                        break;
+                    }
+                }
+            }
+            if (seedErr <= TRAJ_STRICT_ERROR && seedJumpOk) {
+                trajectoryLastAlpha = Double.isFinite(csvSeed.alphaDeg) ? csvSeed.alphaDeg : trajectoryLastAlpha;
+                trajectoryLockedCfg = getActualConfig(csvSeed.q, isRightArmSelected);
+                trajectoryLastYawOffset = Double.isFinite(csvSeed.yawOffsetDeg)
+                        ? csvSeed.yawOffsetDeg
+                        : getYawOffsetFromQ(csvSeed.q, px, py, isRightArmSelected);
+                if (DEBUG) {
+                    System.out.printf("[WORKSPACE_SEED] Direct CSV hit target=(%.2f, %.2f, %.2f) err=%.4f%n",
+                            px, py, pz, seedErr);
+                }
+                return csvSeed.q.clone();
+            }
+            if (seedJumpOk) {
+                qSearchRef = csvSeed.q;
+                if (Double.isFinite(csvSeed.yawOffsetDeg)) {
+                    preferredYaw = csvSeed.yawOffsetDeg;
+                }
+            }
+        }
 
         if (DEBUG) {
             System.out.printf("[DEBUG_TRAJ_IK] Target: (X=%.2f, Y=%.2f, Z=%.2f) | Arm=%s | ConfigRef=%s | isFirst=%b\n",
@@ -2313,7 +2376,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double aEnd = fixedGround ? 30 : (trajectoryLastAlpha + 18);
         double aStep = fixedGround ? 3.0 : 1.0;
         for (double a = aStart; a <= aEnd; a += aStep) {
-            List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw, false);
+            List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qSearchRef, preferredYaw, false);
             for (double[] q : candidates) {
                 // Reject candidates with a huge joint jump (> 30 degrees) to prevent wild/erratic movements
                 boolean hasHugeJump = false;
@@ -2367,7 +2430,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (bestStrictQ == null && !fixedGround) {
             String[] cfgFallback = cfgCandidates;
             for (double a = -90; a <= 30; a += 1.5) {
-                List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qRef, preferredYaw, false);
+                List<double[]> candidates = tryAlpha(px, py, pz, a, isRightArmSelected, qSearchRef, preferredYaw, false);
                 for (double[] q : candidates) {
                     // Reject candidates with a huge joint jump (> 30 degrees) to prevent wild/erratic movements
                     boolean hasHugeJump = false;
