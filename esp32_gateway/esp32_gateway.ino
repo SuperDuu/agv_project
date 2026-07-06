@@ -25,8 +25,23 @@
 #define HC12_RXD 16
 #define HC12_TXD 17
 #define HC12_BAUDRATE 115200
-#define RS485_CMD_ARM_TEXT 0x02
 #define ARM_CMD_MAX_LEN 48
+#define PROTO_SOF1 0xAA
+#define PROTO_SOF2 0x55
+#define PROTO_ADDR_MAIN 0x01
+#define PROTO_ADDR_ARM_LEFT 0x02
+#define PROTO_ADDR_ARM_RIGHT 0x03
+#define PROTO_ADDR_ESP32 0x10
+#define PROTO_ADDR_PC_APP 0x20
+#define PROTO_CMD_SENSOR_REPORT 0x01
+#define PROTO_CMD_SYNC_REQUEST 0x11
+#define PROTO_CMD_ARM_JOINT_COMMAND 0x20
+#define PROTO_MOTION_ABSOLUTE 0x01
+#define PROTO_SENSOR_FLAG_IMU_VALID 0x01
+#define PROTO_SENSOR_FLAG_VL53_VALID 0x02
+#define PROTO_SENSOR_FLAG_NEW_TARGET 0x04
+#define PROTO_MAX_PAYLOAD_LEN 64
+#define PROTO_MAX_FRAME_LEN 74
 
 #define RS485_ADDR 0x63  // Địa chỉ 99 cho Master-Slave IMU
 
@@ -63,6 +78,11 @@ float current_yaw = 0.0f; // Góc mô phỏng BNO055
 float imu_total_yaw = 0.0f;  // Góc tích lũy không bị nhảy qua -180/180
 float imu_prev_yaw = 0.0f;
 float imu_delta_yaw = 0.0f;
+uint8_t main_rx_frame[PROTO_MAX_FRAME_LEN];
+uint16_t main_rx_index = 0;
+uint16_t main_expected_len = 0;
+uint8_t main_rx_state = 0;
+uint8_t esp32_seq_counter = 0;
 uint8_t rs485_rx_buffer[10];
 uint8_t rs485_rx_index = 0;
 unsigned long last_rs485_rx_time = 0;
@@ -108,6 +128,41 @@ char arm_cmd_buffer[ARM_CMD_MAX_LEN + 1];
 uint8_t arm_cmd_index = 0;
 
 // Hàm tính XOR Checksum cho khung nhị phân
+uint16_t proto_crc16(const uint8_t *data, uint16_t length) {
+  uint16_t crc = 0xFFFF;
+
+  for (uint16_t i = 0; i < length; i++) {
+    crc ^= (uint16_t)data[i] << 8;
+    for (uint8_t bit = 0; bit < 8; bit++) {
+      if (crc & 0x8000) {
+        crc = (uint16_t)((crc << 1) ^ 0x1021);
+      } else {
+        crc <<= 1;
+      }
+    }
+  }
+
+  return crc;
+}
+
+void write_u16_be(uint8_t *dst, uint16_t value) {
+  dst[0] = (uint8_t)((value >> 8) & 0xFF);
+  dst[1] = (uint8_t)(value & 0xFF);
+}
+
+void write_s16_be(uint8_t *dst, int16_t value) {
+  write_u16_be(dst, (uint16_t)value);
+}
+
+uint16_t read_u16_be(const uint8_t *src) {
+  return (uint16_t)(((uint16_t)src[0] << 8) | src[1]);
+}
+
+int16_t deg_to_x100(float angle_deg) {
+  if (angle_deg >= 0.0f) return (int16_t)(angle_deg * 100.0f + 0.5f);
+  return (int16_t)(angle_deg * 100.0f - 0.5f);
+}
+
 uint8_t calculate_checksum(uint8_t *data, uint8_t start, uint8_t end) {
   uint8_t cs = 0;
   for (uint8_t i = start; i <= end; i++) cs ^= data[i];
@@ -115,33 +170,77 @@ uint8_t calculate_checksum(uint8_t *data, uint8_t start, uint8_t end) {
 }
 
 // Xử lý gói tin nhị phân nhận từ STM32
-bool is_arm_command_line_valid(const char *cmd) {
+bool parse_arm_command_line(const char *cmd, uint8_t *dest, int16_t joints_x100[6]) {
   if (cmd == nullptr) return false;
 
   size_t len = strlen(cmd);
-  if (len < 4 || len > ARM_CMD_MAX_LEN) return false;
-  if ((cmd[0] != 'L' && cmd[0] != 'R') || cmd[1] != ':') return false;
+  if (len < 4 || len > ARM_CMD_MAX_LEN || cmd[1] != ':') return false;
 
-  return true;
+  if (cmd[0] == 'L') {
+    *dest = PROTO_ADDR_ARM_LEFT;
+  } else if (cmd[0] == 'R') {
+    *dest = PROTO_ADDR_ARM_RIGHT;
+  } else {
+    return false;
+  }
+
+  char local_buf[ARM_CMD_MAX_LEN + 1];
+  strncpy(local_buf, cmd + 2, sizeof(local_buf) - 1);
+  local_buf[sizeof(local_buf) - 1] = '\0';
+
+  char *context = nullptr;
+  char *token = strtok_r(local_buf, ",", &context);
+  for (int i = 0; i < 6; i++) {
+    if (token == nullptr) return false;
+    joints_x100[i] = deg_to_x100(strtof(token, nullptr));
+    token = strtok_r(nullptr, ",", &context);
+  }
+
+  return token == nullptr;
+}
+
+void send_proto_frame(uint8_t dest, uint8_t cmd, const uint8_t *payload, uint16_t payload_len) {
+  uint8_t tx_frame[PROTO_MAX_FRAME_LEN];
+  if (payload_len > PROTO_MAX_PAYLOAD_LEN) return;
+
+  tx_frame[0] = PROTO_SOF1;
+  tx_frame[1] = PROTO_SOF2;
+  tx_frame[2] = dest;
+  tx_frame[3] = PROTO_ADDR_ESP32;
+  tx_frame[4] = cmd;
+  tx_frame[5] = esp32_seq_counter++;
+  write_u16_be(&tx_frame[6], payload_len);
+  if (payload_len > 0 && payload != nullptr) {
+    memcpy(&tx_frame[8], payload, payload_len);
+  }
+
+  uint16_t crc = proto_crc16(&tx_frame[2], (uint16_t)(6 + payload_len));
+  write_u16_be(&tx_frame[8 + payload_len], crc);
+
+  Serial2.write(tx_frame, payload_len + 10);
+  Serial2.flush();
 }
 
 void send_arm_command_frame(const char *cmd) {
-  if (!is_arm_command_line_valid(cmd)) return;
+  uint8_t dest = 0;
+  int16_t joints_x100[6];
+  uint8_t payload[18];
 
-  uint8_t payload_len = (uint8_t)strlen(cmd);
-  uint8_t tx_frame[ARM_CMD_MAX_LEN + 6];
+  if (!parse_arm_command_line(cmd, &dest, joints_x100)) return;
 
-  tx_frame[0] = 0xAA;
-  tx_frame[1] = 0x55;
-  tx_frame[2] = RS485_ADDR;
-  tx_frame[3] = RS485_CMD_ARM_TEXT;
-  tx_frame[4] = payload_len;
-  memcpy(&tx_frame[5], cmd, payload_len);
-  tx_frame[5 + payload_len] =
-      calculate_checksum(tx_frame, 2, (uint8_t)(4 + payload_len));
+  payload[0] = (dest == PROTO_ADDR_ARM_RIGHT) ? 1 : 0;
+  payload[1] = PROTO_MOTION_ABSOLUTE;
+  write_s16_be(&payload[2], joints_x100[0]);
+  write_s16_be(&payload[4], joints_x100[1]);
+  write_s16_be(&payload[6], joints_x100[2]);
+  write_s16_be(&payload[8], joints_x100[3]);
+  write_s16_be(&payload[10], joints_x100[4]);
+  write_s16_be(&payload[12], joints_x100[5]);
+  write_u16_be(&payload[14], 0);
+  payload[16] = 0x01;
+  payload[17] = 0;
 
-  Serial2.write(tx_frame, payload_len + 6);
-  Serial2.flush();
+  send_proto_frame(PROTO_ADDR_MAIN, PROTO_CMD_ARM_JOINT_COMMAND, payload, sizeof(payload));
 }
 
 void process_hc12_uart() {
@@ -249,6 +348,129 @@ void parse_rs485_frame() {
     } else { Serial.println(" => (Loi Header)"); }
   }
   rs485_rx_index = 0;
+}
+
+void send_sensor_report_frame() {
+  uint8_t payload[8];
+  int16_t yaw_x100 = 0;
+  uint8_t sensor_flags = 0;
+
+  if (bno055_ok) {
+    yaw_x100 = deg_to_x100(imu_total_yaw);
+    sensor_flags |= PROTO_SENSOR_FLAG_IMU_VALID;
+  }
+
+  if (vl53_ok) {
+    sensor_flags |= PROTO_SENSOR_FLAG_VL53_VALID;
+  }
+
+  if (firebase_node != 255) {
+    sensor_flags |= PROTO_SENSOR_FLAG_NEW_TARGET;
+  }
+
+  write_s16_be(&payload[0], yaw_x100);
+  write_u16_be(&payload[2], obstacle_distance);
+  write_u16_be(&payload[4], firebase_node == 255 ? 0xFFFF : firebase_node);
+  payload[6] = firebase_h_cmd;
+  payload[7] = sensor_flags;
+
+  send_proto_frame(PROTO_ADDR_MAIN, PROTO_CMD_SENSOR_REPORT, payload, sizeof(payload));
+
+  if (firebase_node != 255 && last_firebase_cmd_time == 0) {
+    last_firebase_cmd_time = millis();
+  }
+  if (firebase_node != 255 && millis() - last_firebase_cmd_time > 1000) {
+    firebase_node = 255;
+    firebase_h_cmd = 255;
+    last_firebase_cmd_time = 0;
+  }
+}
+
+void process_main_frame(const uint8_t *frame, uint16_t frame_len) {
+  if (frame_len < 10 || frame[0] != PROTO_SOF1 || frame[1] != PROTO_SOF2) return;
+  if (frame[2] != PROTO_ADDR_ESP32) return;
+
+  uint16_t payload_len = read_u16_be(&frame[6]);
+  if ((uint16_t)(payload_len + 10) != frame_len) return;
+
+  uint16_t rx_crc = read_u16_be(&frame[8 + payload_len]);
+  uint16_t calc_crc = proto_crc16(&frame[2], (uint16_t)(6 + payload_len));
+  if (rx_crc != calc_crc) return;
+
+  if (frame[4] == PROTO_CMD_SYNC_REQUEST && payload_len == 4) {
+    current_node = read_u16_be(&frame[8]);
+    uint8_t is_arrived = frame[10];
+    if (is_arrived != current_arrived_status && is_arrived <= 1) {
+      current_arrived_status = is_arrived;
+      need_send_status = true;
+    }
+    send_sensor_report_frame();
+  }
+}
+
+void process_main_uart() {
+  while (Serial2.available() > 0) {
+    uint8_t b = (uint8_t)Serial2.read();
+
+    switch (main_rx_state) {
+      case 0:
+        if (b == PROTO_SOF1) {
+          main_rx_frame[0] = b;
+          main_rx_index = 1;
+          main_rx_state = 1;
+        }
+        break;
+
+      case 1:
+        if (b == PROTO_SOF2) {
+          main_rx_frame[1] = b;
+          main_rx_index = 2;
+          main_rx_state = 2;
+        } else if (b == PROTO_SOF1) {
+          main_rx_frame[0] = b;
+          main_rx_index = 1;
+        } else {
+          main_rx_state = 0;
+          main_rx_index = 0;
+        }
+        break;
+
+      case 2:
+        if (main_rx_index >= PROTO_MAX_FRAME_LEN) {
+          main_rx_state = 0;
+          main_rx_index = 0;
+          main_expected_len = 0;
+          break;
+        }
+
+        main_rx_frame[main_rx_index++] = b;
+
+        if (main_rx_index == 8) {
+          uint16_t payload_len = read_u16_be(&main_rx_frame[6]);
+          if (payload_len > PROTO_MAX_PAYLOAD_LEN) {
+            main_rx_state = 0;
+            main_rx_index = 0;
+            main_expected_len = 0;
+            break;
+          }
+          main_expected_len = (uint16_t)(payload_len + 10);
+        }
+
+        if (main_expected_len != 0 && main_rx_index == main_expected_len) {
+          process_main_frame(main_rx_frame, main_expected_len);
+          main_rx_state = 0;
+          main_rx_index = 0;
+          main_expected_len = 0;
+        }
+        break;
+
+      default:
+        main_rx_state = 0;
+        main_rx_index = 0;
+        main_expected_len = 0;
+        break;
+    }
+  }
 }
 
 // ==========================================
@@ -872,25 +1094,5 @@ void loop() {
   // ==========================================
   // XỬ LÝ NHẬN DATA RS485 (MASTER-SLAVE + FIREBASE ACK)
   // ==========================================
-  // ĐỌC PHẢN HỒI TỪ STM32 (Dạng chuỗi ASCII hoặc Khung nhị phân)
-  while (Serial2.available() > 0) {
-    // Để tránh kẹt vòng lặp do dùng readStringUntil, chúng ta đọc từng byte
-    // và phân biệt đâu là chuỗi ACK, đâu là gói tin nhị phân 0xAA 0x55.
-    
-    uint8_t b = Serial2.read();
-    
-    // Xử lý gói nhị phân (Polling 50ms)
-    if (millis() - last_rs485_rx_time > 10) rs485_rx_index = 0;
-    if (rs485_rx_index < sizeof(rs485_rx_buffer)) {
-      rs485_rx_buffer[rs485_rx_index++] = b;
-    }
-    last_rs485_rx_time = millis();
-    if (rs485_rx_index == 8) {
-      parse_rs485_frame();
-    }
-    
-    // (Tạm thời bỏ khối check ASCII "OK/ACK" vì nó sẽ xung đột với gói nhị phân)
-    // Nếu bạn muốn giữ lại Firebase Command, nên gộp lệnh Firebase vào 
-    // gói truyền nhị phân từ STM32 để đồng bộ 100%.
-  }
+  process_main_uart();
 }
