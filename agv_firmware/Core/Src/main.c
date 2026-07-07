@@ -19,11 +19,12 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "gpdma.h"
+#include "gpio.h"
 #include "icache.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
-#include "gpio.h"
+
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -39,9 +40,10 @@
 #include "ls7366r.h"
 #include "motor.h"
 #include "sensor.h"
-#include <string.h>
-#include <stdlib.h> // Để sử dụng hàm atoi
 #include <agv_body_step.h>
+#include <stdlib.h> // Để sử dụng hàm atoi
+#include <string.h>
+
 
 /* USER CODE END Includes */
 
@@ -89,8 +91,8 @@ volatile uint64_t debug_wiegand_raw =
     0; // Raw 34 bit trước khi decode (để chẩn đoán)
 volatile uint32_t debug_wiegand_high32 = 0;
 volatile uint32_t debug_wiegand_low32 = 0;
-	//Step thân robot
-volatile step_command_t cmd = { .angle = 0, .rpm = 30 };
+// Step thân robot
+volatile step_command_t cmd = {.angle = 0, .rpm = 30};
 static step_command_t cmd_prev = {0};
 
 // --- CẤU HÌNH MÃ THẺ RFID CỦA TỪNG TRẠM ---
@@ -229,8 +231,9 @@ static void AGV_HandleEsp32Safety(AGV_HandleTypeDef *hagv,
     if (paused_by_obstacle) {
       if (agv_state.run_mode == MODE_4_FULL_RUN) {
         agv_state.follow_line_enable = true; // Đi tiếp khi vật cản rời đi
-        // Quan trọng: Reset lại bộ đếm timeout QR 15s để tránh bị báo lỗi mất line ngay lập tức
-        agv_state.last_qr_time = HAL_GetTick(); 
+        // Quan trọng: Reset lại bộ đếm timeout QR 15s để tránh bị báo lỗi mất
+        // line ngay lập tức
+        agv_state.last_qr_time = HAL_GetTick();
       }
       paused_by_obstacle = false;
     }
@@ -591,11 +594,10 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
+ * @brief  The application entry point.
+ * @retval int
+ */
+int main(void) {
 
   /* USER CODE BEGIN 1 */
 
@@ -603,7 +605,8 @@ int main(void)
 
   /* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick.
+   */
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -679,7 +682,7 @@ int main(void)
   ESP32_Init(&huart5);
 
   Load_Factory_Map();
-//  EEPROM_EraseSector();
+  //  EEPROM_EraseSector();
   // Đọc trạng thái cũ từ Flash EEPROM (nếu có)
   uint16_t saved_node;
   uint8_t saved_heading;
@@ -747,7 +750,8 @@ int main(void)
       if (arm_snapshot.HasNewArmCommandRight) {
         if (arm_snapshot.RawArmCommandRight[0] == 0xAA &&
             arm_snapshot.RawArmCommandRight[1] == 0x55) {
-          HAL_UART_Transmit(&huart3, (uint8_t *)arm_snapshot.RawArmCommandRight, 32, 50);
+          HAL_UART_Transmit(&huart3, (uint8_t *)arm_snapshot.RawArmCommandRight,
+                            32, 50);
         }
       }
       // Left arm: Forward legacy text string
@@ -755,8 +759,7 @@ int main(void)
         AGV_ForwardArmCommand(arm_snapshot.ArmCommandLeft);
       }
       if (!arm_snapshot.HasNewArmCommandRight &&
-          !arm_snapshot.HasNewArmCommandLeft &&
-          arm_snapshot.HasNewArmCommand) {
+          !arm_snapshot.HasNewArmCommandLeft && arm_snapshot.HasNewArmCommand) {
         if (AGV_IsLegacyArmCommand(arm_snapshot.ArmCommand)) {
           AGV_ForwardArmCommand(arm_snapshot.ArmCommand);
         }
@@ -766,18 +769,19 @@ int main(void)
     } else {
       if (HAL_GetTick() - last_arm_send_tick >= AGV_ARM_FORWARD_PERIOD_MS) {
         last_arm_send_tick = HAL_GetTick();
-        
+
         // Right arm heartbeat (binary)
         if (safe_esp32_data.RawArmCommandRight[0] == 0xAA &&
             safe_esp32_data.RawArmCommandRight[1] == 0x55) {
-          HAL_UART_Transmit(&huart3, (uint8_t *)safe_esp32_data.RawArmCommandRight, 32, 50);
+          HAL_UART_Transmit(
+              &huart3, (uint8_t *)safe_esp32_data.RawArmCommandRight, 32, 50);
         }
-        
+
         // Left arm heartbeat (text)
         if (AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandLeft)) {
           AGV_ForwardArmCommand(safe_esp32_data.ArmCommandLeft);
         }
-        
+
         // Fallback
         if (!AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandLeft) &&
             safe_esp32_data.RawArmCommandRight[0] != 0xAA &&
@@ -923,8 +927,6 @@ int main(void)
       }
     }
 
-
-
     if (qr50.Data.New_Data_Flag) {
       qr50.Data.New_Data_Flag = false;
 
@@ -949,36 +951,35 @@ int main(void)
                                     &path_length, &current_heading);
     }
 
-// chay Step
+    // chay Step
     if (cmd.angle != cmd_prev.angle || cmd.rpm != cmd_prev.rpm) {
-          cmd_prev = cmd;
-          step_Run(&cmd);
-        }
-
-
+      cmd_prev = cmd;
+      step_Run(&cmd);
+    }
   }
   /* USER CODE END 3 */
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
-{
+ * @brief System Clock Configuration
+ * @retval None
+ */
+void SystemClock_Config(void) {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage
-  */
+   */
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
 
-  while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
+  while (!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {
+  }
 
   /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
+   * in the RCC_OscInitTypeDef structure.
+   */
+  RCC_OscInitStruct.OscillatorType =
+      RCC_OSCILLATORTYPE_LSI | RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -991,50 +992,46 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1_VCIRANGE_3;
   RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1_VCORANGE_WIDE;
   RCC_OscInitStruct.PLL.PLLFRACN = 4096;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
     Error_Handler();
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
-                              |RCC_CLOCKTYPE_PCLK3;
+   */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
+                                RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2 |
+                                RCC_CLOCKTYPE_PCLK3;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB3CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
-  {
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK) {
     Error_Handler();
   }
 
   /** Enables the Clock Security System
-  */
+   */
   HAL_RCC_EnableCSS();
 
   /** Configure the programming delay
-  */
+   */
   __HAL_FLASH_SET_PROGRAM_DELAY(FLASH_PROGRAMMING_DELAY_2);
 }
 
 /**
-  * @brief Peripherals Common Clock Configuration
-  * @retval None
-  */
-void PeriphCommonClock_Config(void)
-{
+ * @brief Peripherals Common Clock Configuration
+ * @retval None
+ */
+void PeriphCommonClock_Config(void) {
   RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
 
   /** Initializes the peripherals clock
-  */
+   */
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_CKPER;
   PeriphClkInitStruct.CkperClockSelection = RCC_CLKPSOURCE_HSI;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
-  {
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK) {
     Error_Handler();
   }
 }
@@ -1168,11 +1165,10 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin) {
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
-{
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
+void Error_Handler(void) {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
@@ -1182,14 +1178,13 @@ void Error_Handler(void)
 }
 #ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t *file, uint32_t line)
-{
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
+void assert_failed(uint8_t *file, uint32_t line) {
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line
      number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,
