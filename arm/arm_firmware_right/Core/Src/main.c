@@ -73,6 +73,7 @@ volatile float servo_deg[6] = {96.43f, 35.0f, 0.0f, 0.0f, 60.0f, 0.0f};
  *   [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H][CMD][SEQ][PAYLOAD...][CRC_L][CRC_H]
  * ----------------------------------------------------------------------- */
 static uint8_t  arm_rx_byte;
+static uint8_t  arm_dma_rx_buf[64];
 static uint8_t  arm_frame_buf[ARM_PROTO_MAX_FRAME];
 static uint16_t arm_frame_idx   = 0;
 static uint16_t arm_expected_len = 0;
@@ -164,7 +165,7 @@ int main(void)
 
 //  JointControl_Init();
   ARM_Proto_ResetParser();
-  HAL_UART_Receive_IT(&huart1, &arm_rx_byte, 1);
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, (uint8_t *)arm_dma_rx_buf, sizeof(arm_dma_rx_buf));
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -1027,72 +1028,87 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
  * LEN is at offsets [4:5] — total expected length is known after receiving
  * 6 bytes (index == 6), so no stall waiting for CMD/SEQ to pass.
  * ------------------------------------------------------------------------- */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
     if (huart->Instance != USART1) return;
 
-    uint8_t b = arm_rx_byte;
+    /* Toggle LED PC13 to indicate raw physical bytes received */
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
 
-    switch (arm_parser_state) {
+    for (uint16_t i = 0; i < Size; i++) {
+        uint8_t b = arm_dma_rx_buf[i];
 
-    case 0:  /* WAIT_SOF1 */
-        if (b == ARM_PROTO_SOF1) {
-            arm_frame_buf[0] = b;
-            arm_frame_idx    = 1;
-            arm_parser_state = 1;
-        }
-        break;
+        switch (arm_parser_state) {
 
-    case 1:  /* WAIT_SOF2 */
-        if (b == ARM_PROTO_SOF2) {
-            arm_frame_buf[1] = b;
-            arm_frame_idx    = 2;
-            arm_parser_state = 2;
-        } else if (b == ARM_PROTO_SOF1) {
-            arm_frame_buf[0] = b;   /* consecutive SOF1 — stay */
-            arm_frame_idx    = 1;
-        } else {
-            ARM_Proto_ResetParser();
-        }
-        break;
-
-    case 2:  /* ACCUMULATE */
-        if (arm_frame_idx >= ARM_PROTO_MAX_FRAME) {
-            dbg_rx_len++;
-            ARM_Proto_ResetParser();
+        case 0:  /* WAIT_SOF1 */
+            if (b == ARM_PROTO_SOF1) {
+                arm_frame_buf[0] = b;
+                arm_frame_idx    = 1;
+                arm_parser_state = 1;
+            }
             break;
-        }
-        arm_frame_buf[arm_frame_idx++] = b;
 
-        /* After [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H] — index reaches 6.
-         * Compute total frame size immediately for DMA-friendly pre-sizing. */
-        if (arm_frame_idx == 6u) {
-            uint16_t plen = ARM_Proto_ReadU16LE(&arm_frame_buf[ARM_PROTO_OFF_LEN_L]);
-            if (plen > ARM_PROTO_MAX_PAYLOAD) {
+        case 1:  /* WAIT_SOF2 */
+            if (b == ARM_PROTO_SOF2) {
+                arm_frame_buf[1] = b;
+                arm_frame_idx    = 2;
+                arm_parser_state = 2;
+            } else if (b == ARM_PROTO_SOF1) {
+                arm_frame_buf[0] = b;   /* consecutive SOF1 — stay */
+                arm_frame_idx    = 1;
+            } else {
+                ARM_Proto_ResetParser();
+            }
+            break;
+
+        case 2:  /* ACCUMULATE */
+            if (arm_frame_idx >= ARM_PROTO_MAX_FRAME) {
                 dbg_rx_len++;
                 ARM_Proto_ResetParser();
                 break;
             }
-            arm_expected_len = (uint16_t)(ARM_PROTO_FRAME_OVERHEAD + plen);
-        }
+            arm_frame_buf[arm_frame_idx++] = b;
 
-        if (arm_expected_len != 0u && arm_frame_idx == arm_expected_len) {
-            ARM_Proto_ProcessFrame(arm_frame_buf, arm_expected_len);
+            /* After [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H] — index reaches 6.
+             * Compute total frame size immediately for DMA-friendly pre-sizing. */
+            if (arm_frame_idx == 6u) {
+                uint16_t plen = ARM_Proto_ReadU16LE(&arm_frame_buf[ARM_PROTO_OFF_LEN_L]);
+                if (plen > ARM_PROTO_MAX_PAYLOAD) {
+                    dbg_rx_len++;
+                    ARM_Proto_ResetParser();
+                    break;
+                }
+                arm_expected_len = (uint16_t)(ARM_PROTO_FRAME_OVERHEAD + plen);
+            }
+
+            if (arm_expected_len != 0u && arm_frame_idx == arm_expected_len) {
+                ARM_Proto_ProcessFrame(arm_frame_buf, arm_expected_len);
+                ARM_Proto_ResetParser();
+            }
+            break;
+
+        default:
             ARM_Proto_ResetParser();
+            break;
         }
-        break;
-
-    default:
-        ARM_Proto_ResetParser();
-        break;
     }
 
-    HAL_UART_Receive_IT(&huart1, &arm_rx_byte, 1);
+    /* Start another DMA Receive To Idle */
+    HAL_UART_AbortReceive(huart);
+    __HAL_UART_CLEAR_PEFLAG(huart);
+    __HAL_UART_CLEAR_FEFLAG(huart);
+    __HAL_UART_CLEAR_NEFLAG(huart);
+    __HAL_UART_CLEAR_OREFLAG(huart);
+    HAL_UARTEx_ReceiveToIdle_DMA(huart, (uint8_t *)arm_dma_rx_buf, sizeof(arm_dma_rx_buf));
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART1) {
+        __HAL_UART_CLEAR_PEFLAG(huart);
+        __HAL_UART_CLEAR_FEFLAG(huart);
+        __HAL_UART_CLEAR_NEFLAG(huart);
         __HAL_UART_CLEAR_OREFLAG(huart);
-        HAL_UART_Receive_IT(huart, &arm_rx_byte, 1);
+        HAL_UART_AbortReceive(huart);
+        HAL_UARTEx_ReceiveToIdle_DMA(huart, (uint8_t *)arm_dma_rx_buf, sizeof(arm_dma_rx_buf));
     }
 }
 /* USER CODE END 4 */
