@@ -246,8 +246,14 @@ void send_arm_command_frame(const char *cmd) {
   uint8_t payload[22];   /* 22 bytes: no arm_id, + max_delta_x100 */
 
   if (!parse_arm_command_line(cmd, &dest, joints_x100)) {
+    Serial.printf("[HC-12] Loi phan tich lenh: '%s'\n", cmd);
     return;
   }
+
+  Serial.printf("[HC-12] Nhap lenh Arm: %s -> DEST: 0x%02X, Q: q1=%.2f, q2=%.2f, q3=%.2f, q4=%.2f, q5=%.2f, q6=%.2f\n",
+                cmd, dest, 
+                (float)joints_x100[0] / 100.0f, (float)joints_x100[1] / 100.0f, (float)joints_x100[2] / 100.0f,
+                (float)joints_x100[3] / 100.0f, (float)joints_x100[4] / 100.0f, (float)joints_x100[5] / 100.0f);
 
   /* [0] motion_mode  [1] arm_flags */
   payload[0] = PROTO_MOTION_ABSOLUTE;
@@ -432,6 +438,7 @@ void process_main_frame(const uint8_t *frame, uint16_t frame_len) {
   if (cmd == PROTO_CMD_SYNC_REQUEST && payload_len == 4) {
     current_node = read_u16_le(&frame[8]);
     uint8_t is_arrived = frame[10];
+    Serial.printf("[STM32 Sync] Nhan yeu cau: Node hien tai = %u, Da den = %d\n", current_node, is_arrived);
     if (is_arrived != current_arrived_status && is_arrived <= 1) {
       current_arrived_status = is_arrived;
       need_send_status = true;
@@ -1061,21 +1068,7 @@ void loop() {
     obstacle_distance = 0xFFFF;
   }
 
-  static unsigned long last_vl53_debug = 0;
-  if (millis() - last_vl53_debug >= 1000) {
-    last_vl53_debug = millis();
-    if (vl53_ok) {
-      Serial.println("--- VL53L5CX 4x4 GRID (Distance mm) ---");
-      for (int r = 0; r < 4; r++) {
-        for (int c = 0; c < 4; c++) {
-          int i = r * 4 + c;
-          Serial.printf("%4d ", measurementData.distance_mm[i]);
-        }
-        Serial.println();
-      }
-      Serial.println("---------------------------------------");
-    }
-  }
+
   /*
   // CƠ CHẾ GỬI LẠI UART (CHỜ ACK TỪ STM32) - ĐÃ BỎ VÌ DÙNG KHUNG NHỊ PHÂN
   if (!isAckReceived && (millis() - lastSendTime >= 1000)) {
