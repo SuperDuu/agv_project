@@ -791,17 +791,17 @@ int main(void) {
       }
     }
 
+    // 1. Service communication first so we never lose sensor updates or deadlock
+    AGV_ServiceEsp32Request(&last_esp32_req_time);
+    AGV_ServiceHeartbeat(&last_led_time);
+
+    // 2. Safety handling and navigation bypass
     AGV_HandleEsp32Safety(&h_agv, &safe_esp32_data);
-    /* 
     if (safe_esp32_data.IsConnected &&
         (safe_esp32_data.Yaw == 65535.0f ||
          safe_esp32_data.ObstacleDistance == 0xFFFF)) {
       continue;
     }
-    */
-
-    AGV_ServiceEsp32Request(&last_esp32_req_time);
-    AGV_ServiceHeartbeat(&last_led_time);
 
     if (safe_esp32_data.HasNewCommand) {
       esp32_data.HasNewCommand = false;
