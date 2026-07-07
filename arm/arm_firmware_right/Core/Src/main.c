@@ -65,12 +65,7 @@ DMA_HandleTypeDef hdma_usart1_rx;
 extern Encoder_t encoders[NUM_ENCODERS];
 
 /* Current servo target angles (joint space, degrees) */
-volatile float servo0_deg = 96.43f;
-volatile float servo1_deg = 35.0f;
-volatile float servo2_deg = 0.0f;
-volatile float servo3_deg = 0.0f;
-volatile float servo4_deg = 60.0f;
-volatile float servo5_deg = 0.0f;
+volatile float servo_deg[6] = {96.43f, 35.0f, 0.0f, 0.0f, 60.0f, 0.0f};
 
 /* -----------------------------------------------------------------------
  * Protocol V2.1 binary parser state (replaces legacy text "R:" parser)
@@ -195,12 +190,12 @@ int main(void)
 //    dbg_enc3 = (int32_t)TIM4->CNT;
 //    dbg_enc4 = (int32_t)TIM5->CNT;
 
-//  	Set_Servo_Angle(0,servo0_deg);
-//  	Set_Servo_Angle(1,servo1_deg);
-//  	Set_Servo_Angle(2,servo2_deg);
-//  	Set_Servo_Angle(3,servo3_deg);
-//  	Set_Servo_Angle(4,servo4_deg);
-//  	Set_Servo_Angle(5,servo5_deg);
+//  	Set_Servo_Angle(0,servo_deg[0]);
+//  	Set_Servo_Angle(1,servo_deg[1]);
+//  	Set_Servo_Angle(2,servo_deg[2]);
+//  	Set_Servo_Angle(3,servo_deg[3]);
+//  	Set_Servo_Angle(4,servo_deg[4]);
+//  	Set_Servo_Angle(5,servo_deg[5]);
 
      HAL_Delay(10);
 
@@ -985,12 +980,9 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
         if (motion_mode == ARM_PROTO_MOTION_ABS ||
             motion_mode == ARM_PROTO_MOTION_HOME) {
 
-            servo0_deg = ARM_Proto_X100ToDeg(q_new[0]);
-            servo1_deg = ARM_Proto_X100ToDeg(q_new[1]);
-            servo2_deg = ARM_Proto_X100ToDeg(q_new[2]);
-            servo3_deg = ARM_Proto_X100ToDeg(q_new[3]);
-            servo4_deg = ARM_Proto_X100ToDeg(q_new[4]);
-            servo5_deg = ARM_Proto_X100ToDeg(q_new[5]);
+            for (int i = 0; i < 6; i++) {
+                servo_deg[i] = ARM_Proto_X100ToDeg(q_new[i]);
+            }
 
             /* Update last accepted position */
             for (int i = 0; i < 6; i++) arm_q_last[i] = q_new[i];
