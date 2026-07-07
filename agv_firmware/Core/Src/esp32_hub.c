@@ -20,6 +20,11 @@
 ESP32_SensorData_t esp32_data = {0};
 uint8_t esp32_rx_buffer[64];
 
+volatile uint32_t dbg_tx_ok         = 0;
+volatile uint32_t dbg_tx_busy       = 0;
+volatile uint32_t dbg_tx_err        = 0;
+volatile uint32_t dbg_tx_timeout    = 0;
+
 volatile uint32_t dbg_rx_success    = 0;
 volatile uint32_t dbg_rx_bad_len    = 0;
 volatile uint32_t dbg_rx_bad_cs     = 0;
@@ -324,7 +329,16 @@ void ESP32_RequestData(uint16_t current_node, uint8_t is_arrived) {
   AGV_ProtoV2_WriteU16LE(&tx_frame[12], crc);
 
   HAL_StatusTypeDef status = HAL_UART_Transmit(esp32_huart, tx_frame, sizeof(tx_frame), 20);
-  if (status != HAL_OK) {
+  if (status == HAL_OK) {
+    dbg_tx_ok++;
+  } else {
+    if (status == HAL_BUSY) {
+      dbg_tx_busy++;
+    } else if (status == HAL_ERROR) {
+      dbg_tx_err++;
+    } else if (status == HAL_TIMEOUT) {
+      dbg_tx_timeout++;
+    }
     esp32_huart->gState = HAL_UART_STATE_READY;
     __HAL_UNLOCK(esp32_huart);
   }

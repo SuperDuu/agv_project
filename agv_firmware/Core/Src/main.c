@@ -792,11 +792,13 @@ int main(void) {
     }
 
     AGV_HandleEsp32Safety(&h_agv, &safe_esp32_data);
+    /* 
     if (safe_esp32_data.IsConnected &&
         (safe_esp32_data.Yaw == 65535.0f ||
          safe_esp32_data.ObstacleDistance == 0xFFFF)) {
       continue;
     }
+    */
 
     AGV_ServiceEsp32Request(&last_esp32_req_time);
     AGV_ServiceHeartbeat(&last_led_time);
