@@ -12,10 +12,10 @@ extern TIM_HandleTypeDef htim3;
 #define MAX_RPM              60.0f
 
 /* TB6600 pin: DIR=PG3, EN=PG2 (active LOW) */
-#define DIR_GPIO_PORT        GPIOG
-#define DIR_GPIO_PIN         GPIO_PIN_3
-#define EN_GPIO_PORT         GPIOG
-#define EN_GPIO_PIN          GPIO_PIN_2
+#define DIR_GPIO_PORT        GPIOE
+#define DIR_GPIO_PIN         GPIO_PIN_4
+#define EN_GPIO_PORT         GPIOE
+#define EN_GPIO_PIN          GPIO_PIN_5
 
 /* Khung lenh dieu khien */
 typedef struct {

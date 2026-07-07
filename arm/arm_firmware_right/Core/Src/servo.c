@@ -27,7 +27,6 @@ void Servo_Init(void) {
     // Start PWM first, then write the neutral compare value (135 degrees)
     for (int i = 0; i < MAX_SERVOS; i++) {
         HAL_TIM_PWM_Start(servos[i].htim, servos[i].channel); // Start PWM first
-        
         float init_angle;
         if (i == 0) {
             init_angle = 96.43f;  // Middle of joint (135 degrees servo)
