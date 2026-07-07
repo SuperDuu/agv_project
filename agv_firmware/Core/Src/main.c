@@ -178,7 +178,7 @@ static void AGV_ForwardArmCommand(const char *arm_command) {
     tx_buffer[cmd_len++] = '\n';
   }
 
-  HAL_UART_Transmit(&huart5, tx_buffer, (uint16_t)cmd_len, 50);
+  HAL_UART_Transmit(&huart3, tx_buffer, (uint16_t)cmd_len, 50);
 }
 
 static void AGV_HandleEsp32Safety(AGV_HandleTypeDef *hagv,
@@ -747,7 +747,7 @@ int main(void)
       if (arm_snapshot.HasNewArmCommandRight) {
         if (arm_snapshot.RawArmCommandRight[0] == 0xAA &&
             arm_snapshot.RawArmCommandRight[1] == 0x55) {
-          HAL_UART_Transmit(&huart5, (uint8_t *)arm_snapshot.RawArmCommandRight, 32, 50);
+          HAL_UART_Transmit(&huart3, (uint8_t *)arm_snapshot.RawArmCommandRight, 32, 50);
         }
       }
       // Left arm: Forward legacy text string
@@ -770,7 +770,7 @@ int main(void)
         // Right arm heartbeat (binary)
         if (safe_esp32_data.RawArmCommandRight[0] == 0xAA &&
             safe_esp32_data.RawArmCommandRight[1] == 0x55) {
-          HAL_UART_Transmit(&huart5, (uint8_t *)safe_esp32_data.RawArmCommandRight, 32, 50);
+          HAL_UART_Transmit(&huart3, (uint8_t *)safe_esp32_data.RawArmCommandRight, 32, 50);
         }
         
         // Left arm heartbeat (text)
