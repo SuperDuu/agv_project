@@ -112,7 +112,7 @@ static void MX_TIM11_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void ARM_Proto_ResetParser(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -195,12 +195,12 @@ int main(void)
 //    dbg_enc3 = (int32_t)TIM4->CNT;
 //    dbg_enc4 = (int32_t)TIM5->CNT;
 
-  	Set_Servo_Angle(0,servo0_deg);
-  	Set_Servo_Angle(1,servo1_deg);
-  	Set_Servo_Angle(2,servo2_deg);
-  	Set_Servo_Angle(3,servo3_deg);
-  	Set_Servo_Angle(4,servo4_deg);
-  	Set_Servo_Angle(5,servo5_deg);
+//  	Set_Servo_Angle(0,servo0_deg);
+//  	Set_Servo_Angle(1,servo1_deg);
+//  	Set_Servo_Angle(2,servo2_deg);
+//  	Set_Servo_Angle(3,servo3_deg);
+//  	Set_Servo_Angle(4,servo4_deg);
+//  	Set_Servo_Angle(5,servo5_deg);
 
      HAL_Delay(10);
 
