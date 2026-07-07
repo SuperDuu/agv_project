@@ -884,6 +884,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
         HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
     }
 }
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == USART1) {
+        __HAL_UART_CLEAR_OREFLAG(huart);
+        HAL_UART_Receive_IT(huart, &rx_byte, 1);
+    }
+}
 /* USER CODE END 4 */
 
 /**
