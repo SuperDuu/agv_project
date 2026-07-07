@@ -82,6 +82,11 @@ uint8_t main_rx_frame[PROTO_MAX_FRAME_LEN];
 uint16_t main_rx_index = 0;
 uint16_t main_expected_len = 0;
 uint8_t main_rx_state = 0;
+
+uint8_t hc12_rx_frame[PROTO_MAX_FRAME_LEN];
+uint16_t hc12_rx_index = 0;
+uint16_t hc12_expected_len = 0;
+uint8_t hc12_rx_state = 0;
 uint8_t esp32_seq_counter = 0;
 uint8_t rs485_rx_buffer[10];
 uint8_t rs485_rx_index = 0;
@@ -276,25 +281,110 @@ void send_arm_command_frame(const char *cmd) {
   send_proto_frame(dest, PROTO_CMD_ARM_JOINT_COMMAND, payload, sizeof(payload));
 }
 
+void process_hc12_frame(const uint8_t *frame, uint16_t frame_len) {
+  if (frame_len < 10 || frame[0] != PROTO_SOF1 || frame[1] != PROTO_SOF2) return;
+
+  uint16_t payload_len = read_u16_le(&frame[4]);
+  if ((uint16_t)(payload_len + 10) != frame_len) return;
+
+  uint16_t rx_crc = read_u16_le(&frame[8 + payload_len]);
+  uint16_t calc_crc = proto_crc16(&frame[2], (uint16_t)(6 + payload_len));
+  if (rx_crc != calc_crc) {
+    Serial.printf("[HC-12 RX ERROR] CRC mismatch: rx=0x%04X, calc=0x%04X\n", rx_crc, calc_crc);
+    return;
+  }
+
+  uint8_t dest = frame[2];
+  uint8_t src = frame[3];
+  uint8_t cmd = frame[6];
+  uint8_t seq = frame[7];
+
+  if (cmd == PROTO_CMD_ARM_JOINT_COMMAND && payload_len == 22) {
+    int16_t q1 = read_s16_le(&frame[8 + 2]);
+    int16_t q2 = read_s16_le(&frame[8 + 4]);
+    int16_t q3 = read_s16_le(&frame[8 + 6]);
+    int16_t q4 = read_s16_le(&frame[8 + 8]);
+    int16_t q5 = read_s16_le(&frame[8 + 10]);
+    int16_t q6 = read_s16_le(&frame[8 + 12]);
+    uint16_t max_delta = read_u16_le(&frame[8 + 16]);
+
+    Serial.printf("[HC-12 RX OK] Arm Joint: DEST=0x%02X, SRC=0x%02X, SEQ=%u, Q: q1=%.2f, q2=%.2f, q3=%.2f, q4=%.2f, q5=%.2f, q6=%.2f, max_delta=%.2f\n",
+                  dest, src, seq,
+                  (float)q1 / 100.0f, (float)q2 / 100.0f, (float)q3 / 100.0f,
+                  (float)q4 / 100.0f, (float)q5 / 100.0f, (float)q6 / 100.0f,
+                  (float)max_delta / 100.0f);
+  } else {
+    Serial.printf("[HC-12 RX OK] Frame: DEST=0x%02X, SRC=0x%02X, CMD=0x%02X, SEQ=%u, LEN=%u\n",
+                  dest, src, cmd, seq, payload_len);
+  }
+
+  // Forward the valid binary frame to STM32 (Serial2)
+  Serial2.write(frame, frame_len);
+  Serial2.flush();
+}
+
 void process_hc12_uart() {
   while (HC12Serial.available() > 0) {
-    char c = (char)HC12Serial.read();
+    uint8_t b = (uint8_t)HC12Serial.read();
 
-    if (c == '\r') continue;
+    switch (hc12_rx_state) {
+      case 0:
+        if (b == PROTO_SOF1) {
+          hc12_rx_frame[0] = b;
+          hc12_rx_index = 1;
+          hc12_rx_state = 1;
+        }
+        break;
 
-    if (c == '\n') {
-      if (arm_cmd_index > 0) {
-        arm_cmd_buffer[arm_cmd_index] = '\0';
-        send_arm_command_frame(arm_cmd_buffer);
-        arm_cmd_index = 0;
-      }
-      continue;
-    }
+      case 1:
+        if (b == PROTO_SOF2) {
+          hc12_rx_frame[1] = b;
+          hc12_rx_index = 2;
+          hc12_rx_state = 2;
+        } else if (b == PROTO_SOF1) {
+          hc12_rx_frame[0] = b;
+          hc12_rx_index = 1;
+        } else {
+          hc12_rx_state = 0;
+          hc12_rx_index = 0;
+        }
+        break;
 
-    if (arm_cmd_index < ARM_CMD_MAX_LEN) {
-      arm_cmd_buffer[arm_cmd_index++] = c;
-    } else {
-      arm_cmd_index = 0;
+      case 2:
+        if (hc12_rx_index >= PROTO_MAX_FRAME_LEN) {
+          hc12_rx_state = 0;
+          hc12_rx_index = 0;
+          hc12_expected_len = 0;
+          break;
+        }
+
+        hc12_rx_frame[hc12_rx_index++] = b;
+
+        /* LEN at offset [4:5] (LE) — known after receiving 6 bytes (index==6) */
+        if (hc12_rx_index == 6) {
+          uint16_t payload_len = read_u16_le(&hc12_rx_frame[4]);
+          if (payload_len > PROTO_MAX_PAYLOAD_LEN) {
+            hc12_rx_state = 0;
+            hc12_rx_index = 0;
+            hc12_expected_len = 0;
+            break;
+          }
+          hc12_expected_len = (uint16_t)(payload_len + 10);
+        }
+
+        if (hc12_expected_len != 0 && hc12_rx_index == hc12_expected_len) {
+          process_hc12_frame(hc12_rx_frame, hc12_expected_len);
+          hc12_rx_state = 0;
+          hc12_rx_index = 0;
+          hc12_expected_len = 0;
+        }
+        break;
+
+      default:
+        hc12_rx_state = 0;
+        hc12_rx_index = 0;
+        hc12_expected_len = 0;
+        break;
     }
   }
 }
