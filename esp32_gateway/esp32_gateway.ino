@@ -289,34 +289,7 @@ void process_hc12_frame(const uint8_t *frame, uint16_t frame_len) {
 
   uint16_t rx_crc = read_u16_le(&frame[8 + payload_len]);
   uint16_t calc_crc = proto_crc16(&frame[2], (uint16_t)(6 + payload_len));
-  if (rx_crc != calc_crc) {
-    Serial.printf("[HC-12 RX ERROR] CRC mismatch: rx=0x%04X, calc=0x%04X\n", rx_crc, calc_crc);
-    return;
-  }
-
-  uint8_t dest = frame[2];
-  uint8_t src = frame[3];
-  uint8_t cmd = frame[6];
-  uint8_t seq = frame[7];
-
-  if (cmd == PROTO_CMD_ARM_JOINT_COMMAND && payload_len == 22) {
-    int16_t q1 = read_s16_le(&frame[8 + 2]);
-    int16_t q2 = read_s16_le(&frame[8 + 4]);
-    int16_t q3 = read_s16_le(&frame[8 + 6]);
-    int16_t q4 = read_s16_le(&frame[8 + 8]);
-    int16_t q5 = read_s16_le(&frame[8 + 10]);
-    int16_t q6 = read_s16_le(&frame[8 + 12]);
-    uint16_t max_delta = read_u16_le(&frame[8 + 16]);
-
-    Serial.printf("[HC-12 RX OK] Arm Joint: DEST=0x%02X, SRC=0x%02X, SEQ=%u, Q: q1=%.2f, q2=%.2f, q3=%.2f, q4=%.2f, q5=%.2f, q6=%.2f, max_delta=%.2f\n",
-                  dest, src, seq,
-                  (float)q1 / 100.0f, (float)q2 / 100.0f, (float)q3 / 100.0f,
-                  (float)q4 / 100.0f, (float)q5 / 100.0f, (float)q6 / 100.0f,
-                  (float)max_delta / 100.0f);
-  } else {
-    Serial.printf("[HC-12 RX OK] Frame: DEST=0x%02X, SRC=0x%02X, CMD=0x%02X, SEQ=%u, LEN=%u\n",
-                  dest, src, cmd, seq, payload_len);
-  }
+  if (rx_crc != calc_crc) return;
 
   // Forward the valid binary frame to STM32 (Serial2)
   Serial2.write(frame, frame_len);
@@ -435,7 +408,6 @@ void parse_rs485_frame() {
             tx_frame[9] = obstacle_distance & 0xFF;
             
             tx_frame[10] = calculate_checksum(tx_frame, 2, 9);
-            Serial.printf("%d\n", obstacle_distance);
             // --- DEBUG TX ---
             /*
             Serial.printf(" => [TX] yaw=%.1fdeg node=%u cmd=%u obs=%u | ",
@@ -528,7 +500,6 @@ void process_main_frame(const uint8_t *frame, uint16_t frame_len) {
   if (cmd == PROTO_CMD_SYNC_REQUEST && payload_len == 4) {
     current_node = read_u16_le(&frame[8]);
     uint8_t is_arrived = frame[10];
-    Serial.printf("[STM32 Sync] Nhan yeu cau: Node hien tai = %u, Da den = %d\n", current_node, is_arrived);
     if (is_arrived != current_arrived_status && is_arrived <= 1) {
       current_arrived_status = is_arrived;
       need_send_status = true;
