@@ -722,11 +722,19 @@ int main(void)
     }
 
     ESP32_SensorData_t safe_esp32_data = ESP32_GetSafeData();
+    static uint32_t last_arm_send_tick = 0;
     if (safe_esp32_data.HasNewArmCommand) {
       __disable_irq();
       esp32_data.HasNewArmCommand = false;
       __enable_irq();
+      safe_esp32_data = ESP32_GetSafeData(); // Lấy bản copy mới nhất có chứa ArmCommand vừa nhận
       AGV_ForwardArmCommand(safe_esp32_data.ArmCommand);
+      last_arm_send_tick = HAL_GetTick();
+    } else if (safe_esp32_data.ArmCommand[0] == 'L' || safe_esp32_data.ArmCommand[0] == 'R') {
+      if (HAL_GetTick() - last_arm_send_tick >= 50) {
+        last_arm_send_tick = HAL_GetTick();
+        AGV_ForwardArmCommand(safe_esp32_data.ArmCommand);
+      }
     }
 
     AGV_HandleEsp32Safety(&h_agv, &safe_esp32_data);
