@@ -2,11 +2,11 @@
 
 /* Internal state */
 volatile uint8_t  step_running = 0;
-static volatile uint32_t step_count  = 0;
-static volatile uint32_t step_target = 0;
-static volatile int8_t   current_dir = 1;       /* +1=CW, -1=CCW */
-static volatile int32_t  position_steps = 0;     /* Vi tri tuyet doi (microstep) */
-static volatile uint8_t  move_done = 0;
+volatile uint32_t step_count  = 0;
+volatile uint32_t step_target = 0;
+volatile int8_t   current_dir = 1;       /* +1=CW, -1=CCW */
+volatile int32_t  position_steps = 0;     /* Vi tri tuyet doi (microstep) */
+volatile uint8_t  move_done = 0;
 
 void step_Run(const volatile step_command_t *cmd)
 {
@@ -43,6 +43,11 @@ void step_Run(const volatile step_command_t *cmd)
 
   HAL_GPIO_WritePin(EN_GPIO_PORT, EN_GPIO_PIN, GPIO_PIN_RESET);
   step_running = 1;
+
+  /* Enable TIM3 global interrupt in NVIC */
+  HAL_NVIC_SetPriority(TIM3_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(TIM3_IRQn);
+
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
   HAL_TIM_Base_Start_IT(&htim3);
 }
