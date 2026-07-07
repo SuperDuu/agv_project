@@ -733,6 +733,7 @@ int main(void) {
     }
 
     ESP32_SensorData_t safe_esp32_data = ESP32_GetSafeData();
+    /* ARM FORWARD BLOCK - disabled while arms are physically disconnected
     static uint32_t last_arm_send_tick = 0;
     if (safe_esp32_data.HasNewArmCommandLeft ||
         safe_esp32_data.HasNewArmCommandRight ||
@@ -790,6 +791,7 @@ int main(void) {
         }
       }
     }
+    ARM FORWARD BLOCK END */
 
     // 1. Service communication first so we never lose sensor updates or deadlock
     AGV_ServiceEsp32Request(&last_esp32_req_time);
