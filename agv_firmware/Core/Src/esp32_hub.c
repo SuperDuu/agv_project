@@ -189,8 +189,11 @@ static void ESP32_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
   uint8_t dest = frame[AGV_PROTO_V2_OFF_DEST];
   uint8_t cmd  = frame[AGV_PROTO_V2_OFF_CMD];
 
-  /* This node (AGV main) accepts frames destined for itself or broadcast */
-  if (dest != AGV_PROTO_V2_ADDR_MAIN && dest != AGV_PROTO_V2_ADDR_BROADCAST) {
+  /* This node (AGV main) accepts frames destined for itself, broadcast, or arm slaves (to forward them) */
+  if (dest != AGV_PROTO_V2_ADDR_MAIN &&
+      dest != AGV_PROTO_V2_ADDR_BROADCAST &&
+      dest != AGV_PROTO_V2_ADDR_ARM_LEFT &&
+      dest != AGV_PROTO_V2_ADDR_ARM_RIGHT) {
     /* In a future phase: forward to RS485 arm slaves here */
     return;
   }
