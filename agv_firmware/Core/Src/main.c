@@ -149,6 +149,14 @@ void PeriphCommonClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define AGV_ARM_FORWARD_PERIOD_MS 20u
+
+static bool AGV_IsLegacyArmCommand(const char *arm_command) {
+  return arm_command != NULL &&
+         (arm_command[0] == 'L' || arm_command[0] == 'R') &&
+         arm_command[1] == ':';
+}
+
 static void AGV_ForwardArmCommand(const char *arm_command) {
   if (arm_command == NULL) {
     return;
@@ -159,7 +167,7 @@ static void AGV_ForwardArmCommand(const char *arm_command) {
     return;
   }
 
-  if ((arm_command[0] != 'L' && arm_command[0] != 'R') || arm_command[1] != ':') {
+  if (!AGV_IsLegacyArmCommand(arm_command)) {
     return;
   }
 
@@ -723,17 +731,46 @@ int main(void)
 
     ESP32_SensorData_t safe_esp32_data = ESP32_GetSafeData();
     static uint32_t last_arm_send_tick = 0;
-    if (safe_esp32_data.HasNewArmCommand) {
+    if (safe_esp32_data.HasNewArmCommandLeft ||
+        safe_esp32_data.HasNewArmCommandRight ||
+        safe_esp32_data.HasNewArmCommand) {
+      ESP32_SensorData_t arm_snapshot;
+
       __disable_irq();
+      arm_snapshot = esp32_data;
       esp32_data.HasNewArmCommand = false;
+      esp32_data.HasNewArmCommandLeft = false;
+      esp32_data.HasNewArmCommandRight = false;
       __enable_irq();
-      safe_esp32_data = ESP32_GetSafeData(); // Lấy bản copy mới nhất có chứa ArmCommand vừa nhận
-      AGV_ForwardArmCommand(safe_esp32_data.ArmCommand);
+
+      if (arm_snapshot.HasNewArmCommandRight) {
+        AGV_ForwardArmCommand(arm_snapshot.ArmCommandRight);
+      }
+      if (arm_snapshot.HasNewArmCommandLeft) {
+        AGV_ForwardArmCommand(arm_snapshot.ArmCommandLeft);
+      }
+      if (!arm_snapshot.HasNewArmCommandRight &&
+          !arm_snapshot.HasNewArmCommandLeft &&
+          arm_snapshot.HasNewArmCommand) {
+        AGV_ForwardArmCommand(arm_snapshot.ArmCommand);
+      }
+
       last_arm_send_tick = HAL_GetTick();
-    } else if (safe_esp32_data.ArmCommand[0] == 'L' || safe_esp32_data.ArmCommand[0] == 'R') {
-      if (HAL_GetTick() - last_arm_send_tick >= 50) {
+    } else if (AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandRight) ||
+               AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandLeft) ||
+               AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommand)) {
+      if (HAL_GetTick() - last_arm_send_tick >= AGV_ARM_FORWARD_PERIOD_MS) {
         last_arm_send_tick = HAL_GetTick();
-        AGV_ForwardArmCommand(safe_esp32_data.ArmCommand);
+        if (AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandRight)) {
+          AGV_ForwardArmCommand(safe_esp32_data.ArmCommandRight);
+        }
+        if (AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandLeft)) {
+          AGV_ForwardArmCommand(safe_esp32_data.ArmCommandLeft);
+        }
+        if (!AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandRight) &&
+            !AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandLeft)) {
+          AGV_ForwardArmCommand(safe_esp32_data.ArmCommand);
+        }
       }
     }
 

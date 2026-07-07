@@ -22,6 +22,10 @@ typedef struct {
     uint16_t ObstacleDistance;
     bool HasNewArmCommand;
     char ArmCommand[ESP32_MAX_ARM_CMD_LEN + 1];
+    bool HasNewArmCommandLeft;
+    bool HasNewArmCommandRight;
+    char ArmCommandLeft[ESP32_MAX_ARM_CMD_LEN + 1];
+    char ArmCommandRight[ESP32_MAX_ARM_CMD_LEN + 1];
 } ESP32_SensorData_t;
 
 // Khai báo biến toàn cục

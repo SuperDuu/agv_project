@@ -124,7 +124,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JSlider speedSlider = new JSlider(0, 120, 20);
     JLabel speedLabel = new JLabel("20 °/s");
     private static final int MOTION_DT_MS = 30;
-    private static final int ARM_TX_REFRESH_MS = 50;
+    private static final int ARM_TX_REFRESH_MS = 20;
     Timer motionTimer;
     Timer armTxRefreshTimer;
 
@@ -1477,6 +1477,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             angleLblsRight[2].setText((int) Math.round(anglesRight[2]) + "°");
             angleLblsRight[3].setText((int) Math.round(anglesRight[3]) + "°");
             updateArm();
+            sendJointsToUart(true);
             return;
         }
 
@@ -1534,6 +1535,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             angleLblsLeft[2].setText((int) Math.round(anglesLeft[2]) + "°");
             angleLblsLeft[3].setText((int) Math.round(anglesLeft[3]) + "°");
             updateArm();
+            sendJointsToUart(true);
             return;
         }
 
@@ -1567,6 +1569,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 
                 angleLblsRight[i].setText((int) anglesRight[i] + "°");
                 updateArm();
+                sendJointsToUart(true);
                 return;
             }
         }
@@ -1601,6 +1604,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 
                 angleLblsLeft[i].setText((int) anglesLeft[i] + "°");
                 updateArm();
+                sendJointsToUart(true);
                 return;
             }
         }

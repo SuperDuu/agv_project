@@ -86,6 +86,12 @@ static void ESP32_ResetParser(void) {
 static void ESP32_FormatLegacyArmCommand(uint8_t dest,
                                          const AGV_ProtoV2_ArmJointCommand_t *cmd) {
   char prefix = (dest == AGV_PROTO_V2_ADDR_ARM_RIGHT) ? 'R' : 'L';
+  char *arm_command = (dest == AGV_PROTO_V2_ADDR_ARM_RIGHT) ?
+                      esp32_data.ArmCommandRight :
+                      esp32_data.ArmCommandLeft;
+  bool *has_new_command = (dest == AGV_PROTO_V2_ADDR_ARM_RIGHT) ?
+                          &esp32_data.HasNewArmCommandRight :
+                          &esp32_data.HasNewArmCommandLeft;
 
   /* Convert x100 fixed-point → integer degree (round to nearest) */
   int q1 = (cmd->q1_x100 >= 0) ? (cmd->q1_x100 + 50) / 100 : (cmd->q1_x100 - 50) / 100;
@@ -95,8 +101,11 @@ static void ESP32_FormatLegacyArmCommand(uint8_t dest,
   int q5 = (cmd->q5_x100 >= 0) ? (cmd->q5_x100 + 50) / 100 : (cmd->q5_x100 - 50) / 100;
   int q6 = (cmd->q6_x100 >= 0) ? (cmd->q6_x100 + 50) / 100 : (cmd->q6_x100 - 50) / 100;
 
-  snprintf(esp32_data.ArmCommand, sizeof(esp32_data.ArmCommand),
+  snprintf(arm_command, ESP32_MAX_ARM_CMD_LEN + 1u,
            "%c:%d,%d,%d,%d,%d,%d", prefix, q1, q2, q3, q4, q5, q6);
+  strncpy(esp32_data.ArmCommand, arm_command, sizeof(esp32_data.ArmCommand) - 1u);
+  esp32_data.ArmCommand[sizeof(esp32_data.ArmCommand) - 1u] = '\0';
+  *has_new_command = true;
   esp32_data.HasNewArmCommand = true;
 }
 
