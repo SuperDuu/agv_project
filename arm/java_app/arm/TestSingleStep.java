@@ -9,9 +9,23 @@ public class TestSingleStep {
             return;
         }
 
+        // Homed configuration as qInit (Right Arm)
+        double[] qInitDeg = { 0.0, 0.0, 20.0, -35.0, 0.0, 0.0 };
+        double[] qInitRad = new double[6];
+        for (int i = 0; i < 6; i++) {
+            qInitRad[i] = Math.toRadians(qInitDeg[i]);
+        }
+
+        double[] initialQ = { 0.0, 0.0, Math.toRadians(20.0), Math.toRadians(-35.0), 0.0, 0.0 };
+        double[][] T_init = Kinematics.computeFKMatrix(initialQ, true);
+        System.out.println("T_init Matrix:");
+        for (int r = 0; r < 4; r++) {
+            System.out.println(java.util.Arrays.toString(T_init[r]));
+        }
+
         // Center derived from the homed configuration
-        double cx = -28.6370, cy = 13.8366, cz = 101.0342;
-        double R = 5.0;
+        double cx = T_init[0][3], cy = T_init[1][3], cz = T_init[2][3];
+        double R = 0.5;
         
         // Step 7 angle
         double angle = 7 * 2.0 * Math.PI / 100.0;
@@ -19,15 +33,6 @@ public class TestSingleStep {
         double py = cy + R * Math.sin(angle);
         double pz = cz;
 
-        // Homed configuration as qInit
-        double[] qInitDeg = { 0.0, 30.0, -30.0, -45.0, 30.0, 0.0 };
-        double[] qInitRad = new double[6];
-        for (int i = 0; i < 6; i++) {
-            qInitRad[i] = Math.toRadians(qInitDeg[i]);
-        }
-
-        double[] initialQ = { 0.0, Math.toRadians(30.0), Math.toRadians(-30.0), Math.toRadians(-45.0), Math.toRadians(30.0), 0.0 };
-        double[][] T_init = Kinematics.computeFKMatrix(initialQ, true);
         double[][] R_target = new double[3][3];
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
@@ -40,17 +45,11 @@ public class TestSingleStep {
         // Run Java
         Kinematics.solverMode = 0;
         double[] qJava = Kinematics.solveIK(px, py, pz, R_target, qInitRad.clone(), true);
-        System.out.println("\nJava result:");
-        for (int i = 0; i < 6; i++) {
-            System.out.printf("  q[%d] = %.15f\n", i, qJava[i]);
-        }
+        System.out.println("\nJava result: " + (qJava == null ? "NULL" : java.util.Arrays.toString(qJava)));
 
         // Run JNI
         Kinematics.solverMode = 1;
         double[] qJni = JniKinematics.solveIKNative(px, py, pz, R_target, qInitRad.clone(), true, 1);
-        System.out.println("\nJNI result:");
-        for (int i = 0; i < 6; i++) {
-            System.out.printf("  q[%d] = %.15f\n", i, qJni[i]);
-        }
+        System.out.println("\nJNI result: " + (qJni == null ? "NULL" : java.util.Arrays.toString(qJni)));
     }
 }

@@ -35,3 +35,8 @@ arm/java_app/arm/.venv/
 # Python cache artifacts
 __pycache__/
 *.pyc
+
+# ROS 2 workspace build artifacts
+ros2_hybrid/ros2_ws/build/
+ros2_hybrid/ros2_ws/install/
+ros2_hybrid/ros2_ws/log/

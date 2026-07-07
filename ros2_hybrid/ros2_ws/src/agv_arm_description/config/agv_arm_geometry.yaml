@@ -1,0 +1,43 @@
+robot:
+  name: agv_dual_arm
+  units:
+    length: mm
+    angle: deg
+
+links:
+  # Placeholder values copied from the current Java prototype.
+  # Replace these with measured robot dimensions before real hardware planning.
+  L0: 120.0
+  L1: 5.0
+  L2: 10.0
+  L3: 10.0
+  L4: 20.0
+  L5: 20.0
+  L6: 10.0
+  L7: 10.0
+
+base:
+  torso_height: 125.0
+  shoulder_z: 125.0
+  shoulder_y_offset: 20.0
+
+joint_limits:
+  right:
+    joint_1: { lower: -45.0, upper: 45.0, velocity: 1.5, effort: 8.0 }
+    joint_2: { lower: -90.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
+    joint_3: { lower: 20.0, upper: 165.0, velocity: 1.5, effort: 8.0 }
+    joint_4: { lower: -95.0, upper: -15.0, velocity: 1.5, effort: 8.0 }
+    joint_5: { lower: -90.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
+    joint_6: { lower: -90.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
+  left:
+    joint_1: { lower: -45.0, upper: 45.0, velocity: 1.5, effort: 8.0 }
+    joint_2: { lower: -90.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
+    joint_3: { lower: -165.0, upper: -20.0, velocity: 1.5, effort: 8.0 }
+    joint_4: { lower: 15.0, upper: 95.0, velocity: 1.5, effort: 8.0 }
+    joint_5: { lower: -90.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
+    joint_6: { lower: -90.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
+
+visual:
+  link_radius: 6.0
+  joint_radius: 8.0
+  gripper_length: 20.0

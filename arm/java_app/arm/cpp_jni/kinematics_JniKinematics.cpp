@@ -7,20 +7,32 @@
 #include "kinematics_JniKinematics.h"
 
 // Robot dimensions (must match Kinematics.java)
-const double L0 = 120.0;
-const double L1 = 5.0;
-const double L2 = 10.0;
-const double L3 = 10.0;
+const double L0 = 130.0;
+const double L1 = 0.0;
+const double L2 = 32.0;
+const double L3 = 0.0;
 const double L4 = 20.0;
-const double L5 = 20.0;
-const double L6 = 10.0;
-const double L7 = 10.0;
+const double L5 = 25.0;
+const double L6 = 0.0;
+const double L7 = 15.0;
 
-// Joint limits (in degrees, must match Kinematics.java)
-const double JOINT_MIN_RIGHT[6] = { -45, -90, -90, -140, -90, -90 };
-const double JOINT_MAX_RIGHT[6] = { 45, 90, 90, -30, 90, 90 };
-const double JOINT_MIN_LEFT[6]  = { -45, -90, -90, 30, -90, -90 };
-const double JOINT_MAX_LEFT[6]  = { 45, 90, 90, 140, 90, 90 };
+// θ-space limits (must match Kinematics.java JOINT_MIN/MAX)
+const double JOINT_MIN_RIGHT[6] = { -45, -90, 20, -95, -90, -90 };
+const double JOINT_MAX_RIGHT[6] = { 45, 90, 165, -15, 90, 90 };
+const double JOINT_MIN_LEFT[6]  = { -45, -90, -165, 15, -90, -90 };
+const double JOINT_MAX_LEFT[6]  = { 45, 90, -20, 95, 90, 90 };
+
+// Check θ-space limits
+// Mirrors Kinematics.java isWithinLimits() exactly
+bool isWithinLimits(const double thetaDeg[6], bool isRight) {
+    const double* jMin = isRight ? JOINT_MIN_RIGHT : JOINT_MIN_LEFT;
+    const double* jMax = isRight ? JOINT_MAX_RIGHT : JOINT_MAX_LEFT;
+    // θ-space limits
+    for (int i = 0; i < 6; i++) {
+        if (thetaDeg[i] < jMin[i] - 0.1 || thetaDeg[i] > jMax[i] + 0.1) return false;
+    }
+    return true;
+}
 
 // Helper matrix functions
 void multiply4x4(const double A[4][4], const double B[4][4], double C[4][4]) {
@@ -417,6 +429,15 @@ bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3]
     computeFKMatrix(bestQ, isRight, T_best);
     double finalPosErr = std::sqrt(std::pow(T_best[0][3] - px, 2) + std::pow(T_best[1][3] - py, 2) + std::pow(T_best[2][3] - pz, 2));
     if (finalPosErr <= 0.30) {
+        // Convert to degrees for limit check
+        double candidateDeg[6];
+        for (int i = 0; i < 6; i++) {
+            double d = bestQ[i] * 180.0 / M_PI;
+            while (d > 180.0) d -= 360.0;
+            while (d < -180.0) d += 360.0;
+            candidateDeg[i] = d;
+        }
+        if (!isWithinLimits(candidateDeg, isRight)) return false;
         std::copy(bestQ, bestQ + 6, qOut);
         return true;
     }
