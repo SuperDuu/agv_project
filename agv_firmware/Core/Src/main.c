@@ -180,7 +180,8 @@ static void AGV_ForwardArmCommand(const char *arm_command) {
     tx_buffer[cmd_len++] = '\n';
   }
 
-  HAL_UART_Transmit(&huart3, tx_buffer, (uint16_t)cmd_len, 50);
+  // Temporarily skipped to prevent unconnected UART3 hang
+  // HAL_UART_Transmit(&huart3, tx_buffer, (uint16_t)cmd_len, 50);
 }
 
 static void AGV_HandleEsp32Safety(AGV_HandleTypeDef *hagv,
@@ -244,7 +245,7 @@ static void AGV_ServiceEsp32Request(uint32_t *last_esp32_req_time) {
   if (last_esp32_req_time == NULL)
     return;
 
-  if (HAL_GetTick() - *last_esp32_req_time > 50) {
+  if (HAL_GetTick() - *last_esp32_req_time > 20) {
     *last_esp32_req_time = HAL_GetTick();
     uint8_t is_arrived =
         (agv_state.current_node == agv_state.destination_node) ? 1 : 0;
@@ -265,7 +266,7 @@ static void AGV_ServiceHeartbeat(uint32_t *last_led_time) {
                                      UART_CLEAR_FEF | UART_CLEAR_PEF);
 
   if (HAL_GetTick() - esp32_data.LastUpdateTick > 2000) {
-    extern uint8_t esp32_rx_buffer[64];
+    extern uint8_t esp32_rx_buffer[128];
     HAL_UART_AbortReceive(&huart5);
     HAL_UARTEx_ReceiveToIdle_DMA(&huart5, esp32_rx_buffer,
                                  sizeof(esp32_rx_buffer));
@@ -751,8 +752,9 @@ int main(void) {
       if (arm_snapshot.HasNewArmCommandRight) {
         if (arm_snapshot.RawArmCommandRight[0] == 0xAA &&
             arm_snapshot.RawArmCommandRight[1] == 0x55) {
-          HAL_UART_Transmit(&huart3, (uint8_t *)arm_snapshot.RawArmCommandRight,
-                            32, 50);
+          // Temporarily skipped to prevent unconnected UART3 hang
+          // HAL_UART_Transmit(&huart3, (uint8_t *)arm_snapshot.RawArmCommandRight,
+          //                   32, 50);
         }
       }
       // Left arm: Forward legacy text string
@@ -774,8 +776,9 @@ int main(void) {
         // Right arm heartbeat (binary)
         if (safe_esp32_data.RawArmCommandRight[0] == 0xAA &&
             safe_esp32_data.RawArmCommandRight[1] == 0x55) {
-          HAL_UART_Transmit(
-              &huart3, (uint8_t *)safe_esp32_data.RawArmCommandRight, 32, 50);
+          // Temporarily skipped to prevent unconnected UART3 hang
+          // HAL_UART_Transmit(
+          //     &huart3, (uint8_t *)safe_esp32_data.RawArmCommandRight, 32, 50);
         }
 
         // Left arm heartbeat (text)
@@ -1079,7 +1082,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
                                      UART_CLEAR_FEF | UART_CLEAR_PEF);
 
     HAL_UART_AbortReceive(huart);
-    extern uint8_t esp32_rx_buffer[64];
+    extern uint8_t esp32_rx_buffer[128];
     HAL_UARTEx_ReceiveToIdle_DMA(huart, esp32_rx_buffer,
                                  sizeof(esp32_rx_buffer));
   }
@@ -1120,7 +1123,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
     HAL_UART_AbortReceive(huart);
     __HAL_UART_CLEAR_FLAG(huart,
                           UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
-    extern uint8_t esp32_rx_buffer[64];
+    extern uint8_t esp32_rx_buffer[128];
     HAL_UARTEx_ReceiveToIdle_DMA(huart, esp32_rx_buffer,
                                  sizeof(esp32_rx_buffer));
   }
