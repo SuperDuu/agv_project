@@ -124,7 +124,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JSlider speedSlider = new JSlider(0, 120, 20);
     JLabel speedLabel = new JLabel("20 °/s");
     private static final int MOTION_DT_MS = 30;
+    private static final int ARM_TX_REFRESH_MS = 50;
     Timer motionTimer;
+    Timer armTxRefreshTimer;
 
     boolean showWorkspace = false;
     Thread explorationThread;
@@ -133,6 +135,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     String lastLimitInfo = "";
 
     boolean isGripped = false;
+    boolean armStreamingEnabled = true;
     Timer trajectoryTimer;
     double[] trajectoryLastQ = null;
     double trajectoryLastAlpha = 0.0;
@@ -193,6 +196,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         });
 
         startMotionTimer();
+        startArmTxRefreshTimer();
         
         // Start PS5 Controller Receiver & Timer
         controllerReceiver = new ControllerReceiver(5005);
@@ -210,8 +214,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
      */
     public void emergencyStop() {
         // 1. Stop all timers
+        armStreamingEnabled = false;
         if (motionTimer != null) motionTimer.stop();
         if (trajectoryTimer != null) trajectoryTimer.stop();
+        if (armTxRefreshTimer != null) armTxRefreshTimer.stop();
 
         // 2. Freeze targets at current position (prevent further movement)
         System.arraycopy(anglesRight, 0, targetAnglesRight, 0, NUM_JOINTS);
@@ -988,6 +994,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         motionTimer.start();
     }
 
+    /** Re-sends the current joint snapshot so a dropped frame is overwritten quickly. */
+    private void startArmTxRefreshTimer() {
+        if (armTxRefreshTimer != null && armTxRefreshTimer.isRunning())
+            return;
+        armTxRefreshTimer = new Timer(ARM_TX_REFRESH_MS, e -> sendJointsToUart(true));
+        armTxRefreshTimer.start();
+    }
+
     /**
      * Called every MOTION_DT_MS ms. Moves each joint angle toward its target
      * at the rate configured by speedSlider (degrees/second).
@@ -1110,8 +1124,21 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
      *   - Angles converted to int16 x100 fixed-point via round() in UartManager
      */
     private void sendJointsToUart() {
+        sendJointsToUart(false);
+    }
+
+    private void sendJointsToUart(boolean forceSend) {
+        if (!armStreamingEnabled) {
+            return;
+        }
+
+        boolean uartConnected = uartManager != null && uartManager.isConnected();
+        if (forceSend && !uartConnected) {
+            return;
+        }
+
         // --- Right Arm ---
-        boolean changedRight = false;
+        boolean changedRight = forceSend;
         for (int i = 0; i < NUM_JOINTS; i++) {
             if (Math.abs(anglesRight[i] - lastSentAnglesRight[i]) > 0.01) {
                 changedRight = true;
@@ -1134,7 +1161,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 // Show first 10 header bytes as hex for live debug
                 txUartRight.setText(frameHexSummary(frame, qActuator));
             }
-            if (uartManager != null && uartManager.isConnected()) {
+            if (uartConnected) {
                 uartManager.sendBytes(frame);
                 if (DEBUG) {
                     System.out.printf("[V2.1] Sent Right arm frame: %d bytes | q=%s%n",
@@ -1145,7 +1172,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         // --- Left Arm ---
-        boolean changedLeft = false;
+        boolean changedLeft = forceSend;
         for (int i = 0; i < NUM_JOINTS; i++) {
             if (Math.abs(anglesLeft[i] - lastSentAnglesLeft[i]) > 0.01) {
                 changedLeft = true;
@@ -1166,7 +1193,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (txUartLeft != null) {
                 txUartLeft.setText(frameHexSummary(frame, qActuator));
             }
-            if (uartManager != null && uartManager.isConnected()) {
+            if (uartConnected) {
                 uartManager.sendBytes(frame);
                 if (DEBUG) {
                     System.out.printf("[V2.1] Sent Left  arm frame: %d bytes | q=%s%n",
@@ -1704,6 +1731,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     void resetAngles() {
+        armStreamingEnabled = true;
+        startArmTxRefreshTimer();
         armPanel.trail.clear();
         double[] defaultPoseRight = { 0, 0, 10.0, -30.0, 0, 0 };
         double[] defaultPoseLeft = { 0, 0, -10.0, 30.0, 0, 0 };
