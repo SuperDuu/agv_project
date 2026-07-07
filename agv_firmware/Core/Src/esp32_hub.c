@@ -24,6 +24,25 @@ volatile uint32_t dbg_rx_success    = 0;
 volatile uint32_t dbg_rx_bad_len    = 0;
 volatile uint32_t dbg_rx_bad_cs     = 0;
 volatile uint32_t dbg_rx_sync_lost  = 0;
+volatile uint32_t dbg_rx_bad_addr   = 0;
+volatile uint32_t dbg_rx_unsupported_cmd = 0;
+volatile uint32_t dbg_arm_seen      = 0;
+volatile uint32_t dbg_arm_ok        = 0;
+volatile uint32_t dbg_arm_bad_len   = 0;
+volatile uint32_t dbg_arm_bad_mode  = 0;
+
+volatile uint8_t  dbg_rx_last_dest        = 0;
+volatile uint8_t  dbg_rx_last_src         = 0;
+volatile uint8_t  dbg_rx_last_cmd         = 0;
+volatile uint8_t  dbg_rx_last_seq         = 0;
+volatile uint16_t dbg_rx_last_payload_len = 0;
+volatile uint16_t dbg_rx_last_frame_len   = 0;
+volatile uint16_t dbg_rx_last_crc_rx      = 0;
+volatile uint16_t dbg_rx_last_crc_calc    = 0;
+volatile uint8_t  dbg_arm_last_dest        = 0;
+volatile uint8_t  dbg_arm_last_motion_mode = 0;
+volatile uint8_t  dbg_arm_last_flags       = 0;
+volatile uint16_t dbg_arm_last_payload_len = 0;
 
 /* --------------------------------------------------------------------------
  * Private state
@@ -135,7 +154,12 @@ static void ESP32_ProcessSensorReport(const uint8_t *payload, uint16_t payload_l
 static void ESP32_ProcessArmJointCommand(uint8_t dest,
                                          const uint8_t *payload,
                                          uint16_t payload_len) {
+  dbg_arm_seen++;
+  dbg_arm_last_dest = dest;
+  dbg_arm_last_payload_len = payload_len;
+
   if (payload_len != 22u) {
+    dbg_arm_bad_len++;
     dbg_rx_bad_len++;
     return;
   }
@@ -143,6 +167,8 @@ static void ESP32_ProcessArmJointCommand(uint8_t dest,
   AGV_ProtoV2_ArmJointCommand_t cmd;
   cmd.motion_mode    = payload[0];
   cmd.arm_flags      = payload[1];
+  dbg_arm_last_motion_mode = cmd.motion_mode;
+  dbg_arm_last_flags       = cmd.arm_flags;
   cmd.q1_x100        = AGV_ProtoV2_ReadS16LE(&payload[2]);
   cmd.q2_x100        = AGV_ProtoV2_ReadS16LE(&payload[4]);
   cmd.q3_x100        = AGV_ProtoV2_ReadS16LE(&payload[6]);
@@ -156,11 +182,13 @@ static void ESP32_ProcessArmJointCommand(uint8_t dest,
   if (cmd.motion_mode != AGV_PROTO_V2_MOTION_ABSOLUTE &&
       cmd.motion_mode != AGV_PROTO_V2_MOTION_HOME     &&
       cmd.motion_mode != AGV_PROTO_V2_MOTION_ESTOP) {
+    dbg_arm_bad_mode++;
     dbg_rx_bad_len++;
     return;
   }
 
   ESP32_FormatLegacyArmCommand(dest, &cmd);
+  dbg_arm_ok++;
   dbg_rx_success++;
 }
 
@@ -181,13 +209,22 @@ static void ESP32_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
 
   /* LEN is at offset 4:5, Little-Endian */
   uint16_t payload_len = AGV_ProtoV2_ReadU16LE(&frame[AGV_PROTO_V2_OFF_LEN_L]);
+  uint8_t dest = frame[AGV_PROTO_V2_OFF_DEST];
+  uint8_t src  = frame[AGV_PROTO_V2_OFF_SRC];
+  uint8_t cmd  = frame[AGV_PROTO_V2_OFF_CMD];
+  uint8_t seq  = frame[AGV_PROTO_V2_OFF_SEQ];
+
+  dbg_rx_last_payload_len = payload_len;
+  dbg_rx_last_frame_len   = frame_len;
+  dbg_rx_last_dest = dest;
+  dbg_rx_last_src  = src;
+  dbg_rx_last_cmd  = cmd;
+  dbg_rx_last_seq  = seq;
+
   if ((uint16_t)(payload_len + AGV_PROTO_V2_FRAME_OVERHEAD) != frame_len) {
     dbg_rx_bad_len++;
     return;
   }
-
-  uint8_t dest = frame[AGV_PROTO_V2_OFF_DEST];
-  uint8_t cmd  = frame[AGV_PROTO_V2_OFF_CMD];
 
   /* This node (AGV main) accepts frames destined for itself, broadcast, or arm slaves (to forward them) */
   if (dest != AGV_PROTO_V2_ADDR_MAIN &&
@@ -195,6 +232,7 @@ static void ESP32_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
       dest != AGV_PROTO_V2_ADDR_ARM_LEFT &&
       dest != AGV_PROTO_V2_ADDR_ARM_RIGHT) {
     /* In a future phase: forward to RS485 arm slaves here */
+    dbg_rx_bad_addr++;
     return;
   }
 
@@ -202,6 +240,8 @@ static void ESP32_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
    * = bytes [2 .. 2 + 4 + 2 + payload_len - 1] = 6 + payload_len bytes */
   uint16_t rx_crc   = AGV_ProtoV2_ReadU16LE(&frame[8u + payload_len]);
   uint16_t calc_crc = AGV_ProtoV2_Crc16(&frame[2], (uint16_t)(6u + payload_len));
+  dbg_rx_last_crc_rx   = rx_crc;
+  dbg_rx_last_crc_calc = calc_crc;
   if (rx_crc != calc_crc) {
     dbg_rx_bad_cs++;
     return;
@@ -220,6 +260,7 @@ static void ESP32_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
     break;
 
   default:
+    dbg_rx_unsupported_cmd++;
     dbg_rx_sync_lost++;
     break;
   }
