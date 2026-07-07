@@ -26,6 +26,7 @@ typedef struct {
     bool HasNewArmCommandRight;
     char ArmCommandLeft[ESP32_MAX_ARM_CMD_LEN + 1];
     char ArmCommandRight[ESP32_MAX_ARM_CMD_LEN + 1];
+    uint8_t RawArmCommandRight[32];
 } ESP32_SensorData_t;
 
 // Khai báo biến toàn cục

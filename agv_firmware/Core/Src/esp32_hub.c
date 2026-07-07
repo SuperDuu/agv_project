@@ -264,6 +264,11 @@ static void ESP32_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
     break;
 
   case AGV_PROTO_V2_CMD_ARM_JOINT_COMMAND:
+    if (dest == AGV_PROTO_V2_ADDR_ARM_RIGHT) {
+      if (frame_len == 32) {
+        memcpy(esp32_data.RawArmCommandRight, frame, 32);
+      }
+    }
     /* Pass DEST so the legacy bridge knows R/L prefix */
     ESP32_ProcessArmJointCommand(dest, payload, payload_len);
     break;

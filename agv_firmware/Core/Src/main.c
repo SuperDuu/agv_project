@@ -743,32 +743,45 @@ int main(void)
       esp32_data.HasNewArmCommandRight = false;
       __enable_irq();
 
+      // Right arm: Forward raw binary frame
       if (arm_snapshot.HasNewArmCommandRight) {
-        AGV_ForwardArmCommand(arm_snapshot.ArmCommandRight);
+        if (arm_snapshot.RawArmCommandRight[0] == 0xAA &&
+            arm_snapshot.RawArmCommandRight[1] == 0x55) {
+          HAL_UART_Transmit(&huart3, (uint8_t *)arm_snapshot.RawArmCommandRight, 32, 50);
+        }
       }
+      // Left arm: Forward legacy text string
       if (arm_snapshot.HasNewArmCommandLeft) {
         AGV_ForwardArmCommand(arm_snapshot.ArmCommandLeft);
       }
       if (!arm_snapshot.HasNewArmCommandRight &&
           !arm_snapshot.HasNewArmCommandLeft &&
           arm_snapshot.HasNewArmCommand) {
-        AGV_ForwardArmCommand(arm_snapshot.ArmCommand);
+        if (AGV_IsLegacyArmCommand(arm_snapshot.ArmCommand)) {
+          AGV_ForwardArmCommand(arm_snapshot.ArmCommand);
+        }
       }
 
       last_arm_send_tick = HAL_GetTick();
-    } else if (AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandRight) ||
-               AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandLeft) ||
-               AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommand)) {
+    } else {
       if (HAL_GetTick() - last_arm_send_tick >= AGV_ARM_FORWARD_PERIOD_MS) {
         last_arm_send_tick = HAL_GetTick();
-        if (AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandRight)) {
-          AGV_ForwardArmCommand(safe_esp32_data.ArmCommandRight);
+        
+        // Right arm heartbeat (binary)
+        if (safe_esp32_data.RawArmCommandRight[0] == 0xAA &&
+            safe_esp32_data.RawArmCommandRight[1] == 0x55) {
+          HAL_UART_Transmit(&huart3, (uint8_t *)safe_esp32_data.RawArmCommandRight, 32, 50);
         }
+        
+        // Left arm heartbeat (text)
         if (AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandLeft)) {
           AGV_ForwardArmCommand(safe_esp32_data.ArmCommandLeft);
         }
-        if (!AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandRight) &&
-            !AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandLeft)) {
+        
+        // Fallback
+        if (!AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommandLeft) &&
+            safe_esp32_data.RawArmCommandRight[0] != 0xAA &&
+            AGV_IsLegacyArmCommand(safe_esp32_data.ArmCommand)) {
           AGV_ForwardArmCommand(safe_esp32_data.ArmCommand);
         }
       }
