@@ -108,7 +108,7 @@ volatile uint64_t debug_wiegand_raw =
 volatile uint32_t debug_wiegand_high32 = 0;
 volatile uint32_t debug_wiegand_low32 = 0;
 	//Step thân robot
-volatile step_command_t cmd = { .angle = 0, .rpm = 45 };
+volatile step_command_t cmd = { .angle = 0, .rpm = 30 };
 static step_command_t cmd_prev = {0};
 
 // --- CẤU HÌNH MÃ THẺ RFID CỦA TỪNG TRẠM ---
@@ -700,7 +700,7 @@ int main(void) {
   ESP32_Init(&huart5);
 
   Load_Factory_Map();
-  EEPROM_EraseSector();
+//  EEPROM_EraseSector();
   // Đọc trạng thái cũ từ Flash EEPROM (nếu có)
   uint16_t saved_node;
   uint8_t saved_heading;
@@ -1758,6 +1758,9 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+  if (htim->Instance == TIM3) {
+    step_TIM_Callback(htim);
+  }
   if (htim->Instance == TIM6) {
     // Luôn luôn đọc cảm biến line để phục vụ việc xem trên Live Watch (giống
     // code cũ của bạn)
