@@ -12,11 +12,11 @@ void step_Run(const volatile step_command_t *cmd)
 {
   step_Stop();
 
-  float angle = cmd->angle;
-  if (angle == 0.0f) { move_done = 1; return; }
+  float current_angle = position_steps * DEG_PER_MICROSTEP;
+  float delta_angle = cmd->angle - current_angle;
 
-  current_dir = (angle > 0.0f) ? 1 : -1;
-  float abs_angle = (angle > 0.0f) ? angle : -angle;
+  current_dir = (delta_angle > 0.0f) ? 1 : -1;
+  float abs_angle = (delta_angle > 0.0f) ? delta_angle : -delta_angle;
 
   step_target = (uint32_t)(abs_angle / DEG_PER_MICROSTEP + 0.5f);
   step_count  = 0;
@@ -41,7 +41,7 @@ void step_Run(const volatile step_command_t *cmd)
   __HAL_TIM_CLEAR_FLAG(&htim3, TIM_FLAG_UPDATE);
   __HAL_TIM_SET_COUNTER(&htim3, 0);
 
-  HAL_GPIO_WritePin(EN_GPIO_PORT, EN_GPIO_PIN, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(EN_GPIO_PORT, EN_GPIO_PIN, EN_PIN_ACTIVE);
   step_running = 1;
 
   /* Enable TIM3 global interrupt in NVIC */
@@ -57,7 +57,7 @@ void step_Stop(void)
   HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_3);
   HAL_TIM_Base_Stop_IT(&htim3);
   step_running = 0;
-  HAL_GPIO_WritePin(EN_GPIO_PORT, EN_GPIO_PIN, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(EN_GPIO_PORT, EN_GPIO_PIN, EN_PIN_INACTIVE);
 }
 
 step_status_t step_GetStatus(void)

@@ -245,7 +245,9 @@ void send_arm_command_frame(const char *cmd) {
   int16_t joints_x100[6];
   uint8_t payload[22];   /* 22 bytes: no arm_id, + max_delta_x100 */
 
-  if (!parse_arm_command_line(cmd, &dest, joints_x100)) return;
+  if (!parse_arm_command_line(cmd, &dest, joints_x100)) {
+    return;
+  }
 
   /* [0] motion_mode  [1] arm_flags */
   payload[0] = PROTO_MOTION_ABSOLUTE;
@@ -1009,10 +1011,9 @@ void setup() {
 
 void loop() {
   process_hc12_uart();
-  // NẾU ĐANG Ở CHẾ ĐỘ CẤU HÌNH -> CHỈ CHẠY WEBSERVER
+  // NẾU ĐANG Ở CHẾ ĐỘ CẤU HÌNH -> CHẠY THÊM WEBSERVER ĐỂ USER CẤU HÌNH
   if (isConfigMode) {
     server.handleClient();
-    return; // Dừng lại ở đây
   }
 
   // ==========================================
