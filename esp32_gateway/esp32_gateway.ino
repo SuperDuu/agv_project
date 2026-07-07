@@ -88,6 +88,36 @@ uint16_t hc12_rx_index = 0;
 uint16_t hc12_expected_len = 0;
 uint8_t hc12_rx_state = 0;
 uint8_t esp32_seq_counter = 0;
+
+// Ring buffer for arm commands to avoid half-duplex collisions on RS485
+#define ARM_QUEUE_SIZE 8
+struct ArmFrame {
+  uint8_t data[PROTO_MAX_FRAME_LEN];
+  uint16_t len;
+};
+ArmFrame arm_queue[ARM_QUEUE_SIZE];
+volatile uint8_t arm_queue_head = 0;
+volatile uint8_t arm_queue_tail = 0;
+unsigned long last_sync_request_time = 0;
+
+void enqueue_arm_frame(const uint8_t *frame, uint16_t frame_len) {
+  if (frame_len > PROTO_MAX_FRAME_LEN) return;
+
+  // Clear stale queue data if STM32 has not queried for > 1000ms (watchdog)
+  if (last_sync_request_time > 0 && millis() - last_sync_request_time > 1000) {
+    arm_queue_head = 0;
+    arm_queue_tail = 0;
+  }
+
+  uint8_t next_head = (arm_queue_head + 1) % ARM_QUEUE_SIZE;
+  if (next_head == arm_queue_tail) {
+    // Queue is full, drop oldest to prioritize new commands
+    arm_queue_tail = (arm_queue_tail + 1) % ARM_QUEUE_SIZE;
+  }
+  memcpy(arm_queue[arm_queue_head].data, frame, frame_len);
+  arm_queue[arm_queue_head].len = frame_len;
+  arm_queue_head = next_head;
+}
 uint8_t rs485_rx_buffer[10];
 uint8_t rs485_rx_index = 0;
 unsigned long last_rs485_rx_time = 0;
@@ -291,9 +321,11 @@ void process_hc12_frame(const uint8_t *frame, uint16_t frame_len) {
   uint16_t calc_crc = proto_crc16(&frame[2], (uint16_t)(6 + payload_len));
   if (rx_crc != calc_crc) return;
 
-  // Forward the valid binary frame to STM32 (Serial2)
-  Serial2.write(frame, frame_len);
-  Serial2.flush();
+  // Buffer the arm commands in a FIFO queue to transmit strictly in Master-Slave mode
+  uint8_t dest = frame[2];
+  if (dest == PROTO_ADDR_ARM_LEFT || dest == PROTO_ADDR_ARM_RIGHT) {
+    enqueue_arm_frame(frame, frame_len);
+  }
 }
 
 void process_hc12_uart() {
@@ -471,6 +503,13 @@ void send_sensor_report_frame() {
 
   send_proto_frame(PROTO_ADDR_MAIN, PROTO_CMD_SENSOR_REPORT, payload, sizeof(payload));
 
+  // Flush any pending arm frames from the ring buffer
+  while (arm_queue_tail != arm_queue_head) {
+    Serial2.write(arm_queue[arm_queue_tail].data, arm_queue[arm_queue_tail].len);
+    arm_queue_tail = (arm_queue_tail + 1) % ARM_QUEUE_SIZE;
+  }
+  Serial2.flush();
+
   if (firebase_node != 255 && last_firebase_cmd_time == 0) {
     last_firebase_cmd_time = millis();
   }
@@ -498,6 +537,7 @@ void process_main_frame(const uint8_t *frame, uint16_t frame_len) {
   uint8_t cmd = frame[6];   /* CMD at [6], SEQ at [7] */
 
   if (cmd == PROTO_CMD_SYNC_REQUEST && payload_len == 4) {
+    last_sync_request_time = millis();
     current_node = read_u16_le(&frame[8]);
     uint8_t is_arrived = frame[10];
     if (is_arrived != current_arrived_status && is_arrived <= 1) {
