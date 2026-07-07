@@ -18,7 +18,7 @@
  * Public data
  * -------------------------------------------------------------------------- */
 ESP32_SensorData_t esp32_data = {0};
-uint8_t esp32_rx_buffer[64];
+uint8_t esp32_rx_buffer[128];
 
 volatile uint32_t dbg_tx_ok         = 0;
 volatile uint32_t dbg_tx_busy       = 0;
