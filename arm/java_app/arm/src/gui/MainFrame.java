@@ -1154,18 +1154,17 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 qActuator[i] = (i == 2) ? q34[0] : (i == 3) ? q34[1] : anglesRight[i];
             }
 
-            // Build V2.1 binary frame: DEST = 0x03 (Right arm)
-            byte[] frame = uartManager.buildArmJointFrame(comm.UartManager.ADDR_ARM_RIGHT, qActuator);
+            // Build text frame: R:q0,q1,q2,q3,q4,q5\n
+            String textFrame = String.format(java.util.Locale.US, "R:%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+                qActuator[0], qActuator[1], qActuator[2], qActuator[3], qActuator[4], qActuator[5]);
 
             if (txUartRight != null) {
-                // Show first 10 header bytes as hex for live debug
-                txUartRight.setText(frameHexSummary(frame, qActuator));
+                txUartRight.setText(textFrame.trim());
             }
             if (uartConnected) {
-                uartManager.sendBytes(frame);
+                uartManager.sendData(textFrame);
                 if (DEBUG) {
-                    System.out.printf("[V2.1] Sent Right arm frame: %d bytes | q=%s%n",
-                        frame.length, Arrays.toString(qActuator));
+                    System.out.printf("[TEXT] Sent Right arm: %s", textFrame);
                 }
             }
             System.arraycopy(anglesRight, 0, lastSentAnglesRight, 0, NUM_JOINTS);
@@ -1187,17 +1186,17 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 qActuator[i] = (i == 2) ? q34[0] : (i == 3) ? q34[1] : anglesLeft[i];
             }
 
-            // Build V2.1 binary frame: DEST = 0x02 (Left arm)
-            byte[] frame = uartManager.buildArmJointFrame(comm.UartManager.ADDR_ARM_LEFT, qActuator);
+            // Build text frame: L:q0,q1,q2,q3,q4,q5\n
+            String textFrame = String.format(java.util.Locale.US, "L:%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+                qActuator[0], qActuator[1], qActuator[2], qActuator[3], qActuator[4], qActuator[5]);
 
             if (txUartLeft != null) {
-                txUartLeft.setText(frameHexSummary(frame, qActuator));
+                txUartLeft.setText(textFrame.trim());
             }
             if (uartConnected) {
-                uartManager.sendBytes(frame);
+                uartManager.sendData(textFrame);
                 if (DEBUG) {
-                    System.out.printf("[V2.1] Sent Left  arm frame: %d bytes | q=%s%n",
-                        frame.length, Arrays.toString(qActuator));
+                    System.out.printf("[TEXT] Sent Left arm: %s", textFrame);
                 }
             }
             System.arraycopy(anglesLeft, 0, lastSentAnglesLeft, 0, NUM_JOINTS);
