@@ -24,7 +24,7 @@ void step_Run(const volatile step_command_t *cmd)
 
   move_done = 0;
 
-  HAL_GPIO_WritePin(DIR_GPIO_PORT, DIR_GPIO_PIN, (current_dir > 0) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(DIR_GPIO_PORT, DIR_GPIO_PIN, (current_dir > 0) ? GPIO_PIN_RESET : GPIO_PIN_SET);
 
   float rpm = cmd->rpm;
   if (rpm > MAX_RPM) rpm = MAX_RPM;
@@ -57,7 +57,7 @@ void step_Stop(void)
   HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_3);
   HAL_TIM_Base_Stop_IT(&htim3);
   step_running = 0;
-  HAL_GPIO_WritePin(EN_GPIO_PORT, EN_GPIO_PIN, EN_PIN_INACTIVE);
+  HAL_GPIO_WritePin(EN_GPIO_PORT, EN_GPIO_PIN, EN_PIN_ACTIVE);
 }
 
 step_status_t step_GetStatus(void)
