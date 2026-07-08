@@ -73,7 +73,7 @@ volatile float servo_deg[6] = {96.43f, 35.0f, 0.0f, 0.0f, 60.0f, 0.0f};
  *   [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H][CMD][SEQ][PAYLOAD...][CRC_L][CRC_H]
  * ----------------------------------------------------------------------- */
 static uint8_t  arm_rx_byte;
-static uint8_t  arm_dma_rx_buf[64];
+//static uint8_t  arm_dma_rx_buf[64];
 static uint8_t  arm_frame_buf[ARM_PROTO_MAX_FRAME];
 static uint16_t arm_frame_idx   = 0;
 static uint16_t arm_expected_len = 0;
@@ -108,7 +108,7 @@ static void MX_TIM11_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-static void ARM_Proto_ResetParser(void);
+//static void ARM_Proto_ResetParser(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -164,8 +164,8 @@ int main(void)
   Encoder_Init();
 
 //  JointControl_Init();
-  ARM_Proto_ResetParser();
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, (uint8_t *)arm_dma_rx_buf, sizeof(arm_dma_rx_buf));
+//  ARM_Proto_ResetParser();
+  HAL_UART_Receive_IT(&huart1, &arm_rx_byte, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -889,21 +889,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-/* -------------------------------------------------------------------------
- * ARM_Proto_ResetParser — restart state machine from scratch
- * ------------------------------------------------------------------------- */
-static void ARM_Proto_ResetParser(void) {
-    arm_parser_state  = 0;
-    arm_frame_idx     = 0;
-    arm_expected_len  = 0;
-}
-
-/* -------------------------------------------------------------------------
- * ARM_Proto_ProcessFrame — called once a complete, length-validated frame
- * has been buffered.  Performs CRC check, DEST filter, SEQ dedup, Δθ guard,
- * then applies joint angles to servos.
- * ------------------------------------------------------------------------- */
 static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
     /* Basic sanity */
     if (frame_len < ARM_PROTO_FRAME_OVERHEAD) return;
@@ -932,22 +917,6 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
     const uint8_t *payload = &frame[ARM_PROTO_OFF_PAYLOAD];
 
     switch (cmd) {
-
-    /* ------------------------------------------------------------------
-     * CMD 0x20 — Arm Joint Command
-     * Payload (22 bytes, LE):
-     *   [0]  motion_mode
-     *   [1]  arm_flags
-     *   [2..3]  q1_x100
-     *   [4..5]  q2_x100
-     *   [6..7]  q3_x100
-     *   [8..9]  q4_x100
-     *   [10..11] q5_x100
-     *   [12..13] q6_x100
-     *   [14..15] move_time_ms
-     *   [16..17] max_delta_x100  ← Δθ safety guard
-     *   [18..21] reserved
-     * ------------------------------------------------------------------ */
     case ARM_PROTO_CMD_ARM_JOINT: {
         if (payload_len != ARM_PROTO_PAYLOAD_JOINT) {
             dbg_rx_len++;
@@ -972,7 +941,7 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
                 if (delta < 0) delta = -delta;
                 if ((uint16_t)delta > max_delta_x100) {
                     dbg_rx_delta++;
-                    return;  /* DROP — keep servos at q_last, protect linkage */
+                    return;
                 }
             }
         }
@@ -991,22 +960,16 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
             dbg_rx_ok++;
 
         } else if (motion_mode == ARM_PROTO_MOTION_ESTOP) {
-            /* ESTOP: freeze all servos at current position — do nothing */
             arm_last_seq = seq;
         }
         break;
     }
 
-    /* ------------------------------------------------------------------
-     * CMD 0x21 — Arm Gripper Command
-     * Payload (4 bytes): [0] grip_action, [1..3] reserved
-     * ------------------------------------------------------------------ */
     case ARM_PROTO_CMD_ARM_GRIPPER: {
         if (payload_len != ARM_PROTO_PAYLOAD_GRIPPER) {
             dbg_rx_len++;
             return;
         }
-        /* TODO: implement gripper hardware control here */
         arm_last_seq = seq;
         dbg_rx_ok++;
         break;
@@ -1017,29 +980,12 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
     }
 }
 
-/* -------------------------------------------------------------------------
- * HAL_UART_RxCpltCallback — Protocol V2.1 byte-by-byte state machine
- *
- * States:
- *   0 = WAIT_SOF1
- *   1 = WAIT_SOF2
- *   2 = ACCUMULATE (DEST..CRC)
- *
- * LEN is at offsets [4:5] — total expected length is known after receiving
- * 6 bytes (index == 6), so no stall waiting for CMD/SEQ to pass.
- * ------------------------------------------------------------------------- */
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
-    if (huart->Instance != USART1) return;
-
-    /* Toggle LED PC13 to indicate raw physical bytes received */
-    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-
-    for (uint16_t i = 0; i < Size; i++) {
-        uint8_t b = arm_dma_rx_buf[i];
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == USART1) {
+        uint8_t b = arm_rx_byte;
 
         switch (arm_parser_state) {
-
-        case 0:  /* WAIT_SOF1 */
+        case 0:
             if (b == ARM_PROTO_SOF1) {
                 arm_frame_buf[0] = b;
                 arm_frame_idx    = 1;
@@ -1047,34 +993,36 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
             }
             break;
 
-        case 1:  /* WAIT_SOF2 */
+        case 1:
             if (b == ARM_PROTO_SOF2) {
                 arm_frame_buf[1] = b;
                 arm_frame_idx    = 2;
                 arm_parser_state = 2;
             } else if (b == ARM_PROTO_SOF1) {
-                arm_frame_buf[0] = b;   /* consecutive SOF1 — stay */
+                arm_frame_buf[0] = b;
                 arm_frame_idx    = 1;
             } else {
-                ARM_Proto_ResetParser();
+                arm_parser_state = 0;
+                arm_frame_idx    = 0;
+                arm_expected_len = 0;
             }
             break;
 
-        case 2:  /* ACCUMULATE */
+        case 2:
             if (arm_frame_idx >= ARM_PROTO_MAX_FRAME) {
-                dbg_rx_len++;
-                ARM_Proto_ResetParser();
+                arm_parser_state = 0;
+                arm_frame_idx    = 0;
+                arm_expected_len = 0;
                 break;
             }
             arm_frame_buf[arm_frame_idx++] = b;
 
-            /* After [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H] — index reaches 6.
-             * Compute total frame size immediately for DMA-friendly pre-sizing. */
             if (arm_frame_idx == 6u) {
                 uint16_t plen = ARM_Proto_ReadU16LE(&arm_frame_buf[ARM_PROTO_OFF_LEN_L]);
                 if (plen > ARM_PROTO_MAX_PAYLOAD) {
-                    dbg_rx_len++;
-                    ARM_Proto_ResetParser();
+                    arm_parser_state = 0;
+                    arm_frame_idx    = 0;
+                    arm_expected_len = 0;
                     break;
                 }
                 arm_expected_len = (uint16_t)(ARM_PROTO_FRAME_OVERHEAD + plen);
@@ -1082,33 +1030,27 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
 
             if (arm_expected_len != 0u && arm_frame_idx == arm_expected_len) {
                 ARM_Proto_ProcessFrame(arm_frame_buf, arm_expected_len);
-                ARM_Proto_ResetParser();
+                arm_parser_state = 0;
+                arm_frame_idx    = 0;
+                arm_expected_len = 0;
             }
             break;
 
         default:
-            ARM_Proto_ResetParser();
+            arm_parser_state = 0;
+            arm_frame_idx    = 0;
+            arm_expected_len = 0;
             break;
         }
-    }
 
-    /* Start another DMA Receive To Idle */
-    HAL_UART_AbortReceive(huart);
-    __HAL_UART_CLEAR_PEFLAG(huart);
-    __HAL_UART_CLEAR_FEFLAG(huart);
-    __HAL_UART_CLEAR_NEFLAG(huart);
-    __HAL_UART_CLEAR_OREFLAG(huart);
-    HAL_UARTEx_ReceiveToIdle_DMA(huart, (uint8_t *)arm_dma_rx_buf, sizeof(arm_dma_rx_buf));
+        HAL_UART_Receive_IT(&huart1, &arm_rx_byte, 1);
+    }
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART1) {
-        __HAL_UART_CLEAR_PEFLAG(huart);
-        __HAL_UART_CLEAR_FEFLAG(huart);
-        __HAL_UART_CLEAR_NEFLAG(huart);
         __HAL_UART_CLEAR_OREFLAG(huart);
-        HAL_UART_AbortReceive(huart);
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, (uint8_t *)arm_dma_rx_buf, sizeof(arm_dma_rx_buf));
+        HAL_UART_Receive_IT(huart, &arm_rx_byte, 1);
     }
 }
 /* USER CODE END 4 */
