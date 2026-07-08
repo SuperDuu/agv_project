@@ -18,8 +18,8 @@ extern TIM_HandleTypeDef htim3;
 #define EN_GPIO_PIN          GPIO_PIN_5
 
 /* Logic kích hoạt chân EN (Enable) - Thay đổi nếu bị ngược trạng thái ghì/thả */
-#define EN_PIN_ACTIVE        GPIO_PIN_SET  /* Cấp điện cho động cơ (Ghì lực khi quay) */
-#define EN_PIN_INACTIVE      GPIO_PIN_RESET    /* Ngắt điện động cơ (Thả tự do khi dừng) */
+#define EN_PIN_ACTIVE        GPIO_PIN_RESET  /* Cấp điện cho động cơ (Ghì lực khi quay) */
+#define EN_PIN_INACTIVE      GPIO_PIN_SET    /* Ngắt điện động cơ (Thả tự do khi dừng) */
 
 /* Khung lenh dieu khien */
 typedef struct {
