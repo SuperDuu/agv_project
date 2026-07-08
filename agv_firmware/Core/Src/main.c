@@ -153,6 +153,7 @@ void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN 0 */
 #define AGV_ARM_FORWARD_PERIOD_MS 20u
 
+#if 0
 static bool AGV_IsLegacyArmCommand(const char *arm_command) {
   return arm_command != NULL &&
          (arm_command[0] == 'L' || arm_command[0] == 'R') &&
@@ -183,6 +184,7 @@ static void AGV_ForwardArmCommand(const char *arm_command) {
   // Temporarily skipped to prevent unconnected UART3 hang
   // HAL_UART_Transmit(&huart3, tx_buffer, (uint16_t)cmd_len, 50);
 }
+#endif
 
 static void AGV_HandleEsp32Safety(AGV_HandleTypeDef *hagv,
                                   const ESP32_SensorData_t *safe_esp32_data) {

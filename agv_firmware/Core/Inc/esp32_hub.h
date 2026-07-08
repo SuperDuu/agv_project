@@ -31,7 +31,7 @@ typedef struct {
 
 // Khai báo biến toàn cục
 extern ESP32_SensorData_t esp32_data;
-extern uint8_t esp32_rx_buffer[64];
+extern uint8_t esp32_rx_buffer[128];
 
 extern volatile uint32_t dbg_rx_success;
 extern volatile uint32_t dbg_rx_bad_len;
