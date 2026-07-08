@@ -66,15 +66,16 @@ volatile uint32_t spi_test_result_e2 = 0;
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-volatile uint32_t dbg_huart3_rx_byte_count = 0;
-volatile uint32_t dbg_huart3_rx_ok         = 0;
-volatile uint32_t dbg_huart3_rx_err        = 0;
-volatile uint8_t  huart3_rx_byte           = 0;
-volatile float    dbg_huart3_joints[6]     = {0.0f};
-volatile char     dbg_huart3_last_type     = 0;
+volatile uint32_t dbg_huart3_rx_byte_count   = 0;
+volatile uint32_t dbg_huart3_rx_ok           = 0;
+volatile uint32_t dbg_huart3_rx_err          = 0;
+volatile uint8_t  huart3_rx_byte             = 0;
+volatile float    dbg_huart3_joints_left[6]  = {0.0f};
+volatile float    dbg_huart3_joints_right[6] = {0.0f};
+volatile char     dbg_huart3_last_type       = 0;
 
 static char       huart3_rx_line[128];
-static uint8_t    huart3_rx_line_idx       = 0;
+static uint8_t    huart3_rx_line_idx         = 0;
 
 // Các biến phục vụ việc xem trực tiếp trên Live Expression
 volatile uint32_t debug_rfid_rx_count = 0;
@@ -1122,8 +1123,14 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
           if (matched == 6) {
             dbg_huart3_rx_ok++;
             dbg_huart3_last_type = huart3_rx_line[0];
-            for (int i = 0; i < 6; i++) {
-              dbg_huart3_joints[i] = q[i];
+            if (dbg_huart3_last_type == 'L') {
+              for (int i = 0; i < 6; i++) {
+                dbg_huart3_joints_left[i] = q[i];
+              }
+            } else if (dbg_huart3_last_type == 'R') {
+              for (int i = 0; i < 6; i++) {
+                dbg_huart3_joints_right[i] = q[i];
+              }
             }
           } else {
             dbg_huart3_rx_err++;
