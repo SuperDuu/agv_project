@@ -1133,20 +1133,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         boolean uartConnected = uartManager != null && uartManager.isConnected();
-        if (forceSend && !uartConnected) {
+        if (!uartConnected) {
             return;
         }
 
         // --- Right Arm ---
-        boolean changedRight = forceSend;
-        for (int i = 0; i < NUM_JOINTS; i++) {
-            if (Math.abs(anglesRight[i] - lastSentAnglesRight[i]) > 0.01) {
-                changedRight = true;
-                break;
-            }
-        }
-
-        if (changedRight) {
+        {
             // Convert joint-space (theta) to actuator-space (q) for joints 3 & 4
             double[] q34 = RobotTransmission.jointToActuator(anglesRight[2], anglesRight[3], true);
             double[] qActuator = new double[NUM_JOINTS];
@@ -1166,25 +1158,15 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (txUartRight != null) {
                 txUartRight.setText(textFrame.trim());
             }
-            if (uartConnected) {
-                uartManager.sendData(textFrame);
-                if (DEBUG) {
-                    System.out.printf("[TEXT] Sent Right arm: %s", textFrame);
-                }
+            uartManager.sendData(textFrame);
+            if (DEBUG) {
+                System.out.printf("[TEXT] Sent Right arm: %s", textFrame);
             }
             System.arraycopy(anglesRight, 0, lastSentAnglesRight, 0, NUM_JOINTS);
         }
 
         // --- Left Arm ---
-        boolean changedLeft = forceSend;
-        for (int i = 0; i < NUM_JOINTS; i++) {
-            if (Math.abs(anglesLeft[i] - lastSentAnglesLeft[i]) > 0.01) {
-                changedLeft = true;
-                break;
-            }
-        }
-
-        if (changedLeft) {
+        {
             double[] q34 = RobotTransmission.jointToActuator(anglesLeft[2], anglesLeft[3], false);
             double[] qActuator = new double[NUM_JOINTS];
             for (int i = 0; i < NUM_JOINTS; i++) {
@@ -1203,11 +1185,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (txUartLeft != null) {
                 txUartLeft.setText(textFrame.trim());
             }
-            if (uartConnected) {
-                uartManager.sendData(textFrame);
-                if (DEBUG) {
-                    System.out.printf("[TEXT] Sent Left arm: %s", textFrame);
-                }
+            uartManager.sendData(textFrame);
+            if (DEBUG) {
+                System.out.printf("[TEXT] Sent Left arm: %s", textFrame);
             }
             System.arraycopy(anglesLeft, 0, lastSentAnglesLeft, 0, NUM_JOINTS);
         }
