@@ -973,6 +973,7 @@ int main(void) {
     }
 
     // chay Step
+    cmd.angle = dbg_huart3_joints_left[0];
     if (cmd.angle != cmd_prev.angle || cmd.rpm != cmd_prev.rpm) {
       cmd_prev = cmd;
       step_Run(&cmd);
