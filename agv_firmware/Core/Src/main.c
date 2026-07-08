@@ -1116,30 +1116,61 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
       if (huart3_rx_line_idx > 0) {
         huart3_rx_line[huart3_rx_line_idx] = '\0';
         
-        if ((huart3_rx_line[0] == 'L' || huart3_rx_line[0] == 'R') && huart3_rx_line[1] == ':') {
-          char *p = huart3_rx_line + 2;
-          long q[6];
-          int i = 0;
-          for (i = 0; i < 6; i++) {
-            while (*p == ',' || *p == ' ') p++;
-            if (*p == '\0') break;
-            char *next_p;
-            q[i] = strtol(p, &next_p, 10);
-            if (p == next_p) break;
-            p = next_p;
+        char *star = strchr(huart3_rx_line, '*');
+        if (star != NULL) {
+          *star = '\0';
+          char *checksum_str = star + 1;
+          
+          uint8_t calc_sum = 0;
+          for (char *c_ptr = huart3_rx_line; c_ptr < star; c_ptr++) {
+            calc_sum ^= (uint8_t)(*c_ptr);
           }
           
-          if (i == 6) {
-            dbg_huart3_rx_ok++;
-            dbg_huart3_last_type = huart3_rx_line[0];
-            if (dbg_huart3_last_type == 'L') {
-              for (int j = 0; j < 6; j++) {
-                dbg_huart3_joints_left[j] = (float)q[j] / 100.0f;
+          uint8_t rx_sum = 0;
+          char h1 = checksum_str[0];
+          char h2 = checksum_str[1];
+          int valid_hex = 1;
+          if (h1 >= '0' && h1 <= '9') rx_sum += (h1 - '0') << 4;
+          else if (h1 >= 'A' && h1 <= 'F') rx_sum += (h1 - 'A' + 10) << 4;
+          else if (h1 >= 'a' && h1 <= 'f') rx_sum += (h1 - 'a' + 10) << 4;
+          else valid_hex = 0;
+          
+          if (h2 >= '0' && h2 <= '9') rx_sum += (h2 - '0');
+          else if (h2 >= 'A' && h2 <= 'F') rx_sum += (h2 - 'A' + 10);
+          else if (h2 >= 'a' && h2 <= 'f') rx_sum += (h2 - 'a' + 10);
+          else valid_hex = 0;
+          
+          if (valid_hex && (calc_sum == rx_sum)) {
+            if ((huart3_rx_line[0] == 'L' || huart3_rx_line[0] == 'R') && huart3_rx_line[1] == ':') {
+              char *p = huart3_rx_line + 2;
+              long q[6];
+              int i = 0;
+              for (i = 0; i < 6; i++) {
+                while (*p == ',' || *p == ' ') p++;
+                if (*p == '\0') break;
+                char *next_p;
+                q[i] = strtol(p, &next_p, 10);
+                if (p == next_p) break;
+                p = next_p;
               }
-            } else if (dbg_huart3_last_type == 'R') {
-              for (int j = 0; j < 6; j++) {
-                dbg_huart3_joints_right[j] = (float)q[j] / 100.0f;
+              
+              if (i == 6) {
+                dbg_huart3_rx_ok++;
+                dbg_huart3_last_type = huart3_rx_line[0];
+                if (dbg_huart3_last_type == 'L') {
+                  for (int j = 0; j < 6; j++) {
+                    dbg_huart3_joints_left[j] = (float)q[j] / 100.0f;
+                  }
+                } else if (dbg_huart3_last_type == 'R') {
+                  for (int j = 0; j < 6; j++) {
+                    dbg_huart3_joints_right[j] = (float)q[j] / 100.0f;
+                  }
+                }
+              } else {
+                dbg_huart3_rx_err++;
               }
+            } else {
+              dbg_huart3_rx_err++;
             }
           } else {
             dbg_huart3_rx_err++;

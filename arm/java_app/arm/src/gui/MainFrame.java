@@ -1127,6 +1127,15 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         sendJointsToUart(false);
     }
 
+    private String addChecksum(String str) {
+        String content = str.trim();
+        int sum = 0;
+        for (int i = 0; i < content.length(); i++) {
+            sum ^= content.charAt(i);
+        }
+        return content + "*" + String.format("%02X", sum & 0xFF) + "\n";
+    }
+
     private void sendJointsToUart(boolean forceSend) {
         if (!armStreamingEnabled) {
             return;
@@ -1147,7 +1156,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
 
             // Build text frame: R:q0_x100,q1_x100,q2_x100,q3_x100,q4_x100,q5_x100\n
-            String textFrame = String.format(java.util.Locale.US, "R:%d,%d,%d,%d,%d,%d\n",
+            String textFrame = String.format(java.util.Locale.US, "R:%d,%d,%d,%d,%d,%d",
                 (int) Math.round(qActuator[0] * 100.0),
                 (int) Math.round(qActuator[1] * 100.0),
                 (int) Math.round(qActuator[2] * 100.0),
@@ -1155,12 +1164,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 (int) Math.round(qActuator[4] * 100.0),
                 (int) Math.round(qActuator[5] * 100.0));
 
+            String frameWithChecksum = addChecksum(textFrame);
+
             if (txUartRight != null) {
-                txUartRight.setText(textFrame.trim());
+                txUartRight.setText(frameWithChecksum.trim());
             }
-            uartManager.sendData(textFrame);
+            uartManager.sendData(frameWithChecksum);
             if (DEBUG) {
-                System.out.printf("[TEXT] Sent Right arm: %s", textFrame);
+                System.out.printf("[TEXT] Sent Right arm: %s", frameWithChecksum);
             }
             System.arraycopy(anglesRight, 0, lastSentAnglesRight, 0, NUM_JOINTS);
         }
@@ -1174,7 +1185,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
 
             // Build text frame: L:q0_x100,q1_x100,q2_x100,q3_x100,q4_x100,q5_x100\n
-            String textFrame = String.format(java.util.Locale.US, "L:%d,%d,%d,%d,%d,%d\n",
+            String textFrame = String.format(java.util.Locale.US, "L:%d,%d,%d,%d,%d,%d",
                 (int) Math.round(qActuator[0] * 100.0),
                 (int) Math.round(qActuator[1] * 100.0),
                 (int) Math.round(qActuator[2] * 100.0),
@@ -1182,12 +1193,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 (int) Math.round(qActuator[4] * 100.0),
                 (int) Math.round(qActuator[5] * 100.0));
 
+            String frameWithChecksum = addChecksum(textFrame);
+
             if (txUartLeft != null) {
-                txUartLeft.setText(textFrame.trim());
+                txUartLeft.setText(frameWithChecksum.trim());
             }
-            uartManager.sendData(textFrame);
+            uartManager.sendData(frameWithChecksum);
             if (DEBUG) {
-                System.out.printf("[TEXT] Sent Left arm: %s", textFrame);
+                System.out.printf("[TEXT] Sent Left arm: %s", frameWithChecksum);
             }
             System.arraycopy(anglesLeft, 0, lastSentAnglesLeft, 0, NUM_JOINTS);
         }
