@@ -1154,9 +1154,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 qActuator[i] = (i == 2) ? q34[0] : (i == 3) ? q34[1] : anglesRight[i];
             }
 
-            // Build text frame: R:q0,q1,q2,q3,q4,q5\n
-            String textFrame = String.format(java.util.Locale.US, "R:%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
-                qActuator[0], qActuator[1], qActuator[2], qActuator[3], qActuator[4], qActuator[5]);
+            // Build text frame: R:q0_x100,q1_x100,q2_x100,q3_x100,q4_x100,q5_x100\n
+            String textFrame = String.format(java.util.Locale.US, "R:%d,%d,%d,%d,%d,%d\n",
+                (int) Math.round(qActuator[0] * 100.0),
+                (int) Math.round(qActuator[1] * 100.0),
+                (int) Math.round(qActuator[2] * 100.0),
+                (int) Math.round(qActuator[3] * 100.0),
+                (int) Math.round(qActuator[4] * 100.0),
+                (int) Math.round(qActuator[5] * 100.0));
 
             if (txUartRight != null) {
                 txUartRight.setText(textFrame.trim());
@@ -1186,9 +1191,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 qActuator[i] = (i == 2) ? q34[0] : (i == 3) ? q34[1] : anglesLeft[i];
             }
 
-            // Build text frame: L:q0,q1,q2,q3,q4,q5\n
-            String textFrame = String.format(java.util.Locale.US, "L:%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
-                qActuator[0], qActuator[1], qActuator[2], qActuator[3], qActuator[4], qActuator[5]);
+            // Build text frame: L:q0_x100,q1_x100,q2_x100,q3_x100,q4_x100,q5_x100\n
+            String textFrame = String.format(java.util.Locale.US, "L:%d,%d,%d,%d,%d,%d\n",
+                (int) Math.round(qActuator[0] * 100.0),
+                (int) Math.round(qActuator[1] * 100.0),
+                (int) Math.round(qActuator[2] * 100.0),
+                (int) Math.round(qActuator[3] * 100.0),
+                (int) Math.round(qActuator[4] * 100.0),
+                (int) Math.round(qActuator[5] * 100.0));
 
             if (txUartLeft != null) {
                 txUartLeft.setText(textFrame.trim());

@@ -1117,19 +1117,28 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
         huart3_rx_line[huart3_rx_line_idx] = '\0';
         
         if ((huart3_rx_line[0] == 'L' || huart3_rx_line[0] == 'R') && huart3_rx_line[1] == ':') {
-          float q[6];
-          int matched = sscanf(huart3_rx_line + 2, "%f,%f,%f,%f,%f,%f", 
-                               &q[0], &q[1], &q[2], &q[3], &q[4], &q[5]);
-          if (matched == 6) {
+          char *p = huart3_rx_line + 2;
+          long q[6];
+          int i = 0;
+          for (i = 0; i < 6; i++) {
+            while (*p == ',' || *p == ' ') p++;
+            if (*p == '\0') break;
+            char *next_p;
+            q[i] = strtol(p, &next_p, 10);
+            if (p == next_p) break;
+            p = next_p;
+          }
+          
+          if (i == 6) {
             dbg_huart3_rx_ok++;
             dbg_huart3_last_type = huart3_rx_line[0];
             if (dbg_huart3_last_type == 'L') {
-              for (int i = 0; i < 6; i++) {
-                dbg_huart3_joints_left[i] = q[i];
+              for (int j = 0; j < 6; j++) {
+                dbg_huart3_joints_left[j] = (float)q[j] / 100.0f;
               }
             } else if (dbg_huart3_last_type == 'R') {
-              for (int i = 0; i < 6; i++) {
-                dbg_huart3_joints_right[i] = q[i];
+              for (int j = 0; j < 6; j++) {
+                dbg_huart3_joints_right[j] = (float)q[j] / 100.0f;
               }
             }
           } else {
