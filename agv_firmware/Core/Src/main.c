@@ -66,6 +66,16 @@ volatile uint32_t spi_test_result_e2 = 0;
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+volatile uint32_t dbg_huart3_rx_byte_count = 0;
+volatile uint32_t dbg_huart3_rx_ok         = 0;
+volatile uint32_t dbg_huart3_rx_err        = 0;
+volatile uint8_t  huart3_rx_byte           = 0;
+volatile float    dbg_huart3_joints[6]     = {0.0f};
+volatile char     dbg_huart3_last_type     = 0;
+
+static char       huart3_rx_line[128];
+static uint8_t    huart3_rx_line_idx       = 0;
+
 // Các biến phục vụ việc xem trực tiếp trên Live Expression
 volatile uint32_t debug_rfid_rx_count = 0;
 volatile uint16_t debug_rfid_rx_len = 0;
@@ -697,6 +707,7 @@ int main(void) {
   // Khởi động với đường đi trống - chờ HMI đặt đích mới tính
   path_length = 0;
   agv_state.path_index = 0;
+  HAL_UART_Receive_IT(&huart3, (uint8_t *)&huart3_rx_byte, 1);
   HAL_Delay(2000);
   agv_state.last_qr_time = HAL_GetTick();
   uint32_t last_esp32_req_time = 0;
@@ -1087,6 +1098,52 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
     extern uint8_t esp32_rx_buffer[128];
     HAL_UARTEx_ReceiveToIdle_DMA(huart, esp32_rx_buffer,
                                  sizeof(esp32_rx_buffer));
+  } else if (huart->Instance == USART3) {
+    __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF |
+                                     UART_CLEAR_FEF | UART_CLEAR_PEF);
+    HAL_UART_AbortReceive(huart);
+    HAL_UART_Receive_IT(huart, (uint8_t *)&huart3_rx_byte, 1);
+  }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+  if (huart->Instance == USART3) {
+    dbg_huart3_rx_byte_count++;
+    char c = (char)huart3_rx_byte;
+
+    if (c == '\n' || c == '\r') {
+      if (huart3_rx_line_idx > 0) {
+        huart3_rx_line[huart3_rx_line_idx] = '\0';
+        
+        if ((huart3_rx_line[0] == 'L' || huart3_rx_line[0] == 'R') && huart3_rx_line[1] == ':') {
+          float q[6];
+          int matched = sscanf(huart3_rx_line + 2, "%f,%f,%f,%f,%f,%f", 
+                               &q[0], &q[1], &q[2], &q[3], &q[4], &q[5]);
+          if (matched == 6) {
+            dbg_huart3_rx_ok++;
+            dbg_huart3_last_type = huart3_rx_line[0];
+            for (int i = 0; i < 6; i++) {
+              dbg_huart3_joints[i] = q[i];
+            }
+          } else {
+            dbg_huart3_rx_err++;
+          }
+        } else {
+          dbg_huart3_rx_err++;
+        }
+        
+        huart3_rx_line_idx = 0;
+      }
+    } else {
+      if (huart3_rx_line_idx < sizeof(huart3_rx_line) - 1) {
+        huart3_rx_line[huart3_rx_line_idx++] = c;
+      } else {
+        huart3_rx_line_idx = 0;
+        dbg_huart3_rx_err++;
+      }
+    }
+
+    HAL_UART_Receive_IT(&huart3, (uint8_t *)&huart3_rx_byte, 1);
   }
 }
 
