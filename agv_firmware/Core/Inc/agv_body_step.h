@@ -5,7 +5,7 @@
 extern TIM_HandleTypeDef htim3;
 
 /* Motor 200 full-step/rev, vi buoc 1/8 = 1600 microstep/rev */
-#define MICROSTEPS_PER_REV   1600
+#define MICROSTEPS_PER_REV   800
 #define DEG_PER_MICROSTEP    (360.0f / MICROSTEPS_PER_REV)
 #define TIMER_CLK            1000000  /* 1 MHz (PSC=169) */
 #define RPM_TO_DPS(rpm)      ((rpm) * 6.0f)

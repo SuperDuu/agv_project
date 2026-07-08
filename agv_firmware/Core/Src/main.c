@@ -1159,12 +1159,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
                 dbg_huart3_rx_ok++;
                 dbg_huart3_last_type = huart3_rx_line[0];
                 if (dbg_huart3_last_type == 'L') {
-                  dbg_huart3_joints_left[0] = ((float)q[0] / 100.0f) * 5.0f;
+                  dbg_huart3_joints_left[0] = ((float)q[0] / 100.0f) / 15.0f*50.0f;
                   for (int j = 1; j < 6; j++) {
                     dbg_huart3_joints_left[j] = (float)q[j] / 100.0f;
                   }
                 } else if (dbg_huart3_last_type == 'R') {
-                  dbg_huart3_joints_right[0] = ((float)q[0] / 100.0f) * 5.0f;
+                  dbg_huart3_joints_right[0] = ((float)q[0] / 100.0f) / 15.0f*50.0f;
                   for (int j = 1; j < 6; j++) {
                     dbg_huart3_joints_right[j] = (float)q[j] / 100.0f;
                   }
