@@ -167,15 +167,15 @@ int main(void)
   // Test loopback check: gửi 1 byte và nhận lại ngay lập tức qua polling để test loopback RX-TX
   uint8_t tx_byte = 0xAA;
   uint8_t rx_byte = 0;
-  HAL_UART_Transmit(&huart1, &tx_byte, 1, 10);
-  HAL_StatusTypeDef poll_res = HAL_UART_Receive(&huart1, &rx_byte, 1, 100); // Đợi tối đa 100ms
+  HAL_UART_Transmit(&huart2, &tx_byte, 1, 10);
+  HAL_StatusTypeDef poll_res = HAL_UART_Receive(&huart2, &rx_byte, 1, 100); // Đợi tối đa 100ms
   if (poll_res == HAL_OK && rx_byte == 0xAA) {
       dbg_rx_raw_count = 9999; // Loopback thành công! (STM32 truyền nhận nội bộ và chân GPIO OK)
   } else {
       dbg_rx_raw_count = 8880 + (uint32_t)poll_res; // Lỗi: 8883 nếu không nhận lại được
   }
 
-  HAL_UART_Receive_IT(&huart1, &arm_rx_byte, 1);
+  HAL_UART_Receive_IT(&huart2, &arm_rx_byte, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -975,7 +975,7 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    if (huart->Instance == USART1) {
+    if (huart->Instance == USART2) {
         dbg_rx_raw_count++;
         uint8_t b = arm_rx_byte;
 
@@ -1038,9 +1038,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
             break;
         }
 
-        if (HAL_UART_Receive_IT(&huart1, &arm_rx_byte, 1) != HAL_OK) {
-            HAL_UART_AbortReceive(&huart1);
-            HAL_UART_Receive_IT(&huart1, &arm_rx_byte, 1);
+        if (HAL_UART_Receive_IT(&huart2, &arm_rx_byte, 1) != HAL_OK) {
+            HAL_UART_AbortReceive(&huart2);
+            HAL_UART_Receive_IT(&huart2, &arm_rx_byte, 1);
         }
     }
 }
@@ -1052,7 +1052,7 @@ static void ARM_Proto_ResetParser(void) {
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
-    if (huart->Instance == USART1) {
+    if (huart->Instance == USART2) {
         __HAL_UART_CLEAR_OREFLAG(huart);
         ARM_Proto_ResetParser();
         if (HAL_UART_Receive_IT(huart, &arm_rx_byte, 1) != HAL_OK) {
