@@ -430,6 +430,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         JTextField txUart = isRight ? txUartRight : txUartLeft;
         txUart.setEditable(false);
         txUart.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        txUart.setPreferredSize(new java.awt.Dimension(150, 20));
         uartRow.add(txUart, BorderLayout.CENTER);
         configPanel.add(uartRow);
 
