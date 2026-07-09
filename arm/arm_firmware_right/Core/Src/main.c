@@ -91,6 +91,12 @@ volatile uint32_t dbg_rx_delta = 0;   /* frames dropped by Δθ guard */
 volatile uint32_t dbg_rx_crc   = 0;
 volatile uint32_t dbg_rx_len   = 0;
 volatile uint32_t dbg_rx_raw_count = 0;
+volatile uint32_t dbg_rx_line_count = 0;
+volatile uint32_t dbg_rx_no_star = 0;
+volatile uint32_t dbg_rx_bad_hex = 0;
+volatile uint32_t dbg_rx_bad_prefix = 0;
+volatile uint8_t dbg_rx_last_byte = 0;
+volatile char dbg_rx_last_line[128] = {0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -203,12 +209,12 @@ int main(void)
 //    dbg_enc3 = (int32_t)TIM4->CNT;
 //    dbg_enc4 = (int32_t)TIM5->CNT;
 
-  	Set_Servo_Angle(0,servo_deg[0]);
-  	Set_Servo_Angle(1,servo_deg[1]);
-  	Set_Servo_Angle(2,servo_deg[2]);
-  	Set_Servo_Angle(3,servo_deg[3]);
-  	Set_Servo_Angle(4,servo_deg[4]);
-  	Set_Servo_Angle(5,servo_deg[5]);
+//  	Set_Servo_Angle(0,servo_deg[0]);
+//  	Set_Servo_Angle(1,servo_deg[1]);
+//  	Set_Servo_Angle(2,servo_deg[2]);
+//  	Set_Servo_Angle(3,servo_deg[3]);
+//  	Set_Servo_Angle(4,servo_deg[4]);
+//  	Set_Servo_Angle(5,servo_deg[5]);
 
      HAL_Delay(10);
 
@@ -980,10 +986,16 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART2) {
         dbg_rx_raw_count++;
         uint8_t b = arm_rx_byte;
+        dbg_rx_last_byte = b;
 
         if (b == '\n' || b == '\r') {
             if (rx_index > 0) {
                 rx_buffer[rx_index] = '\0';
+                
+                // Copy to debug buffer
+                strncpy((char*)dbg_rx_last_line, (char*)rx_buffer, sizeof(dbg_rx_last_line) - 1);
+                dbg_rx_last_line[sizeof(dbg_rx_last_line) - 1] = '\0';
+                dbg_rx_line_count++;
                 
                 // Check checksum
                 char *star = strchr((char*)rx_buffer, '*');
@@ -1014,11 +1026,17 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
                                 } else {
                                     dbg_rx_len++;
                                 }
+                            } else {
+                                dbg_rx_bad_prefix++;
                             }
                         } else {
                             dbg_rx_crc++;
                         }
+                    } else {
+                        dbg_rx_bad_hex++;
                     }
+                } else {
+                    dbg_rx_no_star++;
                 }
                 rx_index = 0;
             }
