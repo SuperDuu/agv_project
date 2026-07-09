@@ -55,24 +55,15 @@ void Set_Servo_Angle(uint8_t index, float angle) {
     if (index >= MAX_SERVOS) return;
     
     float target_angle = angle;
-    if (index == 0) {
-        // Servo 0 (Joint 2): normal, 5:7 scaling, neutral maps to 135.0f servo angle (96.43f joint angle)
-        target_angle = (96.43f + angle) * 7.0f / 5.0f;
-    } else if (index == 1) {
-        // Servo 1 (Joint 3): reversed, 5:7 scaling, home q3=0 maps to 270.0f servo angle (192.86f actuator angle)
-        target_angle = (192.86f - angle) * 7.0f / 5.0f;
-    } else if (index == 2) {
-        // Servo 2 (Joint 4): reversed, 1:1 scaling, home q4=0 maps to 90.0f joint angle
-        target_angle = 90.0f + angle;
-    } else if (index == 3) {
-        // Servo 3 (Joint 5): normal, 2:3 scaling, neutral maps to 90.0f servo angle (60.0f joint angle)
-        target_angle = (60.0f + angle) * 3.0f / 2.0f;
+    if (index <= 2) {
+        // Apply 5:7 gearbox scaling: servo_angle = joint_angle * 7 / 5
+        target_angle = angle * 7.0f / 5.0f;
     } else if (index == 4) {
-        // Servo 4 (Joint 6): normal, 1:1 scaling, neutral maps to 90.0f servo angle
-        target_angle = 90.0f + angle;
+        // Apply 2:3 gearbox scaling: servo_angle = joint_angle * 3 / 2
+        target_angle = angle * 3.0f / 2.0f;
     } else {
         // Other joints: normal, 1:1 scaling
-        if (target_angle < 0.0f) target_angle = 0.0f;
+        target_angle = angle;
     }
     
     if (target_angle < 0.0f) target_angle = 0.0f;
