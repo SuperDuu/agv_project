@@ -55,20 +55,21 @@ void Set_Servo_Angle(uint8_t index, float angle) {
     if (index >= MAX_SERVOS) return;
     
     float target_angle = angle;
-    if (index == 2) {
-        // Joint 3 (Right Arm): reversed, 5:7 scaling, home q3=0 maps to 65.0f joint angle
-        target_angle = (65.0f - angle) * 7.0f / 5.0f;
+    if (index == 0) {
+        // Servo 0 (Joint 2): normal, 5:7 scaling, neutral maps to 135.0f servo angle (96.43f joint angle)
+        target_angle = (96.43f + angle) * 7.0f / 5.0f;
+    } else if (index == 1) {
+        // Servo 1 (Joint 3): reversed, 5:7 scaling, home q3=0 maps to 270.0f servo angle (192.86f actuator angle)
+        target_angle = (192.86f - angle) * 7.0f / 5.0f;
+    } else if (index == 2) {
+        // Servo 2 (Joint 4): reversed, 1:1 scaling, home q4=0 maps to 90.0f joint angle
+        target_angle = 90.0f + angle;
     } else if (index == 3) {
-        // Joint 4 (Right Arm): reversed, 1:1 scaling, home q4=0 maps to 90.0f joint angle
-        target_angle = 90.0f - angle;
-    } else if (index <= 1) {
-        // Joints 1 & 2 (Right Arm): normal, 5:7 scaling
-        if (target_angle < 0.0f) target_angle = 0.0f;
-        target_angle = target_angle * 7.0f / 5.0f;
+        // Servo 3 (Joint 5): normal, 2:3 scaling, neutral maps to 90.0f servo angle (60.0f joint angle)
+        target_angle = (60.0f + angle) * 3.0f / 2.0f;
     } else if (index == 4) {
-        // Joint 5 (Right Arm): normal, 2:3 scaling
-        if (target_angle < 0.0f) target_angle = 0.0f;
-        target_angle = target_angle * 3.0f / 2.0f;
+        // Servo 4 (Joint 6): normal, 1:1 scaling, neutral maps to 90.0f servo angle
+        target_angle = 90.0f + angle;
     } else {
         // Other joints: normal, 1:1 scaling
         if (target_angle < 0.0f) target_angle = 0.0f;
