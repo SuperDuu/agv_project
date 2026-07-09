@@ -72,6 +72,8 @@ volatile float servo_deg[6] = {96.43f, 35.0f, 0.0f, 0.0f, 60.0f, 0.0f};
  *   [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H][CMD][SEQ][PAYLOAD...][CRC_L][CRC_H]
  * ----------------------------------------------------------------------- */
 static uint8_t  arm_rx_byte;
+static uint8_t  rx_buffer[128];
+static uint16_t rx_index = 0;
 //static uint8_t  arm_dma_rx_buf[64];
 static uint8_t  arm_frame_buf[ARM_PROTO_MAX_FRAME];
 static uint16_t arm_frame_idx   = 0;
@@ -165,15 +167,15 @@ int main(void)
   ARM_Proto_ResetParser();
   
   // Test loopback check: gửi 1 byte và nhận lại ngay lập tức qua polling để test loopback RX-TX
-  uint8_t tx_byte = 0xAA;
-  uint8_t rx_byte = 0;
-  HAL_UART_Transmit(&huart2, &tx_byte, 1, 10);
-  HAL_StatusTypeDef poll_res = HAL_UART_Receive(&huart2, &rx_byte, 1, 100); // Đợi tối đa 100ms
-  if (poll_res == HAL_OK && rx_byte == 0xAA) {
-      dbg_rx_raw_count = 9999; // Loopback thành công! (STM32 truyền nhận nội bộ và chân GPIO OK)
-  } else {
-      dbg_rx_raw_count = 8880 + (uint32_t)poll_res; // Lỗi: 8883 nếu không nhận lại được
-  }
+//  uint8_t tx_byte = 0xAA;
+//  uint8_t rx_byte = 0;
+//  HAL_UART_Transmit(&huart2, &tx_byte, 1, 10);
+//  HAL_StatusTypeDef poll_res = HAL_UART_Receive(&huart2, &rx_byte, 1, 100); // Đợi tối đa 100ms
+//  if (poll_res == HAL_OK && rx_byte == 0xAA) {
+//      dbg_rx_raw_count = 9999; // Loopback thành công! (STM32 truyền nhận nội bộ và chân GPIO OK)
+//  } else {
+//      dbg_rx_raw_count = 8880 + (uint32_t)poll_res; // Lỗi: 8883 nếu không nhận lại được
+//  }
 
   HAL_UART_Receive_IT(&huart2, &arm_rx_byte, 1);
   /* USER CODE END 2 */
@@ -201,12 +203,12 @@ int main(void)
 //    dbg_enc3 = (int32_t)TIM4->CNT;
 //    dbg_enc4 = (int32_t)TIM5->CNT;
 
-//  	Set_Servo_Angle(0,servo_deg[0]);
-//  	Set_Servo_Angle(1,servo_deg[1]);
-//  	Set_Servo_Angle(2,servo_deg[2]);
-//  	Set_Servo_Angle(3,servo_deg[3]);
-//  	Set_Servo_Angle(4,servo_deg[4]);
-//  	Set_Servo_Angle(5,servo_deg[5]);
+  	Set_Servo_Angle(0,servo_deg[0]);
+  	Set_Servo_Angle(1,servo_deg[1]);
+  	Set_Servo_Angle(2,servo_deg[2]);
+  	Set_Servo_Angle(3,servo_deg[3]);
+  	Set_Servo_Angle(4,servo_deg[4]);
+  	Set_Servo_Angle(5,servo_deg[5]);
 
      HAL_Delay(10);
 
@@ -979,63 +981,53 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
         dbg_rx_raw_count++;
         uint8_t b = arm_rx_byte;
 
-        switch (arm_parser_state) {
-        case 0:
-            if (b == ARM_PROTO_SOF1) {
-                arm_frame_buf[0] = b;
-                arm_frame_idx    = 1;
-                arm_parser_state = 1;
-            }
-            break;
-
-        case 1:
-            if (b == ARM_PROTO_SOF2) {
-                arm_frame_buf[1] = b;
-                arm_frame_idx    = 2;
-                arm_parser_state = 2;
-            } else if (b == ARM_PROTO_SOF1) {
-                arm_frame_buf[0] = b;
-                arm_frame_idx    = 1;
-            } else {
-                arm_parser_state = 0;
-                arm_frame_idx    = 0;
-                arm_expected_len = 0;
-            }
-            break;
-
-        case 2:
-            if (arm_frame_idx >= ARM_PROTO_MAX_FRAME) {
-                arm_parser_state = 0;
-                arm_frame_idx    = 0;
-                arm_expected_len = 0;
-                break;
-            }
-            arm_frame_buf[arm_frame_idx++] = b;
-
-            if (arm_frame_idx == 6u) {
-                uint16_t plen = ARM_Proto_ReadU16LE(&arm_frame_buf[ARM_PROTO_OFF_LEN_L]);
-                if (plen > ARM_PROTO_MAX_PAYLOAD) {
-                    arm_parser_state = 0;
-                    arm_frame_idx    = 0;
-                    arm_expected_len = 0;
-                    break;
+        if (b == '\n' || b == '\r') {
+            if (rx_index > 0) {
+                rx_buffer[rx_index] = '\0';
+                
+                // Check checksum
+                char *star = strchr((char*)rx_buffer, '*');
+                if (star != NULL) {
+                    *star = '\0';
+                    char *checksum_str = star + 1;
+                    
+                    uint8_t calc_sum = 0;
+                    for (char *c_ptr = (char*)rx_buffer; c_ptr < star; c_ptr++) {
+                        calc_sum ^= (uint8_t)(*c_ptr);
+                    }
+                    
+                    unsigned int rx_sum = 0;
+                    if (sscanf(checksum_str, "%2X", &rx_sum) == 1) {
+                        if (calc_sum == (uint8_t)rx_sum) {
+#if defined(ARM_LEFT) || (ARM_PROTO_MY_ADDR == 0x02u)
+                            const char *prefix = "L:";
+#else
+                            const char *prefix = "R:";
+#endif
+                            if (strncmp((char*)rx_buffer, prefix, 2) == 0) {
+                                int q[6];
+                                if (sscanf((char*)rx_buffer + 2, "%d,%d,%d,%d,%d,%d", &q[0], &q[1], &q[2], &q[3], &q[4], &q[5]) == 6) {
+                                    dbg_rx_ok++;
+                                    for (int i = 0; i < 6; i++) {
+                                        servo_deg[i] = (float)q[i] / 100.0f;
+                                    }
+                                } else {
+                                    dbg_rx_len++;
+                                }
+                            }
+                        } else {
+                            dbg_rx_crc++;
+                        }
+                    }
                 }
-                arm_expected_len = (uint16_t)(ARM_PROTO_FRAME_OVERHEAD + plen);
+                rx_index = 0;
             }
-
-            if (arm_expected_len != 0u && arm_frame_idx == arm_expected_len) {
-                ARM_Proto_ProcessFrame(arm_frame_buf, arm_expected_len);
-                arm_parser_state = 0;
-                arm_frame_idx    = 0;
-                arm_expected_len = 0;
+        } else {
+            if (rx_index < sizeof(rx_buffer) - 1) {
+                rx_buffer[rx_index++] = b;
+            } else {
+                rx_index = 0;
             }
-            break;
-
-        default:
-            arm_parser_state = 0;
-            arm_frame_idx    = 0;
-            arm_expected_len = 0;
-            break;
         }
 
         if (HAL_UART_Receive_IT(&huart2, &arm_rx_byte, 1) != HAL_OK) {
@@ -1046,9 +1038,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 }
 
 static void ARM_Proto_ResetParser(void) {
-    arm_frame_idx    = 0;
-    arm_expected_len = 0;
-    arm_parser_state = 0;
+    rx_index = 0;
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
