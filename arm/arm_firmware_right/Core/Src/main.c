@@ -64,7 +64,7 @@ UART_HandleTypeDef huart2;
 extern Encoder_t encoders[NUM_ENCODERS];
 
 /* Current servo target angles (joint space, degrees) */
-volatile float servo_deg[6] = {96.43f, 35.0f, 0.0f, 0.0f, 60.0f, 0.0f};
+volatile float servo_deg[6] = {96.43f, 35.0f, 65.0f, 96.43f, 96.43f, 96.43f};
 
 /* -----------------------------------------------------------------------
  * Protocol V2.1 binary parser state (replaces legacy text "R:" parser)
