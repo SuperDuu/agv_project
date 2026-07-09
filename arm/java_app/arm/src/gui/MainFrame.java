@@ -1741,8 +1741,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         armStreamingEnabled = true;
         startArmTxRefreshTimer();
         armPanel.trail.clear();
-        double[] defaultPoseRight = { 0, 0, 10.0, -30.0, 0, 0 };
-        double[] defaultPoseLeft = { 0, 0, -10.0, 30.0, 0, 0 };
+        double[] defaultPoseRight = { 0, 0, 20.0, -35.0, 0, 0 };
+        double[] defaultPoseLeft = { 0, 0, -20.0, 35.0, 0, 0 };
         setTargetAnglesRight(defaultPoseRight);
         setTargetAnglesLeft(defaultPoseLeft);
         syncGuiCoordsFromFK();
