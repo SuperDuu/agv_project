@@ -25,12 +25,19 @@ void Servo_Init(void) {
     servos[9] = (Servo_t){&htim12, TIM_CHANNEL_2, 500, 2550, 270};
 
     // Start PWM first, then write the initial compare values
-    extern volatile float servo_deg[6];
     for (int i = 0; i < MAX_SERVOS; i++) {
         HAL_TIM_PWM_Start(servos[i].htim, servos[i].channel); // Start PWM first
         float init_angle;
-        if (i >= 0 && i <= 4) {
-            init_angle = servo_deg[i + 1];
+        if (i == 0) {
+            init_angle = 35.0f;
+        } else if (i == 1) {
+            init_angle = 65.0f;
+        } else if (i == 2) {
+            init_angle = 96.43f;
+        } else if (i == 3) {
+            init_angle = 96.43f;
+        } else if (i == 4) {
+            init_angle = 96.43f;
         } else if (i == 5) {
             init_angle = 0.0f;    // Default to 0 degrees as requested
         } else {
