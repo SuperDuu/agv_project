@@ -411,7 +411,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             gotoCoordinate(isRight);
         });
 
-        JPanel comboRow = new JPanel(new GridLayout(1, 2, 5, 0));
+        JPanel comboRow = new JPanel(new GridLayout(2, 1, 0, 5));
         JPanel col1 = new JPanel(new BorderLayout());
         col1.add(new JLabel("Cấu hình IK:"), BorderLayout.NORTH);
         col1.add(comb, BorderLayout.CENTER);
