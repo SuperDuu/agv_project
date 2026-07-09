@@ -164,13 +164,15 @@ int main(void)
 //  JointControl_Init();
   ARM_Proto_ResetParser();
   
-  // Test polling check: cho phép kiểm tra trực tiếp phần cứng UART1 không qua ngắt
-  uint8_t test_poll_byte = 0;
-  HAL_StatusTypeDef poll_res = HAL_UART_Receive(&huart1, &test_poll_byte, 1, 5000); // Đợi tối đa 5 giây
-  if (poll_res == HAL_OK) {
-      dbg_rx_raw_count = 9999; // Nhận thành công qua Polling! (Phần cứng & Baudrate OK)
+  // Test loopback check: gửi 1 byte và nhận lại ngay lập tức qua polling để test loopback RX-TX
+  uint8_t tx_byte = 0xAA;
+  uint8_t rx_byte = 0;
+  HAL_UART_Transmit(&huart1, &tx_byte, 1, 10);
+  HAL_StatusTypeDef poll_res = HAL_UART_Receive(&huart1, &rx_byte, 1, 100); // Đợi tối đa 100ms
+  if (poll_res == HAL_OK && rx_byte == 0xAA) {
+      dbg_rx_raw_count = 9999; // Loopback thành công! (STM32 truyền nhận nội bộ và chân GPIO OK)
   } else {
-      dbg_rx_raw_count = 8880 + (uint32_t)poll_res; // Trả về mã lỗi: 8883 (Timeout - không có data), 8881 (Error), 8882 (Busy)
+      dbg_rx_raw_count = 8880 + (uint32_t)poll_res; // Lỗi: 8883 nếu không nhận lại được
   }
 
   HAL_UART_Receive_IT(&huart1, &arm_rx_byte, 1);
