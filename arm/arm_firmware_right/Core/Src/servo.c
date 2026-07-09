@@ -24,22 +24,15 @@ void Servo_Init(void) {
     servos[8] = (Servo_t){&htim12, TIM_CHANNEL_1, 500, 2550, 270};
     servos[9] = (Servo_t){&htim12, TIM_CHANNEL_2, 500, 2550, 270};
 
-    // Start PWM first, then write the neutral compare value (135 degrees)
+    // Start PWM first, then write the initial compare values
+    extern volatile float servo_deg[6];
     for (int i = 0; i < MAX_SERVOS; i++) {
         HAL_TIM_PWM_Start(servos[i].htim, servos[i].channel); // Start PWM first
         float init_angle;
-        if (i == 0) {
-            init_angle = 96.43f;  // Middle of joint (135 degrees servo)
-        } else if (i == 1) {
-            init_angle = 35.0f;   // 10 degrees joint (14 degrees servo)
-        } else if (i == 2) {
-            init_angle = 0.0f;    // Home q3 = 0 (maps to 65.0 deg joint angle)
-        } else if (i == 3) {
-            init_angle = 0.0f;    // Home q4 = 0 (maps to 90.0 deg joint angle)
+        if (i >= 0 && i <= 4) {
+            init_angle = servo_deg[i + 1];
         } else if (i == 5) {
             init_angle = 0.0f;    // Default to 0 degrees as requested
-        } else if (i == 4) {
-            init_angle = 60.0f;   // Middle of joint (90 degrees servo due to 2:3 scaling)
         } else {
             init_angle = (float)servos[i].max_angle / 2.0f; // Default 135 degrees
         }
