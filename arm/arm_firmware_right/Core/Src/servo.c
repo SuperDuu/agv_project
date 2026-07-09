@@ -24,22 +24,23 @@ void Servo_Init(void) {
     servos[8] = (Servo_t){&htim12, TIM_CHANNEL_1, 500, 2550, 270};
     servos[9] = (Servo_t){&htim12, TIM_CHANNEL_2, 500, 2550, 270};
 
-    // Start PWM first, then write the initial compare values
+    // Start PWM first, then write the neutral compare value (135 degrees)
     for (int i = 0; i < MAX_SERVOS; i++) {
         HAL_TIM_PWM_Start(servos[i].htim, servos[i].channel); // Start PWM first
+        
         float init_angle;
         if (i == 0) {
-            init_angle = 35.0f;
+            init_angle = 96.43f;  // Middle of joint (135 degrees servo)
         } else if (i == 1) {
-            init_angle = 65.0f;
+            init_angle = 35.0f;   // 10 degrees joint (14 degrees servo)
         } else if (i == 2) {
-            init_angle = 96.43f;
+            init_angle = 0.0f;    // Home q3 = 0 (maps to 65.0 deg joint angle)
         } else if (i == 3) {
-            init_angle = 96.43f;
-        } else if (i == 4) {
-            init_angle = 96.43f;
+            init_angle = 0.0f;    // Home q4 = 0 (maps to 90.0 deg joint angle)
         } else if (i == 5) {
             init_angle = 0.0f;    // Default to 0 degrees as requested
+        } else if (i == 4) {
+            init_angle = 60.0f;   // Middle of joint (90 degrees servo due to 2:3 scaling)
         } else {
             init_angle = (float)servos[i].max_angle / 2.0f; // Default 135 degrees
         }
@@ -54,21 +55,20 @@ void Set_Servo_Angle(uint8_t index, float angle) {
     if (index >= MAX_SERVOS) return;
     
     float target_angle = angle;
-    if (index == 0) {
-        // Servo 0 (Joint 2): normal, 5:7 scaling, neutral maps to 135.0f servo angle (96.43f joint angle)
-        target_angle = (96.43f + angle) * 7.0f / 5.0f;
-    } else if (index == 1) {
-        // Servo 1 (Joint 3): reversed, 5:7 scaling, home q3=0 maps to 270.0f servo angle (192.86f actuator angle)
-        target_angle = (192.86f - angle) * 7.0f / 5.0f;
-    } else if (index == 2) {
-        // Servo 2 (Joint 4): reversed, 1:1 scaling, home q4=0 maps to 90.0f joint angle
-        target_angle = 90.0f - angle;
+    if (index == 2) {
+        // Joint 3 (Right Arm): reversed, 5:7 scaling, home q3=0 maps to 65.0f joint angle
+        target_angle = (65.0f - angle) * 7.0f / 5.0f;
     } else if (index == 3) {
-        // Servo 3 (Joint 5): normal, 2:3 scaling, neutral maps to 90.0f servo angle (60.0f joint angle)
-        target_angle = (60.0f + angle) * 3.0f / 2.0f;
+        // Joint 4 (Right Arm): reversed, 1:1 scaling, home q4=0 maps to 90.0f joint angle
+        target_angle = 90.0f - angle;
+    } else if (index <= 1) {
+        // Joints 1 & 2 (Right Arm): normal, 5:7 scaling
+        if (target_angle < 0.0f) target_angle = 0.0f;
+        target_angle = target_angle * 7.0f / 5.0f;
     } else if (index == 4) {
-        // Servo 4 (Joint 6): normal, 1:1 scaling, neutral maps to 90.0f servo angle
-        target_angle = 90.0f + angle;
+        // Joint 5 (Right Arm): normal, 2:3 scaling
+        if (target_angle < 0.0f) target_angle = 0.0f;
+        target_angle = target_angle * 3.0f / 2.0f;
     } else {
         // Other joints: normal, 1:1 scaling
         if (target_angle < 0.0f) target_angle = 0.0f;
