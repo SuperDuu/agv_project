@@ -59,7 +59,6 @@ TIM_HandleTypeDef htim12;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
-DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
 extern Encoder_t encoders[NUM_ENCODERS];
@@ -95,7 +94,6 @@ volatile uint32_t dbg_rx_raw_count = 0;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
@@ -146,7 +144,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
@@ -166,6 +163,16 @@ int main(void)
 
 //  JointControl_Init();
   ARM_Proto_ResetParser();
+  
+  // Test polling check: cho phép kiểm tra trực tiếp phần cứng UART1 không qua ngắt
+  uint8_t test_poll_byte = 0;
+  HAL_StatusTypeDef poll_res = HAL_UART_Receive(&huart1, &test_poll_byte, 1, 5000); // Đợi tối đa 5 giây
+  if (poll_res == HAL_OK) {
+      dbg_rx_raw_count = 9999; // Nhận thành công qua Polling! (Phần cứng & Baudrate OK)
+  } else {
+      dbg_rx_raw_count = 8880 + (uint32_t)poll_res; // Trả về mã lỗi: 8883 (Timeout - không có data), 8881 (Error), 8882 (Busy)
+  }
+
   HAL_UART_Receive_IT(&huart1, &arm_rx_byte, 1);
   /* USER CODE END 2 */
 
@@ -835,22 +842,6 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
-
-}
-
-/**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA2_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA2_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
 
 }
 
