@@ -42,24 +42,7 @@ case "$JAVA2D_MODE" in
         ;;
 esac
 
-PYTHON_CMD=""
-if [[ -x ".venv/bin/python" ]]; then
-    PYTHON_CMD=".venv/bin/python"
-elif command -v python3 >/dev/null 2>&1; then
-    PYTHON_CMD="python3"
-elif command -v python >/dev/null 2>&1; then
-    PYTHON_CMD="python"
-fi
 
-if [[ -n "$PYTHON_CMD" ]]; then
-    if ! "$PYTHON_CMD" -c "import pygame" >/dev/null 2>&1; then
-        echo "[WARN] pygame is not installed for $PYTHON_CMD. PS5 controller script will fail until you install it."
-        echo "[HINT] Ubuntu: python3 -m venv .venv && . .venv/bin/activate && python -m pip install -r scripts/requirements.txt"
-    fi
-    export AGV_PYTHON="$PYTHON_CMD"
-else
-    echo "[WARN] Python was not found. GUI can start, but PS5 controller script will not."
-fi
 
 mkdir -p build/classes uart_temp
 find src -name '*.java' -print > build/sources.txt

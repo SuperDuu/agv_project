@@ -198,11 +198,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         startMotionTimer();
         startArmTxRefreshTimer();
         
-        // Start PS5 Controller Receiver & Timer
-        controllerReceiver = new ControllerReceiver(5005);
-        controllerReceiver.setMainFrame(this);
-        controllerReceiver.start();
-        startControllerTimer();
+        // Start PS5 Controller Receiver & Timer (Disabled)
+        // controllerReceiver = new ControllerReceiver(5005);
+        // controllerReceiver.setMainFrame(this);
+        // controllerReceiver.start();
+        // startControllerTimer();
 
         updateArm();
         syncGuiCoordsFromFK();

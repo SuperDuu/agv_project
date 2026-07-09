@@ -27,27 +27,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-set "PYTHON_CMD="
 
-where python >nul 2>nul
-if errorlevel 1 (
-    where py >nul 2>nul
-    if errorlevel 1 (
-        echo [WARN] Python was not found. GUI can start, but PS5 controller script will not.
-    ) else (
-        set "PYTHON_CMD=py -3"
-    )
-) else (
-    set "PYTHON_CMD=python"
-)
-
-if defined PYTHON_CMD (
-    %PYTHON_CMD% -c "import pygame" >nul 2>nul
-    if errorlevel 1 (
-        echo [WARN] pygame is not installed. PS5 controller script will fail until you install it.
-        echo [HINT] Run: %PYTHON_CMD% -m pip install -r scripts\requirements.txt
-    )
-)
 
 if not exist build\classes mkdir build\classes
 if not exist uart_temp mkdir uart_temp
