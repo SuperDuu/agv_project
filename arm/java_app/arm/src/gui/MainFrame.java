@@ -29,14 +29,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     static final double WORKSPACE_FALLBACK_MAX_DISTANCE = 2.0;
     static final double WORKSPACE_FALLBACK_MAX_JOINT_JUMP = 25.0;
     static final double WORKSPACE_SEED_MAX_DISTANCE = 1.0;
+    private static final double[] HOME_ANGLES_RIGHT = { 0, 0, 20, -35, 0, 0 };
+    private static final double[] HOME_ANGLES_LEFT = { 0, 0, -20, 35, 0, 0 };
+    private static final double[] HOME_ACTUATOR_RIGHT = toActuatorSpace(HOME_ANGLES_RIGHT, true);
+    private static final double[] HOME_ACTUATOR_LEFT = toActuatorSpace(HOME_ANGLES_LEFT, false);
+
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
-    double[] anglesRight = { 0, 0, 20, -35, 0, 0 };
-    double[] targetAnglesRight = { 0, 0, 20, -35, 0, 0 };
+    double[] anglesRight = HOME_ANGLES_RIGHT.clone();
+    double[] targetAnglesRight = HOME_ANGLES_RIGHT.clone();
     double[] lastSentAnglesRight = { -999, -999, -999, -999, -999, -999 };
 
     // θ-space: θ₃=q₃=-20, θ₄=q₄-q₃=15-(-20)=35 (Left)
-    double[] anglesLeft = { 0, 0, -20, 35, 0, 0 };
-    double[] targetAnglesLeft = { 0, 0, -20, 35, 0, 0 };
+    double[] anglesLeft = HOME_ANGLES_LEFT.clone();
+    double[] targetAnglesLeft = HOME_ANGLES_LEFT.clone();
     double[] lastSentAnglesLeft = { -999, -999, -999, -999, -999, -999 };
 
     public double[] angles = anglesRight;
@@ -1137,6 +1142,24 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return content + "*" + String.format("%02X", sum & 0xFF) + "\n";
     }
 
+    private static double[] toActuatorSpace(double[] jointAngles, boolean isRight) {
+        double[] q34 = RobotTransmission.jointToActuator(jointAngles[2], jointAngles[3], isRight);
+        double[] qActuator = new double[NUM_JOINTS];
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            qActuator[i] = (i == 2) ? q34[0] : (i == 3) ? q34[1] : jointAngles[i];
+        }
+        return qActuator;
+    }
+
+    private static double[] toHomeRelativeActuatorSpace(double[] jointAngles, boolean isRight) {
+        double[] qActuator = toActuatorSpace(jointAngles, isRight);
+        double[] qHome = isRight ? HOME_ACTUATOR_RIGHT : HOME_ACTUATOR_LEFT;
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            qActuator[i] -= qHome[i];
+        }
+        return qActuator;
+    }
+
     private void sendJointsToUart(boolean forceSend) {
         if (!armStreamingEnabled) {
             return;
@@ -1149,14 +1172,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // --- Right Arm ---
         {
-            // Convert joint-space (theta) to actuator-space (q) for joints 3 & 4
-            double[] q34 = RobotTransmission.jointToActuator(anglesRight[2], anglesRight[3], true);
-            double[] qActuator = new double[NUM_JOINTS];
-            for (int i = 0; i < NUM_JOINTS; i++) {
-                qActuator[i] = (i == 2) ? q34[0] : (i == 3) ? q34[1] : anglesRight[i];
-            }
+            double[] qActuator = toHomeRelativeActuatorSpace(anglesRight, true);
 
-            // Build text frame: R:q0_x100,q1_x100,q2_x100,q3_x100,q4_x100,q5_x100\n
+            // Build text frame: R:dq0_x100,dq1_x100,dq2_x100,dq3_x100,dq4_x100,dq5_x100\n
             String textFrame = String.format(java.util.Locale.US, "R:%d,%d,%d,%d,%d,%d",
                 (int) Math.round(qActuator[0] * 100.0),
                 (int) Math.round(qActuator[1] * 100.0),
@@ -1179,13 +1197,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // --- Left Arm ---
         {
-            double[] q34 = RobotTransmission.jointToActuator(anglesLeft[2], anglesLeft[3], false);
-            double[] qActuator = new double[NUM_JOINTS];
-            for (int i = 0; i < NUM_JOINTS; i++) {
-                qActuator[i] = (i == 2) ? q34[0] : (i == 3) ? q34[1] : anglesLeft[i];
-            }
+            double[] qActuator = toHomeRelativeActuatorSpace(anglesLeft, false);
 
-            // Build text frame: L:q0_x100,q1_x100,q2_x100,q3_x100,q4_x100,q5_x100\n
+            // Build text frame: L:dq0_x100,dq1_x100,dq2_x100,dq3_x100,dq4_x100,dq5_x100\n
             String textFrame = String.format(java.util.Locale.US, "L:%d,%d,%d,%d,%d,%d",
                 (int) Math.round(qActuator[0] * 100.0),
                 (int) Math.round(qActuator[1] * 100.0),

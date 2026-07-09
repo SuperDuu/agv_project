@@ -76,10 +76,10 @@ static uint8_t arm_rx_byte;
 static uint8_t rx_buffer[128];
 static uint16_t rx_index = 0;
 // static uint8_t  arm_dma_rx_buf[64];
-static uint8_t arm_frame_buf[ARM_PROTO_MAX_FRAME];
-static uint16_t arm_frame_idx = 0;
-static uint16_t arm_expected_len = 0;
-static uint8_t arm_parser_state = 0; /* 0=SOF1, 1=SOF2, 2=ACCUMULATE */
+//static uint8_t arm_frame_buf[ARM_PROTO_MAX_FRAME];
+//static uint16_t arm_frame_idx = 0;
+//static uint16_t arm_expected_len = 0;
+//static uint8_t arm_parser_state = 0; /* 0=SOF1, 1=SOF2, 2=ACCUMULATE */
 static uint8_t arm_last_seq = 0xFF;  /* for duplicate / stale drop  */
 
 /* Last accepted joint positions in x100 (for Δθ guard) */
@@ -901,10 +901,14 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
     if (motion_mode == ARM_PROTO_MOTION_ABS ||
         motion_mode == ARM_PROTO_MOTION_HOME) {
 
-      for (int i = 0; i < 6; i++) {
-        servo_deg[i] = ARM_Proto_X100ToDeg(q_new[i]);
-      }
-
+//      for (int i = 0; i < 6; i++) {
+//        servo_deg[i] = ARM_Proto_X100ToDeg(q_new[i]);
+//      }
+        servo_deg[1] = -ARM_Proto_X100ToDeg(q_new[1])+96.43;
+        servo_deg[2] = ARM_Proto_X100ToDeg(q_new[2])+35;
+        servo_deg[3] = 65-ARM_Proto_X100ToDeg(q_new[3]);
+        servo_deg[4] = ARM_Proto_X100ToDeg(q_new[4])+96.43;
+        servo_deg[5] = ARM_Proto_X100ToDeg(q_new[5])+96.43;
       /* Update last accepted position */
       for (int i = 0; i < 6; i++)
         arm_q_last[i] = q_new[i];
@@ -972,9 +976,14 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
                 if (sscanf((char *)rx_buffer + 2, "%d,%d,%d,%d,%d,%d", &q[0],
                            &q[1], &q[2], &q[3], &q[4], &q[5]) == 6) {
                   dbg_rx_ok++;
-                  for (int i = 0; i < 6; i++) {
-                    servo_deg[i] = (float)q[i] / 100.0f;
-                  }
+//                  for (int i = 0; i < 6; i++) {
+//                    servo_deg[i] = (float)q[i] / 100.0f;
+//                  }
+                  servo_deg[1] =-(float)q[1] / 100.0f+96.43;
+                  servo_deg[2] = (float)q[2] / 100.0f+35;
+                  servo_deg[3] = 65.0f-(float)q[3] / 100.0f;
+                  servo_deg[4] = (float)q[4] / 100.0f+96.43;
+                  servo_deg[5] = (float)q[5] / 100.0f+96.43;
                 } else {
                   dbg_rx_len++;
                 }
