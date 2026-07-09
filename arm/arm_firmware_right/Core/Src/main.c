@@ -89,6 +89,7 @@ volatile uint32_t dbg_rx_ok    = 0;
 volatile uint32_t dbg_rx_delta = 0;   /* frames dropped by Δθ guard */
 volatile uint32_t dbg_rx_crc   = 0;
 volatile uint32_t dbg_rx_len   = 0;
+volatile uint32_t dbg_rx_raw_count = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -982,6 +983,7 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART1) {
+        dbg_rx_raw_count++;
         uint8_t b = arm_rx_byte;
 
         switch (arm_parser_state) {
