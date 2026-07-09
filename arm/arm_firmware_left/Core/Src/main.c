@@ -26,6 +26,7 @@
 #include "pid.h"
 #include "joint_control.h"
 #include <stdio.h>
+#include <string.h>
 #include "arm_protocol.h"
 /* USER CODE END Includes */
 
@@ -61,7 +62,6 @@ UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
-int index,angle=0;
 volatile float servo0_deg = 96.43f;
 volatile float servo1_deg = 35.0f;
 volatile float servo2_deg = 0.0f;
@@ -165,7 +165,7 @@ int main(void)
 
   Encoder_Init();
 //  JointControl_Init();
-  HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
+  HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -964,84 +964,75 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    if (huart->Instance == USART1) {
+    if (huart->Instance == USART2) {
         dbg_rx_raw_count++;
         uint8_t b = rx_byte;
 
-        switch (arm_parser_state) {
-        case 0:
-            if (b == ARM_PROTO_SOF1) {
-                arm_frame_buf[0] = b;
-                arm_frame_idx    = 1;
-                arm_parser_state = 1;
-            }
-            break;
-
-        case 1:
-            if (b == ARM_PROTO_SOF2) {
-                arm_frame_buf[1] = b;
-                arm_frame_idx    = 2;
-                arm_parser_state = 2;
-            } else if (b == ARM_PROTO_SOF1) {
-                arm_frame_buf[0] = b;
-                arm_frame_idx    = 1;
-            } else {
-                arm_parser_state = 0;
-                arm_frame_idx    = 0;
-                arm_expected_len = 0;
-            }
-            break;
-
-        case 2:
-            if (arm_frame_idx >= ARM_PROTO_MAX_FRAME) {
-                arm_parser_state = 0;
-                arm_frame_idx    = 0;
-                arm_expected_len = 0;
-                break;
-            }
-            arm_frame_buf[arm_frame_idx++] = b;
-
-            if (arm_frame_idx == 6u) {
-                uint16_t plen = ARM_Proto_ReadU16LE(&arm_frame_buf[ARM_PROTO_OFF_LEN_L]);
-                if (plen > ARM_PROTO_MAX_PAYLOAD) {
-                    arm_parser_state = 0;
-                    arm_frame_idx    = 0;
-                    arm_expected_len = 0;
-                    break;
+        if (b == '\n' || b == '\r') {
+            if (rx_index > 0) {
+                rx_buffer[rx_index] = '\0';
+                
+                // Check checksum
+                char *star = strchr((char*)rx_buffer, '*');
+                if (star != NULL) {
+                    *star = '\0';
+                    char *checksum_str = star + 1;
+                    
+                    uint8_t calc_sum = 0;
+                    for (char *c_ptr = (char*)rx_buffer; c_ptr < star; c_ptr++) {
+                        calc_sum ^= (uint8_t)(*c_ptr);
+                    }
+                    
+                    unsigned int rx_sum = 0;
+                    if (sscanf(checksum_str, "%2X", &rx_sum) == 1) {
+                        if (calc_sum == (uint8_t)rx_sum) {
+#if defined(ARM_LEFT) || (ARM_PROTO_MY_ADDR == 0x02u)
+                            const char *prefix = "L:";
+#else
+                            const char *prefix = "R:";
+#endif
+                            if (strncmp((char*)rx_buffer, prefix, 2) == 0) {
+                                int q[6];
+                                if (sscanf((char*)rx_buffer + 2, "%d,%d,%d,%d,%d,%d", &q[0], &q[1], &q[2], &q[3], &q[4], &q[5]) == 6) {
+                                    dbg_rx_ok++;
+                                    servo0_deg = (float)q[0] / 100.0f;
+                                    servo1_deg = (float)q[1] / 100.0f;
+                                    servo2_deg = (float)q[2] / 100.0f;
+                                    servo3_deg = (float)q[3] / 100.0f;
+                                    servo4_deg = (float)q[4] / 100.0f;
+                                    servo5_deg = (float)q[5] / 100.0f;
+                                } else {
+                                    dbg_rx_len++;
+                                }
+                            }
+                        } else {
+                            dbg_rx_crc++;
+                        }
+                    }
                 }
-                arm_expected_len = (uint16_t)(ARM_PROTO_FRAME_OVERHEAD + plen);
+                rx_index = 0;
             }
-
-            if (arm_expected_len != 0u && arm_frame_idx == arm_expected_len) {
-                ARM_Proto_ProcessFrame(arm_frame_buf, arm_expected_len);
-                arm_parser_state = 0;
-                arm_frame_idx    = 0;
-                arm_expected_len = 0;
+        } else {
+            if (rx_index < sizeof(rx_buffer) - 1) {
+                rx_buffer[rx_index++] = b;
+            } else {
+                rx_index = 0;
             }
-            break;
-
-        default:
-            arm_parser_state = 0;
-            arm_frame_idx    = 0;
-            arm_expected_len = 0;
-            break;
         }
 
-        if (HAL_UART_Receive_IT(&huart1, &rx_byte, 1) != HAL_OK) {
-            HAL_UART_AbortReceive(&huart1);
-            HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
+        if (HAL_UART_Receive_IT(&huart2, &rx_byte, 1) != HAL_OK) {
+            HAL_UART_AbortReceive(&huart2);
+            HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
         }
     }
 }
 
 static void ARM_Proto_ResetParser(void) {
-    arm_frame_idx    = 0;
-    arm_expected_len = 0;
-    arm_parser_state = 0;
+    rx_index = 0;
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
-    if (huart->Instance == USART1) {
+    if (huart->Instance == USART2) {
         __HAL_UART_CLEAR_OREFLAG(huart);
         ARM_Proto_ResetParser();
         if (HAL_UART_Receive_IT(huart, &rx_byte, 1) != HAL_OK) {
