@@ -243,7 +243,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private void buildControlPanel() {
         add(BorderLayout.EAST, controlPanel);
         controlPanel.setLayout(new BorderLayout());
-        controlPanel.setPreferredSize(new Dimension(730, 0));
+        controlPanel.setPreferredSize(new Dimension(760, 0));
 
         JPanel manualPanel = new JPanel(new GridLayout(1, 2, 8, 0));
         manualPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
