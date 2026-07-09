@@ -108,7 +108,7 @@ static void MX_TIM11_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void ARM_Proto_ResetParser(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -1025,14 +1025,27 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
             break;
         }
 
-        HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
+        if (HAL_UART_Receive_IT(&huart1, &rx_byte, 1) != HAL_OK) {
+            HAL_UART_AbortReceive(&huart1);
+            HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
+        }
     }
+}
+
+static void ARM_Proto_ResetParser(void) {
+    arm_frame_idx    = 0;
+    arm_expected_len = 0;
+    arm_parser_state = 0;
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART1) {
         __HAL_UART_CLEAR_OREFLAG(huart);
-        HAL_UART_Receive_IT(huart, &rx_byte, 1);
+        ARM_Proto_ResetParser();
+        if (HAL_UART_Receive_IT(huart, &rx_byte, 1) != HAL_OK) {
+            HAL_UART_AbortReceive(huart);
+            HAL_UART_Receive_IT(huart, &rx_byte, 1);
+        }
     }
 }
 /* USER CODE END 4 */
