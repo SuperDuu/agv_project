@@ -30,17 +30,17 @@ void Servo_Init(void) {
         
         float init_angle;
         if (i == 0) {
-            init_angle = 96.43f;  // Middle of joint (135 degrees servo)
+            init_angle = 96.43f;
         } else if (i == 1) {
-            init_angle = 35.0f;   // 10 degrees joint (14 degrees servo)
+            init_angle = 35.0f;
         } else if (i == 2) {
-            init_angle = 0.0f;    // Home q3 = 0 (maps to 65.0 deg joint angle)
+            init_angle = 65.0f;
         } else if (i == 3) {
-            init_angle = 0.0f;    // Home q4 = 0 (maps to 90.0 deg joint angle)
+            init_angle = 96.43f;
+        } else if (i == 4) {
+            init_angle = 96.43f;
         } else if (i == 5) {
             init_angle = 0.0f;    // Default to 0 degrees as requested
-        } else if (i == 4) {
-            init_angle = 60.0f;   // Middle of joint (90 degrees servo due to 2:3 scaling)
         } else {
             init_angle = (float)servos[i].max_angle / 2.0f; // Default 135 degrees
         }
