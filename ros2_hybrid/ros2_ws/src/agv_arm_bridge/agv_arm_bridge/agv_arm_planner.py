@@ -86,7 +86,7 @@ class AgvArmPlanner(Node):
             (-math.pi / 2, d2, 0.0, -math.pi / 2, q[1]),
             (-math.pi / 2, 0.0, 0.0, -math.pi, q[2]),
             (0.0, 0.0, self.L4, -math.pi / 2, q[3]),
-            (-math.pi / 2, self.L5 + self.L6, 0.0, -math.pi / 2, q[4]),
+            (-math.pi / 2, self.L5 + self.L6, 0.0, 0.0, q[4]),
             (-math.pi / 2, 0.0, 0.0, 0.0, q[5])
         ]
         T = np.eye(4)
@@ -102,7 +102,7 @@ class AgvArmPlanner(Node):
             (-math.pi / 2, d2, 0.0, -math.pi / 2, q[1]),
             (-math.pi / 2, 0.0, 0.0, -math.pi, q[2]),
             (0.0, 0.0, self.L4, -math.pi / 2, q[3]),
-            (-math.pi / 2, self.L5 + self.L6, 0.0, -math.pi / 2, q[4]),
+            (-math.pi / 2, self.L5 + self.L6, 0.0, 0.0, q[4]),
             (-math.pi / 2, 0.0, 0.0, 0.0, q[5])
         ]
         T = np.eye(4)
