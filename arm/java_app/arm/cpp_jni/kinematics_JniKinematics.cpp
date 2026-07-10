@@ -186,7 +186,7 @@ void computeJacobianEE(const double q[6], bool isRight, double Je[6][6]) {
         { -M_PI / 2, d2, 0, -M_PI / 2, q[1] },
         { -M_PI / 2, 0, 0, -M_PI, q[2] },
         { 0, 0, L4, -M_PI / 2, q[3] },
-        { -M_PI / 2, L5 + L6, 0, -M_PI / 2, q[4] },
+        { -M_PI / 2, L5 + L6, 0, 0, q[4] },
         { -M_PI / 2, 0, 0, 0, q[5] }
     };
     double z0[6][3];

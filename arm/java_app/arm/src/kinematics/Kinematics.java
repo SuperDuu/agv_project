@@ -207,7 +207,7 @@ public class Kinematics {
                 { -Math.PI / 2, d2, 0, -Math.PI / 2, q[1] },
                 { -Math.PI / 2, 0, 0, -Math.PI, q[2] },
                 { 0, 0, L4, -Math.PI / 2, q[3] },
-                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, q[4] },
+                { -Math.PI / 2, L5 + L6, 0, 0, q[4] },
                 { -Math.PI / 2, 0, 0, 0, q[5] }
         };
 

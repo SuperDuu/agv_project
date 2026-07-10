@@ -19,11 +19,11 @@ import utils.WorkspaceMap;
 
 public final class MainFrame extends JFrame implements ActionListener, ChangeListener {
     /** Set to false for demos to suppress debug output. Set to true during development. */
-    public static final boolean DEBUG = false;
+    public static final boolean DEBUG = true;
     public static final boolean FAST_RENDER =
             "fast".equalsIgnoreCase(System.getenv().getOrDefault("AGV_RENDER_QUALITY", "full"));
 
-    private static final double MAX_IK_POSITION_ERROR = 0.20; // General IK threshold
+    private static final double MAX_IK_POSITION_ERROR = 0.50; // General IK threshold
     private static final double TRAJ_RELAXED_ERROR = 0.25; // Trajectory fallback threshold
     private static final double TRAJ_STRICT_ERROR = 0.10; // Trajectory strict tracking threshold
     static final double WORKSPACE_FALLBACK_MAX_DISTANCE = 2.0;
@@ -3752,14 +3752,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 };
             }
 
-            // Strategy 2: Cold start guesses
-            double[] q3_options = isRight ? new double[] { 0.3, -0.3 } : new double[] { -0.3, 0.3 };
-            double[] q4_options = isRight ? new double[] { -35.0, 35.0 } : new double[] { 35.0, -35.0 };
+            // Strategy 2: Cold start guesses (values must be within joint limits)
+            // Right: q3=[20,165]deg, q4=[-95,-15]deg
+            // Left:  q3=[-165,-20]deg, q4=[15,95]deg
+            double[] q3_options = isRight ? new double[] { Math.toRadians(60.0), Math.toRadians(100.0) }
+                                         : new double[] { Math.toRadians(-60.0), Math.toRadians(-100.0) };
+            double[] q4_options = isRight ? new double[] { Math.toRadians(-35.0), Math.toRadians(-70.0) }
+                                         : new double[] { Math.toRadians(35.0), Math.toRadians(70.0) };
             
             double[] q2_guesses = { 1.2, 0.6, 0.0, -0.6, -1.2 };
             for (int cfgIdx = 0; cfgIdx < 2; cfgIdx++) {
                 double q3_val = q3_options[cfgIdx];
-                double q4_val = Math.toRadians(q4_options[cfgIdx]);
+                double q4_val = q4_options[cfgIdx];
                 for (double q2_val : q2_guesses) {
                     double[] qHome = new double[NUM_JOINTS];
                     qHome[0] = yaw;
@@ -3783,7 +3787,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (Math.abs(qInit[0] - yaw) > 0.15) {
                 for (int cfgIdx = 0; cfgIdx < 2; cfgIdx++) {
                     double q3_val = q3_options[cfgIdx];
-                    double q4_val = Math.toRadians(q4_options[cfgIdx]);
+                    double q4_val = q4_options[cfgIdx];
                     for (double q2_val : new double[]{ 0.6, 0.0, -0.6 }) {
                         double[] qAlt = new double[NUM_JOINTS];
                         qAlt[0] = qInit[0];
@@ -3827,13 +3831,20 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return q;
         }
         
-        double[] q3_options = isRightArmSelected ? new double[] { 0.3, -0.3 } : new double[] { -0.3, 0.3 };
-        double[] q4_options = isRightArmSelected ? new double[] { -35.0, 35.0 } : new double[] { 35.0, -35.0 };
+        // Cold start values must be within joint limits:
+        // Right: q3=[20,165]deg, q4=[-95,-15]deg
+        // Left:  q3=[-165,-20]deg, q4=[15,95]deg
+        double[] q3_options = isRightArmSelected
+            ? new double[] { Math.toRadians(60.0), Math.toRadians(100.0) }
+            : new double[] { Math.toRadians(-60.0), Math.toRadians(-100.0) };
+        double[] q4_options = isRightArmSelected
+            ? new double[] { Math.toRadians(-35.0), Math.toRadians(-70.0) }
+            : new double[] { Math.toRadians(35.0), Math.toRadians(70.0) };
         double[] q2_guesses = { 1.2, 0.8, 0.4, 0.0, -0.4, -0.8, -1.2 };
         
         for (int cfgIdx = 0; cfgIdx < 2; cfgIdx++) {
             double q3_val = q3_options[cfgIdx];
-            double q4_val = Math.toRadians(q4_options[cfgIdx]);
+            double q4_val = q4_options[cfgIdx];
             for (double q2_val : q2_guesses) {
                 double[] qHome = new double[NUM_JOINTS];
                 double q1_min = isRightArmSelected ? JOINT_MIN_RIGHT[0] : JOINT_MIN_LEFT[0];

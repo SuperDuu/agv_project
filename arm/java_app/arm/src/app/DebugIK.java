@@ -8,6 +8,7 @@ import static kinematics.Kinematics.*;
  */
 public class DebugIK {
     public static void main(String[] args) {
+        Kinematics.solverMode = 0;
         System.out.println("=== WORKSPACE SCAN & ORIENTATION DEBUG ===\n");
         
         boolean isRight = true;
@@ -132,9 +133,18 @@ public class DebugIK {
         double alpha_rad = Math.toRadians(alphaDeg);
         double q1_base = isRight ? Math.atan2(py, px) : -Math.atan2(py, -px);
         double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
-        double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
+        double[][] R_rot = { { 0, -ca, -sa }, { 1, 0, 0 }, { 0, -sa, ca } };
         
         double[] yawOffsets = { 0.0, -15.0, 15.0 };
+        // Multiple warm starts: target-directed q1 + elbow variations
+        double[][] warmStarts = {
+            { q1_base,  0.0, Math.toRadians(60), Math.toRadians(-35), 0.0, 0.0 },
+            { q1_base, -0.8, Math.toRadians(60), Math.toRadians(-35), 0.0, 0.0 },
+            { q1_base,  0.8, Math.toRadians(60), Math.toRadians(-35), 0.0, 0.0 },
+            { q1_base, -1.2, Math.toRadians(60), Math.toRadians(-80), 0.0, 0.0 },
+            { q1_base,  1.2, Math.toRadians(60), Math.toRadians(-80), 0.0, 0.0 },
+        };
+
         double[] bestQ = null;
         double bestErr = Double.MAX_VALUE;
         
@@ -142,18 +152,21 @@ public class DebugIK {
             double yaw = q1_base + Math.toRadians(offsetDeg);
             double cy = Math.cos(yaw), syA = Math.sin(yaw);
             double[][] R_z = { { cy, -syA, 0 }, { syA, cy, 0 }, { 0, 0, 1 } };
-            double[][] R_target = mul3x3(R_z, R_y);
+            double[][] R_target = mul3x3(R_z, R_rot);
             
-            double[] q = solveIK(px, py, pz, R_target, qInitRad, isRight);
-            if (q != null && withinLimits(q, isRight)) {
-                double[] qRad = new double[6];
-                for (int i = 0; i < 6; i++) qRad[i] = Math.toRadians(q[i]);
-                double[][] T = computeFKMatrix(qRad, isRight);
-                double err = Math.sqrt(Math.pow(T[0][3]-px,2)+Math.pow(T[1][3]-py,2)+Math.pow(T[2][3]-pz,2));
-                if (err < bestErr) { bestErr = err; bestQ = q; }
+            for (double[] ws : warmStarts) {
+                double[] q = solveIK(px, py, pz, R_target, ws, isRight);
+                if (q != null && withinLimits(q, isRight)) {
+                    double[] qRad = new double[6];
+                    for (int i = 0; i < 6; i++) qRad[i] = Math.toRadians(q[i]);
+                    double[][] T = computeFKMatrix(qRad, isRight);
+                    double err = Math.sqrt(Math.pow(T[0][3]-px,2)+Math.pow(T[1][3]-py,2)+Math.pow(T[2][3]-pz,2));
+                    if (err < bestErr) { bestErr = err; bestQ = q; }
+                }
             }
         }
         return (bestQ != null && bestErr < 1.5) ? bestQ : null;
+
     }
     
     static boolean withinLimits(double[] q, boolean isRight) {
