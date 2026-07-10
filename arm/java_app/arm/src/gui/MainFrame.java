@@ -2167,54 +2167,55 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private void runDualArmShowcase() {
+        final int stepsPerSegment = 45;
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(new double[][] {
                 { 0, 0, 20, -35, 0, 0 },
                 { 0, 0, -20, 35, 0, 0 }
         });
         keyframes.add(new double[][] {
-                { 0, -18, 55, -55, 12, -20 },
-                { 0, -18, -55, 55, -12, 20 }
+                { 0, -20, 100, -75, 0, 0 },
+                { 0, -20, -100, 75, 0, 0 }
         });
         keyframes.add(new double[][] {
-                { 0, -25, 145, -88, 20, 0 },
-                { 0, -10, -60, 50, 0, 0 }
+                { 0, -20, 100, -75, 0, 0 },
+                { 0, -20, -100, 75, 0, 0 }
         });
         keyframes.add(new double[][] {
-                { 0, -35, 135, -90, 10, 0 },
-                { 0, -10, -60, 50, 0, 0 }
+                { 0, -25, 145, -88, 10, 0 },
+                { 0, -25, -145, 88, -10, 0 }
         });
         keyframes.add(new double[][] {
-                { -18, -28, 85, -72, 28, -35 },
-                { -18, -28, -85, 72, -28, 35 }
+                { 35, -25, 145, -88, 20, 0 },
+                { 35, -25, -145, 88, -20, 0 }
         });
         keyframes.add(new double[][] {
-                { 18, -28, 85, -72, -28, 35 },
-                { 18, -28, -85, 72, 28, -35 }
+                { 35, -20, 100, -75, 0, 20 },
+                { 35, -20, -100, 75, 0, -20 }
         });
         keyframes.add(new double[][] {
-                { 0, 12, 120, -88, 0, 45 },
-                { 0, 12, -120, 88, 0, -45 }
+                { 35, -20, 100, -75, 0, 20 },
+                { 35, -20, -100, 75, 0, -20 }
         });
         keyframes.add(new double[][] {
-                { -12, 22, 95, -65, -35, -45 },
-                { -12, 22, -95, 65, 35, 45 }
+                { 35, -20, 100, -75, 45, -45 },
+                { 35, -20, -100, 75, -45, 45 }
         });
         keyframes.add(new double[][] {
-                { 12, 22, 95, -65, 35, 45 },
-                { 12, 22, -95, 65, -35, -45 }
+                { 35, -20, 100, -75, -45, 45 },
+                { 35, -20, -100, 75, 45, -45 }
         });
         keyframes.add(new double[][] {
-                { 0, -10, 60, -50, 0, 0 },
-                { 0, -10, -60, 50, 0, 0 }
+                { 35, -20, 100, -75, 45, 45 },
+                { 35, -20, -100, 75, -45, -45 }
         });
         keyframes.add(new double[][] {
                 { 0, 0, 20, -35, 0, 0 },
                 { 0, 0, -20, 35, 0, 0 }
         });
 
-        java.util.List<double[][]> frames = interpolateDualArmKeyframes(keyframes, 45);
-        runDualArmPlayback(frames, "Demo 2 Tay");
+        java.util.List<double[][]> frames = interpolateDualArmKeyframes(keyframes, stepsPerSegment);
+        runDualArmPlayback(frames, "Demo 2 Tay", stepsPerSegment * 2, stepsPerSegment * 6);
     }
 
     private java.util.List<double[][]> interpolateDualArmKeyframes(java.util.List<double[][]> keyframes,
@@ -2251,7 +2252,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return frame;
     }
 
-    private void runDualArmPlayback(final java.util.List<double[][]> frames, String statusTitle) {
+    private void runDualArmPlayback(final java.util.List<double[][]> frames, String statusTitle,
+            int gripFrameIndex, int releaseFrameIndex) {
         if (frames.isEmpty()) {
             return;
         }
@@ -2270,6 +2272,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         setGotoStatusRight("Demo 2 Tay: ready", new Color(0, 90, 180));
         setGotoStatusLeft("Demo 2 Tay: ready", new Color(0, 90, 180));
+        setDualDemoGripperState(false, "Demo 2 Tay: mo kep");
 
         final int[] waitMs = { 0 };
         Timer prepareTimer = new Timer(50, evt -> {
@@ -2290,9 +2293,15 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         return;
                     }
 
-                    double[][] frame = frames.get(currentIndex[0]);
+                    int frameIndex = currentIndex[0];
+                    double[][] frame = frames.get(frameIndex);
                     currentIndex[0]++;
                     applyDualArmFrame(frame[0], frame[1]);
+                    if (frameIndex == gripFrameIndex) {
+                        setDualDemoGripperState(true, "Demo 2 Tay: kep vat");
+                    } else if (frameIndex == releaseFrameIndex) {
+                        setDualDemoGripperState(false, "Demo 2 Tay: nha vat");
+                    }
                     updateArm();
                     sendJointsToUart();
                 });
@@ -2300,6 +2309,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         });
         prepareTimer.start();
+    }
+
+    private void setDualDemoGripperState(boolean gripped, String statusText) {
+        isGrippedRight = gripped;
+        isGrippedLeft = gripped;
+        setGotoStatusRight(statusText, Color.BLUE);
+        setGotoStatusLeft(statusText, Color.BLUE);
+        if (uartManager != null && uartManager.isConnected()) {
+            uartManager.sendData(gripped ? "R:GRIP\n" : "R:RELEASE\n");
+            uartManager.sendData(gripped ? "L:GRIP\n" : "L:RELEASE\n");
+        }
+        armPanel.repaint();
     }
 
     private void applyDualArmFrame(double[] rightFrame, double[] leftFrame) {
