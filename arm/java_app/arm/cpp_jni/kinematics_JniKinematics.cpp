@@ -57,9 +57,9 @@ void getMDHMatrix(double alpha, double d, double a, double offset, double q, dou
 }
 
 void getToolMatrix(double out[4][4]) {
-    out[0][0] = 1; out[0][1] = 0;  out[0][2] = 0;  out[0][3] = 0;
+    out[0][0] = 0; out[0][1] = -1; out[0][2] = 0;  out[0][3] = 0;
     out[1][0] = 0; out[1][1] = 0;  out[1][2] = -1; out[1][3] = -L7;
-    out[2][0] = 0; out[2][1] = 1;  out[2][2] = 0;  out[2][3] = 0;
+    out[2][0] = 1; out[2][1] = 0;  out[2][2] = 0;  out[2][3] = 0;
     out[3][0] = 0; out[3][1] = 0;  out[3][2] = 0;  out[3][3] = 1;
 }
 
@@ -447,9 +447,9 @@ bool solveIK_CppDLS(double px, double py, double pz, const double R_target[3][3]
 // C++ IKFast (Analytical geometric approximation + 3 DLS loops)
 bool solveIK_IKFast(double px, double py, double pz, const double R_target[3][3], const double qInitRad[6], bool isRight, double qOut[6]) {
     // 1. Calculate simplified wrist center
-    double xw = px - R_target[0][1] * (-L7);
-    double yw = py - R_target[1][1] * (-L7);
-    double zw = pz - R_target[2][1] * (-L7);
+    double xw = px - R_target[0][2] * L7;
+    double yw = py - R_target[1][2] * L7;
+    double zw = pz - R_target[2][2] * L7;
 
     // 2. Analytical solve for base angle q0
     double q0 = std::atan2(yw, xw);
