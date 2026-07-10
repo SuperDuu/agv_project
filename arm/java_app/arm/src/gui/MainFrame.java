@@ -3503,7 +3503,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         // 2. Fallback to global scan if local search fails or is inaccurate
-        for (double a = -90; a <= 30; a += 15.0) {
+        for (double a = -120; a <= 60; a += 10.0) {
             String userPref = cCombo.getSelectedIndex() == 0 ? "+" : "-";
 
             List<double[]> candidates = tryAlpha(px, py, pz, a, isRight, activeAngles, prefYaw, true);
