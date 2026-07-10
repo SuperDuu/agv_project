@@ -35,6 +35,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final double[] HOME_ACTUATOR_LEFT = toActuatorSpace(HOME_ANGLES_LEFT, false);
     private static final String RIGHT_DEMO_CACHE_FILE = "demo_right_pick_place.csv";
     private static final String RIGHT_DEMO_CACHE_VERSION = "right_pick_place_v1";
+    private static final String LEFT_DEMO_CACHE_FILE = "demo_left_pick_place.csv";
+    private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v1";
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = HOME_ANGLES_RIGHT.clone();
@@ -2169,13 +2171,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private void runDualArmShowcase() {
-        setGotoStatusRight("Demo: tinh IK...", new Color(0, 90, 180));
-        setGotoStatusLeft("Demo: chuan bi...", new Color(0, 90, 180));
+        final boolean rightDemo = (trajArmCombo.getSelectedIndex() == 0);
+        setGotoStatusRight(rightDemo ? "Demo: tinh IK..." : "Demo: giu an toan", new Color(0, 90, 180));
+        setGotoStatusLeft(rightDemo ? "Demo: giu an toan" : "Demo: tinh IK...", new Color(0, 90, 180));
 
         new SwingWorker<DualDemoPlan, Void>() {
             @Override
             protected DualDemoPlan doInBackground() {
-                return buildRightArmPickPlaceDemo();
+                return buildPickPlaceDemo(rightDemo);
             }
 
             @Override
@@ -2183,13 +2186,21 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 try {
                     DualDemoPlan plan = get();
                     if (plan == null || plan.frames.isEmpty()) {
-                        setGotoStatusRight("Demo: diem ngoai tam", Color.RED);
+                        if (rightDemo) {
+                            setGotoStatusRight("Demo: diem ngoai tam", Color.RED);
+                        } else {
+                            setGotoStatusLeft("Demo: diem ngoai tam", Color.RED);
+                        }
                         return;
                     }
-                    runDualArmPlayback(plan.frames, "Demo Gap Tra", plan.gripFrameIndex, plan.releaseFrameIndex);
+                    runDualArmPlayback(plan.frames, "Demo Gap Tra", plan.gripFrameIndex, plan.releaseFrameIndex, rightDemo);
                 } catch (Exception ex) {
                     ex.printStackTrace();
-                    setGotoStatusRight("Demo: loi tinh IK", Color.RED);
+                    if (rightDemo) {
+                        setGotoStatusRight("Demo: loi tinh IK", Color.RED);
+                    } else {
+                        setGotoStatusLeft("Demo: loi tinh IK", Color.RED);
+                    }
                 }
             }
         }.execute();
@@ -2207,34 +2218,39 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
     }
 
-    private DualDemoPlan buildRightArmPickPlaceDemo() {
-        DualDemoPlan cachedPlan = loadDualDemoPlanCache(RIGHT_DEMO_CACHE_FILE, RIGHT_DEMO_CACHE_VERSION);
+    private DualDemoPlan buildPickPlaceDemo(boolean rightDemo) {
+        String cacheFile = rightDemo ? RIGHT_DEMO_CACHE_FILE : LEFT_DEMO_CACHE_FILE;
+        String baseCacheVersion = rightDemo ? RIGHT_DEMO_CACHE_VERSION : LEFT_DEMO_CACHE_VERSION;
+        String prefCfg = (rightDemo ? configComboRight : configComboLeft).getSelectedIndex() == 0 ? "+" : "-";
+        String cacheVersion = baseCacheVersion + "_cfg" + prefCfg;
+        DualDemoPlan cachedPlan = loadDualDemoPlanCache(cacheFile, cacheVersion);
         if (cachedPlan != null) {
             return cachedPlan;
         }
 
-        final double pickX = 11.3;
+        final double side = rightDemo ? 1.0 : -1.0;
+        final double pickX = side * 11.3;
         final double pickY = 56.1;
         final double pickZ = 85.0;
-        final double placeX = 46.3;
+        final double placeX = side * 46.3;
         final double placeY = -42.8;
         final double placeZ = 120.0;
         final double pickHoverLift = 35.0;
         final double placeHoverLift = 20.0;
 
         boolean savedArmSelection = isRightArmSelected;
-        isRightArmSelected = true;
-        String prefCfg = configComboRight.getSelectedIndex() == 0 ? "+" : "-";
+        isRightArmSelected = rightDemo;
 
-        double[] pickHover = solveRightDemoHover(pickX, pickY, pickZ, pickHoverLift, prefCfg);
-        double[] pickQ = solveIKSmartRight(pickX, pickY, pickZ, prefCfg);
-        double[] placeHover = solveRightDemoHover(placeX, placeY, placeZ, placeHoverLift, prefCfg);
-        double[] placeQ = solveIKSmartRight(placeX, placeY, placeZ, prefCfg);
+        double[] pickHover = solveDemoHover(rightDemo, pickX, pickY, pickZ, pickHoverLift, prefCfg);
+        double[] pickQ = solveDemoPoint(rightDemo, pickX, pickY, pickZ, prefCfg);
+        double[] placeHover = solveDemoHover(rightDemo, placeX, placeY, placeZ, placeHoverLift, prefCfg);
+        double[] placeQ = solveDemoPoint(rightDemo, placeX, placeY, placeZ, prefCfg);
         isRightArmSelected = savedArmSelection;
 
         if (pickHover == null || pickQ == null || placeHover == null || placeQ == null) {
             System.out.printf(java.util.Locale.US,
-                    "[DEMO_IK] failed pickHover=%s pick=%s placeHover=%s place=%s | pick=[%.1f, %.1f, %.1f] place=[%.1f, %.1f, %.1f]%n",
+                    "[DEMO_IK] %s failed pickHover=%s pick=%s placeHover=%s place=%s | pick=[%.1f, %.1f, %.1f] place=[%.1f, %.1f, %.1f]%n",
+                    rightDemo ? "right" : "left",
                     pickHover != null, pickQ != null, placeHover != null, placeQ != null,
                     pickX, pickY, pickZ, placeX, placeY, placeZ);
             return null;
@@ -2242,51 +2258,20 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         final int stepsPerSegment = 45;
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
-        double[] leftHome = makeLeftHoldPose(0.0);
         keyframes.add(new double[][] {
                 { 0, 0, 20, -35, 0, 0 },
-                leftHome
+                { 0, 0, -20, 35, 0, 0 }
         });
-        keyframes.add(new double[][] {
-                pickHover,
-                makeLeftHoldPose(pickHover[0])
-        });
-        keyframes.add(new double[][] {
-                pickQ,
-                makeLeftHoldPose(pickQ[0])
-        });
-        keyframes.add(new double[][] {
-                pickQ,
-                makeLeftHoldPose(pickQ[0])
-        });
-        keyframes.add(new double[][] {
-                pickHover,
-                makeLeftHoldPose(pickHover[0])
-        });
-        keyframes.add(new double[][] {
-                placeHover,
-                makeLeftHoldPose(placeHover[0])
-        });
-        keyframes.add(new double[][] {
-                placeQ,
-                makeLeftHoldPose(placeQ[0])
-        });
-        keyframes.add(new double[][] {
-                placeQ,
-                makeLeftHoldPose(placeQ[0])
-        });
-        keyframes.add(new double[][] {
-                placeHover,
-                makeLeftHoldPose(placeHover[0])
-        });
-        keyframes.add(new double[][] {
-                withWrist(placeHover, 45, -45),
-                makeLeftHoldPose(placeHover[0])
-        });
-        keyframes.add(new double[][] {
-                withWrist(placeHover, -45, 45),
-                makeLeftHoldPose(placeHover[0])
-        });
+        keyframes.add(makeDemoFrame(rightDemo, pickHover));
+        keyframes.add(makeDemoFrame(rightDemo, pickQ));
+        keyframes.add(makeDemoFrame(rightDemo, pickQ));
+        keyframes.add(makeDemoFrame(rightDemo, pickHover));
+        keyframes.add(makeDemoFrame(rightDemo, placeHover));
+        keyframes.add(makeDemoFrame(rightDemo, placeQ));
+        keyframes.add(makeDemoFrame(rightDemo, placeQ));
+        keyframes.add(makeDemoFrame(rightDemo, placeHover));
+        keyframes.add(makeDemoFrame(rightDemo, withWrist(placeHover, 45, -45)));
+        keyframes.add(makeDemoFrame(rightDemo, withWrist(placeHover, -45, 45)));
         keyframes.add(new double[][] {
                 { 0, 0, 20, -35, 0, 0 },
                 { 0, 0, -20, 35, 0, 0 }
@@ -2294,7 +2279,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         java.util.List<double[][]> frames = interpolateDualArmKeyframes(keyframes, stepsPerSegment);
         DualDemoPlan plan = new DualDemoPlan(frames, stepsPerSegment * 3, stepsPerSegment * 8);
-        saveDualDemoPlanCache(plan, RIGHT_DEMO_CACHE_FILE, RIGHT_DEMO_CACHE_VERSION);
+        saveDualDemoPlanCache(plan, cacheFile, cacheVersion);
         return plan;
     }
 
@@ -2378,14 +2363,29 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return new double[] { sharedQ1, 0, -20, 35, 0, 0 };
     }
 
-    private double[] solveRightDemoHover(double x, double y, double z, double maxLift, String prefCfg) {
+    private double[] makeRightHoldPose(double sharedQ1) {
+        return new double[] { sharedQ1, 0, 20, -35, 0, 0 };
+    }
+
+    private double[][] makeDemoFrame(boolean rightDemo, double[] movingArmPose) {
+        if (rightDemo) {
+            return new double[][] { movingArmPose, makeLeftHoldPose(movingArmPose[0]) };
+        }
+        return new double[][] { makeRightHoldPose(movingArmPose[0]), movingArmPose };
+    }
+
+    private double[] solveDemoPoint(boolean rightDemo, double x, double y, double z, String prefCfg) {
+        return rightDemo ? solveIKSmartRight(x, y, z, prefCfg) : solveIKSmartLeft(x, y, z, prefCfg);
+    }
+
+    private double[] solveDemoHover(boolean rightDemo, double x, double y, double z, double maxLift, String prefCfg) {
         for (double lift = maxLift; lift >= 0.0; lift -= 2.5) {
-            double[] q = solveIKSmartRight(x, y, z + lift, prefCfg);
+            double[] q = solveDemoPoint(rightDemo, x, y, z + lift, prefCfg);
             if (q != null) {
                 if (lift < maxLift) {
                     System.out.printf(java.util.Locale.US,
-                            "[DEMO_IK] adjusted hover for [%.1f, %.1f, %.1f] from +%.1f to +%.1f%n",
-                            x, y, z, maxLift, lift);
+                            "[DEMO_IK] adjusted %s hover for [%.1f, %.1f, %.1f] from +%.1f to +%.1f%n",
+                            rightDemo ? "right" : "left", x, y, z, maxLift, lift);
                 }
                 return q;
             }
@@ -2435,7 +2435,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private void runDualArmPlayback(final java.util.List<double[][]> frames, String statusTitle,
-            int gripFrameIndex, int releaseFrameIndex) {
+            int gripFrameIndex, int releaseFrameIndex, boolean rightDemo) {
         if (frames.isEmpty()) {
             return;
         }
@@ -2454,7 +2454,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         setGotoStatusRight("Demo 2 Tay: ready", new Color(0, 90, 180));
         setGotoStatusLeft("Demo 2 Tay: ready", new Color(0, 90, 180));
-        setDualDemoGripperState(false, "Demo 2 Tay: mo kep");
+        setDemoGripperState(rightDemo, false, "Demo 2 Tay: mo kep");
 
         final int[] waitMs = { 0 };
         Timer prepareTimer = new Timer(50, evt -> {
@@ -2480,9 +2480,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     currentIndex[0]++;
                     applyDualArmFrame(frame[0], frame[1]);
                     if (frameIndex == gripFrameIndex) {
-                        setDualDemoGripperState(true, "Demo 2 Tay: kep vat");
+                        setDemoGripperState(rightDemo, true, "Demo 2 Tay: kep vat");
                     } else if (frameIndex == releaseFrameIndex) {
-                        setDualDemoGripperState(false, "Demo 2 Tay: nha vat");
+                        setDemoGripperState(rightDemo, false, "Demo 2 Tay: nha vat");
                     }
                     updateArm();
                     sendJointsToUart();
@@ -2493,14 +2493,24 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         prepareTimer.start();
     }
 
-    private void setDualDemoGripperState(boolean gripped, String statusText) {
-        isGrippedRight = gripped;
-        isGrippedLeft = gripped;
+    private void setDemoGripperState(boolean rightDemo, boolean gripped, String statusText) {
+        if (rightDemo) {
+            isGrippedRight = gripped;
+            isGrippedLeft = false;
+        } else {
+            isGrippedRight = false;
+            isGrippedLeft = gripped;
+        }
         setGotoStatusRight(statusText, Color.BLUE);
         setGotoStatusLeft(statusText, Color.BLUE);
         if (uartManager != null && uartManager.isConnected()) {
-            uartManager.sendData(gripped ? "R:GRIP\n" : "R:RELEASE\n");
-            uartManager.sendData(gripped ? "L:GRIP\n" : "L:RELEASE\n");
+            if (rightDemo) {
+                uartManager.sendData(gripped ? "R:GRIP\n" : "R:RELEASE\n");
+                if (!gripped) uartManager.sendData("L:RELEASE\n");
+            } else {
+                if (!gripped) uartManager.sendData("R:RELEASE\n");
+                uartManager.sendData(gripped ? "L:GRIP\n" : "L:RELEASE\n");
+            }
         }
         armPanel.repaint();
     }
