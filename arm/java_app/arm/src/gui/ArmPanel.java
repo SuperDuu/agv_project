@@ -19,6 +19,10 @@ public class ArmPanel extends JPanel
     private boolean hasDragged = false;
     double camAz = -30, camEl = 25, scale = 5.0;
     private double cAz = 1.0, sAz = 0.0, cEl = 1.0, sEl = 0.0;
+    private static final double TORSO_CENTER_X = 0.0;
+    private static final double TORSO_CENTER_Y = -60.0;
+    private static final double TORSO_HALF_WIDTH = 14.0;
+    private static final double TORSO_HEIGHT = 130.0;
     int lastX, lastY;
     int demoStep = 0;
     double[] clickTarget = null; // To draw where we clicked
@@ -870,7 +874,7 @@ public class ArmPanel extends JPanel
         double depth;
 
         TorsoBox() {
-            this.depth = getVz(new double[] { 0, 0, 65 });
+            this.depth = getVz(new double[] { TORSO_CENTER_X, TORSO_CENTER_Y, TORSO_HEIGHT / 2.0 });
         }
 
         @Override
@@ -896,17 +900,19 @@ public class ArmPanel extends JPanel
 
         @Override
         public void draw(Graphics2D g2, int cx, int cy) {
-            double halfW = 14.0;
-            double h = 130.0;
+            double x0 = TORSO_CENTER_X;
+            double y0 = TORSO_CENTER_Y;
+            double halfW = TORSO_HALF_WIDTH;
+            double h = TORSO_HEIGHT;
             double[][] corners = {
-                { -halfW, -halfW, 0 },
-                {  halfW, -halfW, 0 },
-                {  halfW,  halfW, 0 },
-                { -halfW,  halfW, 0 },
-                { -halfW, -halfW, h },
-                {  halfW, -halfW, h },
-                {  halfW,  halfW, h },
-                { -halfW,  halfW, h }
+                { x0 - halfW, y0 - halfW, 0 },
+                { x0 + halfW, y0 - halfW, 0 },
+                { x0 + halfW, y0 + halfW, 0 },
+                { x0 - halfW, y0 + halfW, 0 },
+                { x0 - halfW, y0 - halfW, h },
+                { x0 + halfW, y0 - halfW, h },
+                { x0 + halfW, y0 + halfW, h },
+                { x0 - halfW, y0 + halfW, h }
             };
 
             int[][] sc = new int[8][2];
@@ -1548,10 +1554,10 @@ public class ArmPanel extends JPanel
         java.util.List<double[]> pointsLeft = getCheckPoints(ptsLeft);
 
         // 3. Torso Collision Check (for both arms)
-        // Torso size: 28x28 (X in [-14, 14], Y in [-14, 14]) and height 130 (Z in [0, 130])
+        // Torso size: 28x28, shifted 60mm backward on Y from robot center, height 130.
         // Collision threshold: 5.0 mm from the surface of the torso box (Z < 140.0)
         double safetyThreshold = 5.0;
-        double torsoHeightLimit = 140.0;
+        double torsoHeightLimit = TORSO_HEIGHT + 10.0;
 
         for (int i = 0; i < pointsRight.size(); i++) {
             double[] pt = pointsRight.get(i);
@@ -1635,17 +1641,21 @@ public class ArmPanel extends JPanel
 
     private static double getDistanceToTorso(double x, double y, double z) {
         double dx = 0.0;
-        if (x < -14.0) {
-            dx = -14.0 - x;
-        } else if (x > 14.0) {
-            dx = x - 14.0;
+        double minX = TORSO_CENTER_X - TORSO_HALF_WIDTH;
+        double maxX = TORSO_CENTER_X + TORSO_HALF_WIDTH;
+        if (x < minX) {
+            dx = minX - x;
+        } else if (x > maxX) {
+            dx = x - maxX;
         }
 
         double dy = 0.0;
-        if (y < -14.0) {
-            dy = -14.0 - y;
-        } else if (y > 14.0) {
-            dy = y - 14.0;
+        double minY = TORSO_CENTER_Y - TORSO_HALF_WIDTH;
+        double maxY = TORSO_CENTER_Y + TORSO_HALF_WIDTH;
+        if (y < minY) {
+            dy = minY - y;
+        } else if (y > maxY) {
+            dy = y - maxY;
         }
 
         return Math.sqrt(dx * dx + dy * dy);
