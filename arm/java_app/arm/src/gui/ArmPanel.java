@@ -273,6 +273,7 @@ public class ArmPanel extends JPanel
             if (resultRight != null) {
                 rightCollision = diagnoseCollision(resultRight, robot.getAnglesLeft());
                 if (!rightCollision.free) {
+                    logClickCollision("RIGHT", p0, p1, fixedZ, rightCollision, resultRight, robot.getAnglesLeft());
                     resultRight = null;
                 }
             }
@@ -286,6 +287,7 @@ public class ArmPanel extends JPanel
                 if (resultLeft != null) {
                     leftCollision = diagnoseCollision(robot.getAnglesRight(), resultLeft);
                     if (!leftCollision.free) {
+                        logClickCollision("LEFT", p0, p1, fixedZ, leftCollision, resultLeft, robot.getAnglesRight());
                         resultLeft = null;
                     }
                 }
@@ -299,6 +301,7 @@ public class ArmPanel extends JPanel
             if (resultLeft != null) {
                 leftCollision = diagnoseCollision(robot.getAnglesRight(), resultLeft);
                 if (!leftCollision.free) {
+                    logClickCollision("LEFT", p0, p1, fixedZ, leftCollision, resultLeft, robot.getAnglesRight());
                     resultLeft = null;
                 }
             }
@@ -312,6 +315,7 @@ public class ArmPanel extends JPanel
                 if (resultRight != null) {
                     rightCollision = diagnoseCollision(resultRight, robot.getAnglesLeft());
                     if (!rightCollision.free) {
+                        logClickCollision("RIGHT", p0, p1, fixedZ, rightCollision, resultRight, robot.getAnglesLeft());
                         resultRight = null;
                     }
                 }
@@ -453,6 +457,14 @@ public class ArmPanel extends JPanel
             sum += diff * diff;
         }
         return sum;
+    }
+
+    private void logClickCollision(String candidateArm, double tx, double ty, double tz,
+            CollisionResult collision, double[] candidateQ, double[] otherArmQ) {
+        System.out.println(String.format(java.util.Locale.US,
+                "[COLLISION_CLICK] target=[%.2f, %.2f, %.2f] candidate=%s %s candidateQ=%s otherQ=%s",
+                tx, ty, tz, candidateArm, collision,
+                java.util.Arrays.toString(candidateQ), java.util.Arrays.toString(otherArmQ)));
     }
 
     public double[] getEndEffectorPosition() {
