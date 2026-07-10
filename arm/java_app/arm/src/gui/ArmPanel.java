@@ -20,7 +20,7 @@ public class ArmPanel extends JPanel
     double camAz = -30, camEl = 25, scale = 5.0;
     private double cAz = 1.0, sAz = 0.0, cEl = 1.0, sEl = 0.0;
     private static final double TORSO_CENTER_X = 0.0;
-    private static final double TORSO_CENTER_Y = -60.0;
+    private static final double TORSO_CENTER_Y = -6.0;
     private static final double TORSO_HALF_WIDTH = 14.0;
     private static final double TORSO_HEIGHT = 130.0;
     int lastX, lastY;
@@ -1554,7 +1554,7 @@ public class ArmPanel extends JPanel
         java.util.List<double[]> pointsLeft = getCheckPoints(ptsLeft);
 
         // 3. Torso Collision Check (for both arms)
-        // Torso size: 28x28, shifted 60mm backward on Y from robot center, height 130.
+        // Torso size: 28x28, shifted 6 units backward on Y from robot center, height 130.
         // Collision threshold: 5.0 mm from the surface of the torso box (Z < 140.0)
         double safetyThreshold = 5.0;
         double torsoHeightLimit = TORSO_HEIGHT + 10.0;
