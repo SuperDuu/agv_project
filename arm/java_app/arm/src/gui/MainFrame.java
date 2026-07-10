@@ -3756,32 +3756,47 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 };
             }
 
-            // Strategy 2: Cold start guesses (values must be within joint limits)
+            // Strategy 2: Cold start guesses (all values within joint limits)
             // Right: q3=[20,165]deg, q4=[-95,-15]deg
             // Left:  q3=[-165,-20]deg, q4=[15,95]deg
-            double[] q3_options = isRight ? new double[] { Math.toRadians(60.0), Math.toRadians(100.0) }
-                                         : new double[] { Math.toRadians(-60.0), Math.toRadians(-100.0) };
-            double[] q4_options = isRight ? new double[] { Math.toRadians(-35.0), Math.toRadians(-70.0) }
-                                         : new double[] { Math.toRadians(35.0), Math.toRadians(70.0) };
+            double[] q3_options = isRight ? new double[] { Math.toRadians(60.0), Math.toRadians(100.0), Math.toRadians(140.0) }
+                                         : new double[] { Math.toRadians(-60.0), Math.toRadians(-100.0), Math.toRadians(-140.0) };
+            double[] q4_options = isRight ? new double[] { Math.toRadians(-35.0), Math.toRadians(-60.0), Math.toRadians(-85.0) }
+                                         : new double[] { Math.toRadians(35.0), Math.toRadians(60.0), Math.toRadians(85.0) };
             
-            double[] q2_guesses = { 1.2, 0.6, 0.0, -0.6, -1.2 };
-            for (int cfgIdx = 0; cfgIdx < 2; cfgIdx++) {
+            // Z-adaptive q2 seed: arm angle depends on target height
+            double q2_seed_z;
+            if (pz > 135)      q2_seed_z = Math.toRadians(-70); // very high → shoulder tilts back
+            else if (pz > 110) q2_seed_z = Math.toRadians(-35);
+            else if (pz > 90)  q2_seed_z = Math.toRadians(0);
+            else               q2_seed_z = Math.toRadians(40);  // low → shoulder tilts forward
+            
+            double[] q2_guesses = { q2_seed_z, q2_seed_z - 0.6, q2_seed_z + 0.6, 1.2, -1.2 };
+
+            // q5 wrist compensation seeds (FREE mode: wrist can compensate pitch)
+            double[] q5_seeds = { 0.0, Math.PI / 4, -Math.PI / 4 };
+
+            for (int cfgIdx = 0; cfgIdx < q3_options.length; cfgIdx++) {
                 double q3_val = q3_options[cfgIdx];
                 double q4_val = q4_options[cfgIdx];
                 for (double q2_val : q2_guesses) {
-                    double[] qHome = new double[NUM_JOINTS];
-                    qHome[0] = yaw;
-                    qHome[1] = q2_val;
-                    qHome[2] = q3_val;
-                    qHome[3] = q4_val;
-                    
-                    double[] q2 = solveIK(px, py, pz, R_target, qHome, isRight);
-                    if (q2 != null && isWithinLimits(q2, isRight)) {
-                        addUniqueSolution(validSolutions, q2);
-                        if (findOneOnly) return validSolutions;
+                    for (double q5_val : q5_seeds) {
+                        double[] qHome = new double[NUM_JOINTS];
+                        qHome[0] = yaw;
+                        qHome[1] = q2_val;
+                        qHome[2] = q3_val;
+                        qHome[3] = q4_val;
+                        qHome[4] = q5_val;
+                        
+                        double[] q2 = solveIK(px, py, pz, R_target, qHome, isRight);
+                        if (q2 != null && isWithinLimits(q2, isRight)) {
+                            addUniqueSolution(validSolutions, q2);
+                            if (findOneOnly) return validSolutions;
+                        }
                     }
                 }
             }
+
             
             // Strategy 3: Alternative cold start guesses
             double[] qInit = new double[NUM_JOINTS];
