@@ -185,7 +185,7 @@ public class Kinematics {
                 { -Math.PI / 2, d2, 0, -Math.PI / 2, q[1] },
                 { -Math.PI / 2, 0, 0, -Math.PI, q[2] },
                 { 0, 0, L4, -Math.PI / 2, q[3] },
-                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, q[4] },
+                { -Math.PI / 2, L5 + L6, 0, 0, q[4] },
                 { -Math.PI / 2, 0, 0, 0, q[5] }
         };
         for (int i = 0; i < NUM_JOINTS; i++) {
@@ -612,7 +612,7 @@ public class Kinematics {
         params[4][0] = -Math.PI / 2;
         params[4][1] = L5 + L6;
         params[4][2] = 0;
-        params[4][3] = -Math.PI / 2;
+        params[4][3] = 0;
         params[4][4] = q[4];
         params[5][0] = -Math.PI / 2;
         params[5][1] = 0;
@@ -820,7 +820,7 @@ public class Kinematics {
         params[4][0] = -Math.PI / 2;
         params[4][1] = L5 + L6;
         params[4][2] = 0;
-        params[4][3] = -Math.PI / 2;
+        params[4][3] = 0;
         params[4][4] = q[4];
         params[5][0] = -Math.PI / 2;
         params[5][1] = 0;
