@@ -449,6 +449,12 @@ public class ArmPanel extends JPanel
         Graphics2D g2 = (Graphics2D) g;
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                 MainFrame.FAST_RENDER ? RenderingHints.VALUE_ANTIALIAS_OFF : RenderingHints.VALUE_ANTIALIAS_ON);
+        if (!MainFrame.FAST_RENDER) {
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+            g2.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_QUALITY);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        }
         int cx = getWidth() / 2, cy = getHeight() * 2 / 3;
 
         if (robot.showGridCb.isSelected())
@@ -599,6 +605,7 @@ public class ArmPanel extends JPanel
 
         g2.setColor(Color.BLACK);
         g2.drawString("Mô Phỏng Robot Song Arm Humanoid (6-Dof)", 10, 20);
+        Toolkit.getDefaultToolkit().sync();
     }
 
     // L-elbow method removed for 6-DOF robot
