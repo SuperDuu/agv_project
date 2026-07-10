@@ -1504,7 +1504,7 @@ public class ArmPanel extends JPanel
                 { -Math.PI / 2, d2, 0, -Math.PI / 2, Math.toRadians(anglesDeg[1]) },
                 { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(anglesDeg[2]) },
                 { 0, 0, L4, -Math.PI / 2, Math.toRadians(anglesDeg[3]) },
-                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(anglesDeg[4]) },
+                { -Math.PI / 2, L5 + L6, 0, 0, Math.toRadians(anglesDeg[4]) },
                 { -Math.PI / 2, 0, 0, 0, Math.toRadians(anglesDeg[5]) }
         };
 
