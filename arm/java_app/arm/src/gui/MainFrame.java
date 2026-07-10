@@ -21,7 +21,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     /** Set to false for demos to suppress debug output. Set to true during development. */
     public static final boolean DEBUG = false;
     public static final boolean FAST_RENDER =
-            !"full".equalsIgnoreCase(System.getenv().getOrDefault("AGV_RENDER_QUALITY", "fast"));
+            "fast".equalsIgnoreCase(System.getenv().getOrDefault("AGV_RENDER_QUALITY", "full"));
 
     private static final double MAX_IK_POSITION_ERROR = 0.20; // General IK threshold
     private static final double TRAJ_RELAXED_ERROR = 0.25; // Trajectory fallback threshold
@@ -128,8 +128,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JCheckBoxMenuItem clickModeItem;
     JSlider speedSlider = new JSlider(0, 120, 20);
     JLabel speedLabel = new JLabel("20 °/s");
-    private static final int MOTION_DT_MS = 30;
-    private static final int ARM_TX_REFRESH_MS = 20;
+    private static final int MOTION_DT_MS = 20;
+    private static final int ARM_TX_REFRESH_MS = 100;
     Timer motionTimer;
     Timer armTxRefreshTimer;
 
@@ -1034,7 +1034,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     moving = true;
                 }
             } else {
-                anglesRight[i] += Math.signum(diff) * Math.min(Math.abs(diff), maxStep);
+                double step = diff * 0.25;
+                if (Math.abs(step) > maxStep) {
+                    step = Math.signum(step) * maxStep;
+                }
+                anglesRight[i] += step;
                 moving = true;
             }
 
@@ -1060,7 +1064,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     moving = true;
                 }
             } else {
-                anglesLeft[i] += Math.signum(diff) * Math.min(Math.abs(diff), maxStep);
+                double step = diff * 0.25;
+                if (Math.abs(step) > maxStep) {
+                    step = Math.signum(step) * maxStep;
+                }
+                anglesLeft[i] += step;
                 moving = true;
             }
 
@@ -1170,8 +1178,22 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return;
         }
 
+        boolean rightChanged = forceSend;
+        boolean leftChanged = forceSend;
+
+        if (!forceSend) {
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                if (Math.abs(anglesRight[i] - lastSentAnglesRight[i]) > 0.01) {
+                    rightChanged = true;
+                }
+                if (Math.abs(anglesLeft[i] - lastSentAnglesLeft[i]) > 0.01) {
+                    leftChanged = true;
+                }
+            }
+        }
+
         // --- Right Arm ---
-        {
+        if (rightChanged) {
             double[] qActuator = toHomeRelativeActuatorSpace(anglesRight, true);
 
             // Build text frame: R:dq0_x100,dq1_x100,dq2_x100,dq3_x100,dq4_x100,dq5_x100\n
@@ -1196,7 +1218,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         // --- Left Arm ---
-        {
+        if (leftChanged) {
             double[] qActuator = toHomeRelativeActuatorSpace(anglesLeft, false);
 
             // Build text frame: L:dq0_x100,dq1_x100,dq2_x100,dq3_x100,dq4_x100,dq5_x100\n
@@ -2142,7 +2164,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double dt = MOTION_DT_MS / 1000.0;
         double stepLen = speedUnitsPerSec * dt;
-        if (stepLen < 1.2) stepLen = 1.2; // Force minimum 1.2 cm (12mm) spacing between anchors to prevent drift and heavy solver load
+        if (stepLen < 0.2) stepLen = 0.2; // Force minimum 0.2 cm (2mm) spacing between anchors to prevent duplicate points
 
         double[] lastPt = path.get(0);
         result.add(lastPt.clone());
