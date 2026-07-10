@@ -2212,19 +2212,24 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final double placeX = 46.3;
         final double placeY = -42.8;
         final double placeZ = 120.0;
-        final double hoverLift = 35.0;
+        final double pickHoverLift = 35.0;
+        final double placeHoverLift = 20.0;
 
         boolean savedArmSelection = isRightArmSelected;
         isRightArmSelected = true;
         String prefCfg = configComboRight.getSelectedIndex() == 0 ? "+" : "-";
 
-        double[] pickHover = solveIKSmartRight(pickX, pickY, pickZ + hoverLift, prefCfg);
+        double[] pickHover = solveIKSmartRight(pickX, pickY, pickZ + pickHoverLift, prefCfg);
         double[] pickQ = solveIKSmartRight(pickX, pickY, pickZ, prefCfg);
-        double[] placeHover = solveIKSmartRight(placeX, placeY, placeZ + hoverLift, prefCfg);
+        double[] placeHover = solveIKSmartRight(placeX, placeY, placeZ + placeHoverLift, prefCfg);
         double[] placeQ = solveIKSmartRight(placeX, placeY, placeZ, prefCfg);
         isRightArmSelected = savedArmSelection;
 
         if (pickHover == null || pickQ == null || placeHover == null || placeQ == null) {
+            System.out.printf(java.util.Locale.US,
+                    "[DEMO_IK] failed pickHover=%s pick=%s placeHover=%s place=%s | pick=[%.1f, %.1f, %.1f] place=[%.1f, %.1f, %.1f]%n",
+                    pickHover != null, pickQ != null, placeHover != null, placeQ != null,
+                    pickX, pickY, pickZ, placeX, placeY, placeZ);
             return null;
         }
 
