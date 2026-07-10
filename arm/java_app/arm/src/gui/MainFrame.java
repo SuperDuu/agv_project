@@ -33,6 +33,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final double[] HOME_ANGLES_LEFT = { 0, 0, -20, 35, 0, 0 };
     private static final double[] HOME_ACTUATOR_RIGHT = toActuatorSpace(HOME_ANGLES_RIGHT, true);
     private static final double[] HOME_ACTUATOR_LEFT = toActuatorSpace(HOME_ANGLES_LEFT, false);
+    private static final String RIGHT_DEMO_CACHE_FILE = "demo_right_pick_place.csv";
+    private static final String RIGHT_DEMO_CACHE_VERSION = "right_pick_place_v1";
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = HOME_ANGLES_RIGHT.clone();
@@ -2206,6 +2208,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private DualDemoPlan buildRightArmPickPlaceDemo() {
+        DualDemoPlan cachedPlan = loadDualDemoPlanCache(RIGHT_DEMO_CACHE_FILE, RIGHT_DEMO_CACHE_VERSION);
+        if (cachedPlan != null) {
+            return cachedPlan;
+        }
+
         final double pickX = 11.3;
         final double pickY = 56.1;
         final double pickZ = 85.0;
@@ -2286,7 +2293,85 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         });
 
         java.util.List<double[][]> frames = interpolateDualArmKeyframes(keyframes, stepsPerSegment);
-        return new DualDemoPlan(frames, stepsPerSegment * 3, stepsPerSegment * 8);
+        DualDemoPlan plan = new DualDemoPlan(frames, stepsPerSegment * 3, stepsPerSegment * 8);
+        saveDualDemoPlanCache(plan, RIGHT_DEMO_CACHE_FILE, RIGHT_DEMO_CACHE_VERSION);
+        return plan;
+    }
+
+    private DualDemoPlan loadDualDemoPlanCache(String fileName, String version) {
+        java.io.File file = new java.io.File(fileName);
+        if (!file.isFile()) {
+            return null;
+        }
+
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
+            String cachedVersion = reader.readLine();
+            if (!version.equals(cachedVersion)) {
+                System.out.printf("[DEMO_CACHE] ignore stale cache %s%n", file.getPath());
+                return null;
+            }
+
+            String eventLine = reader.readLine();
+            if (eventLine == null) {
+                return null;
+            }
+            String[] events = eventLine.split(",");
+            if (events.length != 2) {
+                return null;
+            }
+            int gripFrameIndex = Integer.parseInt(events[0].trim());
+            int releaseFrameIndex = Integer.parseInt(events[1].trim());
+
+            java.util.List<double[][]> frames = new java.util.ArrayList<>();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) {
+                    continue;
+                }
+                String[] parts = line.split(",");
+                if (parts.length != NUM_JOINTS * 2) {
+                    return null;
+                }
+                double[][] frame = new double[2][NUM_JOINTS];
+                for (int i = 0; i < NUM_JOINTS; i++) {
+                    frame[0][i] = Double.parseDouble(parts[i].trim());
+                    frame[1][i] = Double.parseDouble(parts[i + NUM_JOINTS].trim());
+                }
+                frames.add(frame);
+            }
+
+            if (frames.isEmpty()) {
+                return null;
+            }
+            System.out.printf("[DEMO_CACHE] loaded %d frames from %s%n", frames.size(), file.getPath());
+            return new DualDemoPlan(frames, gripFrameIndex, releaseFrameIndex);
+        } catch (Exception ex) {
+            System.out.printf("[DEMO_CACHE] failed to load %s: %s%n", file.getPath(), ex.getMessage());
+            return null;
+        }
+    }
+
+    private void saveDualDemoPlanCache(DualDemoPlan plan, String fileName, String version) {
+        java.io.File file = new java.io.File(fileName);
+        try (java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.FileWriter(file))) {
+            writer.println(version);
+            writer.printf(java.util.Locale.US, "%d,%d%n", plan.gripFrameIndex, plan.releaseFrameIndex);
+            for (double[][] frame : plan.frames) {
+                for (int arm = 0; arm < 2; arm++) {
+                    for (int joint = 0; joint < NUM_JOINTS; joint++) {
+                        if (arm != 0 || joint != 0) {
+                            writer.print(',');
+                        }
+                        writer.printf(java.util.Locale.US, "%.6f", frame[arm][joint]);
+                    }
+                }
+                writer.println();
+            }
+            System.out.printf("[DEMO_CACHE] saved %d frames to %s%n", plan.frames.size(), file.getPath());
+        } catch (Exception ex) {
+            System.out.printf("[DEMO_CACHE] failed to save %s: %s%n", file.getPath(), ex.getMessage());
+        }
     }
 
     private double[] makeLeftHoldPose(double sharedQ1) {
