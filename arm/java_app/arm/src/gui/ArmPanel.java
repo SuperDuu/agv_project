@@ -308,16 +308,14 @@ public class ArmPanel extends JPanel
             robot.trajArmCombo.setSelectedIndex(chooseRight ? 0 : 1);
             if (chooseRight) {
                 robot.setTargetAnglesRight(chosenResult);
-                double[] leftHome = { chosenResult[0], 0, -10, 30, 0, 0 };
-                robot.setTargetAnglesLeft(leftHome);
+                robot.setTargetAnglesLeft(robot.getAnglesLeft());
                 robot.setGotoStatusRight(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
-                robot.setGotoStatusLeft("Về Home", Color.BLUE);
+                robot.setGotoStatusLeft("Hold", Color.BLUE);
             } else {
                 robot.setTargetAnglesLeft(chosenResult);
-                double[] rightHome = { chosenResult[0], 0, 10, -30, 0, 0 };
-                robot.setTargetAnglesRight(rightHome);
+                robot.setTargetAnglesRight(robot.getAnglesRight());
                 robot.setGotoStatusLeft(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
-                robot.setGotoStatusRight("Về Home", Color.BLUE);
+                robot.setGotoStatusRight("Hold", Color.BLUE);
             }
         } else {
             // --- CSV Fallback: find nearest 3 reachable points and suggest them ---
@@ -370,21 +368,19 @@ public class ArmPanel extends JPanel
                     // Move to the closest (first) candidate
                     WorkspaceMap.Entry best = candidates.get(0);
                     if (isRight) {
-                        double[] leftHome = { best.q[0], 0, -10, 30, 0, 0 };
                         robot.setTargetAnglesRight(best.q);
-                        robot.setTargetAnglesLeft(leftHome);
+                        robot.setTargetAnglesLeft(robot.getAnglesLeft());
                         robot.setGotoStatusRight(
                                 String.format("Gợi ý gần nhất (%.1f,%.1f,%.1f)", best.x, best.y, best.z),
                                 new Color(0, 150, 50));
-                        robot.setGotoStatusLeft("Về Home", Color.BLUE);
+                        robot.setGotoStatusLeft("Hold", Color.BLUE);
                     } else {
-                        double[] rightHome = { best.q[0], 0, 10, -30, 0, 0 };
                         robot.setTargetAnglesLeft(best.q);
-                        robot.setTargetAnglesRight(rightHome);
+                        robot.setTargetAnglesRight(robot.getAnglesRight());
                         robot.setGotoStatusLeft(
                                 String.format("Gợi ý gần nhất (%.1f,%.1f,%.1f)", best.x, best.y, best.z),
                                 new Color(0, 150, 50));
-                        robot.setGotoStatusRight("Về Home", Color.BLUE);
+                        robot.setGotoStatusRight("Hold", Color.BLUE);
                     }
                 } else {
                     // No CSV match either
