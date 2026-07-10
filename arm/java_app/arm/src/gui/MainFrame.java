@@ -185,6 +185,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         buildTopPanel();
         buildMenuBar();
 
+        // Default gripper mode: FREE (Tự do) for both arms
+        gripperModeComboRight.setSelectedIndex(1);
+        gripperModeComboLeft.setSelectedIndex(1);
+
         setSize(1400, 780);
         setTitle("Mô Phỏng cánh tay Robot 6-DOF");
         setLocationRelativeTo(null);
