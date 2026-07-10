@@ -1112,7 +1112,7 @@ public class ArmPanel extends JPanel
                 { -Math.PI / 2, L2 + L3, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesRight()[1]) },
                 { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(robot.getAnglesRight()[2]) },
                 { 0, 0, L4, -Math.PI / 2, Math.toRadians(robot.getAnglesRight()[3]) },
-                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesRight()[4]) },
+                { -Math.PI / 2, L5 + L6, 0, 0, Math.toRadians(robot.getAnglesRight()[4]) },
                 { -Math.PI / 2, 0, 0, 0, Math.toRadians(robot.getAnglesRight()[5]) }
         };
         for (int i = 0; i < NUM_JOINTS; i++) {
@@ -1129,7 +1129,7 @@ public class ArmPanel extends JPanel
                 { -Math.PI / 2, -(L2 + L3), 0, -Math.PI / 2, Math.toRadians(robot.getAnglesLeft()[1]) },
                 { -Math.PI / 2, 0, 0, -Math.PI, Math.toRadians(robot.getAnglesLeft()[2]) },
                 { 0, 0, L4, -Math.PI / 2, Math.toRadians(robot.getAnglesLeft()[3]) },
-                { -Math.PI / 2, L5 + L6, 0, -Math.PI / 2, Math.toRadians(robot.getAnglesLeft()[4]) },
+                { -Math.PI / 2, L5 + L6, 0, 0, Math.toRadians(robot.getAnglesLeft()[4]) },
                 { -Math.PI / 2, 0, 0, 0, Math.toRadians(robot.getAnglesLeft()[5]) }
         };
         for (int i = 0; i < NUM_JOINTS; i++) {
