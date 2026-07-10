@@ -82,6 +82,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     JButton btnReset = new JButton("Reset");
     JButton btnDemo = new JButton("Quỹ đạo Xoắn ốc");
+    JButton btnDualArmDemo = new JButton("Demo 2 Tay");
     JButton btnTopView = new JButton("Hệ Trục (Top)");
     JButton btnPersp = new JButton("3D Perspective");
 
@@ -524,6 +525,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         });
         topPanel.add(btnStartTraj);
+
+        btnDualArmDemo.addActionListener(e -> runDualArmShowcase());
+        topPanel.add(btnDualArmDemo);
 
         JButton btnStopTraj = new JButton("Dừng");
         btnStopTraj.addActionListener(e -> {
@@ -2160,6 +2164,151 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     void runCustomPathTrajectory(java.util.List<double[]> path) {
         executeTrajectory(path, "Quỹ đạo tùy chỉnh");
+    }
+
+    private void runDualArmShowcase() {
+        java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
+        keyframes.add(new double[][] {
+                { 0, 0, 20, -35, 0, 0 },
+                { 0, 0, -20, 35, 0, 0 }
+        });
+        keyframes.add(new double[][] {
+                { 0, -18, 55, -55, 12, -20 },
+                { 0, -18, -55, 55, -12, 20 }
+        });
+        keyframes.add(new double[][] {
+                { -18, -28, 85, -72, 28, -35 },
+                { -18, -28, -85, 72, -28, 35 }
+        });
+        keyframes.add(new double[][] {
+                { 18, -28, 85, -72, -28, 35 },
+                { 18, -28, -85, 72, 28, -35 }
+        });
+        keyframes.add(new double[][] {
+                { 0, 12, 120, -88, 0, 45 },
+                { 0, 12, -120, 88, 0, -45 }
+        });
+        keyframes.add(new double[][] {
+                { -12, 22, 95, -65, -35, -45 },
+                { -12, 22, -95, 65, 35, 45 }
+        });
+        keyframes.add(new double[][] {
+                { 12, 22, 95, -65, 35, 45 },
+                { 12, 22, -95, 65, -35, -45 }
+        });
+        keyframes.add(new double[][] {
+                { 0, -10, 60, -50, 0, 0 },
+                { 0, -10, -60, 50, 0, 0 }
+        });
+        keyframes.add(new double[][] {
+                { 0, 0, 20, -35, 0, 0 },
+                { 0, 0, -20, 35, 0, 0 }
+        });
+
+        java.util.List<double[][]> frames = interpolateDualArmKeyframes(keyframes, 45);
+        runDualArmPlayback(frames, "Demo 2 Tay");
+    }
+
+    private java.util.List<double[][]> interpolateDualArmKeyframes(java.util.List<double[][]> keyframes,
+            int stepsPerSegment) {
+        java.util.List<double[][]> frames = new java.util.ArrayList<>();
+        if (keyframes.isEmpty()) {
+            return frames;
+        }
+
+        for (int k = 0; k < keyframes.size() - 1; k++) {
+            double[][] a = keyframes.get(k);
+            double[][] b = keyframes.get(k + 1);
+            for (int step = 0; step < stepsPerSegment; step++) {
+                double t = step / (double) stepsPerSegment;
+                double s = t * t * (3.0 - 2.0 * t);
+                frames.add(interpolateDualArmFrame(a, b, s));
+            }
+        }
+        double[][] last = keyframes.get(keyframes.size() - 1);
+        frames.add(new double[][] { last[0].clone(), last[1].clone() });
+        return frames;
+    }
+
+    private double[][] interpolateDualArmFrame(double[][] a, double[][] b, double t) {
+        double[][] frame = new double[2][NUM_JOINTS];
+        for (int arm = 0; arm < 2; arm++) {
+            for (int j = 0; j < NUM_JOINTS; j++) {
+                double diff = wrappedDegDiff(b[arm][j], a[arm][j]);
+                frame[arm][j] = a[arm][j] + diff * t;
+            }
+        }
+        double sharedQ1 = frame[0][0];
+        frame[1][0] = sharedQ1;
+        return frame;
+    }
+
+    private void runDualArmPlayback(final java.util.List<double[][]> frames, String statusTitle) {
+        if (frames.isEmpty()) {
+            return;
+        }
+
+        armPanel.trail.clear();
+        showTrailCb.setSelected(true);
+        armPanel.repaint();
+
+        if (motionTimer != null) motionTimer.stop();
+        if (trajectoryTimer != null) trajectoryTimer.stop();
+
+        double[][] startFrame = frames.get(0);
+        setTargetAnglesRight(startFrame[0]);
+        setTargetAnglesLeft(startFrame[1]);
+        updateArm();
+
+        setGotoStatusRight("Demo 2 Tay: ready", new Color(0, 90, 180));
+        setGotoStatusLeft("Demo 2 Tay: ready", new Color(0, 90, 180));
+
+        final int[] waitMs = { 0 };
+        Timer prepareTimer = new Timer(50, evt -> {
+            waitMs[0] += 50;
+            boolean arrived = isArmAtTarget(true) && isArmAtTarget(false);
+            if (arrived || waitMs[0] >= 5000) {
+                ((Timer) evt.getSource()).stop();
+                setTitle(statusTitle + " dang chay...");
+
+                final int[] currentIndex = { 0 };
+                trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
+                    if (currentIndex[0] >= frames.size()) {
+                        trajectoryTimer.stop();
+                        setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
+                        setGotoStatusRight("Demo 2 Tay xong", new Color(0, 140, 0));
+                        setGotoStatusLeft("Demo 2 Tay xong", new Color(0, 140, 0));
+                        startMotionTimer();
+                        return;
+                    }
+
+                    double[][] frame = frames.get(currentIndex[0]);
+                    currentIndex[0]++;
+                    applyDualArmFrame(frame[0], frame[1]);
+                    updateArm();
+                    sendJointsToUart();
+                });
+                trajectoryTimer.start();
+            }
+        });
+        prepareTimer.start();
+    }
+
+    private void applyDualArmFrame(double[] rightFrame, double[] leftFrame) {
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            anglesRight[i] = targetAnglesRight[i] = rightFrame[i];
+            anglesLeft[i] = targetAnglesLeft[i] = leftFrame[i];
+
+            slidersRight[i].removeChangeListener(this);
+            slidersRight[i].setValue((int) Math.round(anglesRight[i]));
+            slidersRight[i].addChangeListener(this);
+            angleLblsRight[i].setText((int) Math.round(anglesRight[i]) + "°");
+
+            slidersLeft[i].removeChangeListener(this);
+            slidersLeft[i].setValue((int) Math.round(anglesLeft[i]));
+            slidersLeft[i].addChangeListener(this);
+            angleLblsLeft[i].setText((int) Math.round(anglesLeft[i]) + "°");
+        }
     }
 
     private java.util.List<double[]> resamplePath(java.util.List<double[]> path, double speedUnitsPerSec) {
