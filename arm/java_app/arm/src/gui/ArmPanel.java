@@ -261,20 +261,18 @@ public class ArmPanel extends JPanel
             System.out.printf("[DEBUG_CLICK] Left Arm Solver: %s\n", resultLeft == null ? "FAILED" : "SUCCESS");
         }
 
-        boolean rightCollision = false;
+        CollisionResult rightCollision = CollisionResult.free();
         if (resultRight != null) {
-            double[] leftHome = { resultRight[0], 0, -10, 30, 0, 0 };
-            if (!isCollisionFree(resultRight, leftHome)) {
+            rightCollision = diagnoseCollision(resultRight, robot.getAnglesLeft());
+            if (!rightCollision.free) {
                 resultRight = null;
-                rightCollision = true;
             }
         }
-        boolean leftCollision = false;
+        CollisionResult leftCollision = CollisionResult.free();
         if (resultLeft != null) {
-            double[] rightHome = { resultLeft[0], 0, 10, -30, 0, 0 };
-            if (!isCollisionFree(rightHome, resultLeft)) {
+            leftCollision = diagnoseCollision(robot.getAnglesRight(), resultLeft);
+            if (!leftCollision.free) {
                 resultLeft = null;
-                leftCollision = true;
             }
         }
 
@@ -390,16 +388,16 @@ public class ArmPanel extends JPanel
                     }
                 } else {
                     // No CSV match either
-                    if (rightCollision) robot.setGotoStatusRight("Va chạm (Click)", Color.RED);
+                    if (!rightCollision.free) robot.setGotoStatusRight(rightCollision.toStatusText(), Color.RED);
                     else robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
-                    if (leftCollision) robot.setGotoStatusLeft("Va chạm (Click)", Color.RED);
+                    if (!leftCollision.free) robot.setGotoStatusLeft(leftCollision.toStatusText(), Color.RED);
                     else robot.setGotoStatusLeft("Ngoài tầm (Click)", Color.RED);
                 }
             } else {
                 // No workspace map available — original fallback
-                if (rightCollision) robot.setGotoStatusRight("Va chạm (Click)", Color.RED);
+                if (!rightCollision.free) robot.setGotoStatusRight(rightCollision.toStatusText(), Color.RED);
                 else robot.setGotoStatusRight("Ngoài tầm (Click)", Color.RED);
-                if (leftCollision) robot.setGotoStatusLeft("Va chạm (Click)", Color.RED);
+                if (!leftCollision.free) robot.setGotoStatusLeft(leftCollision.toStatusText(), Color.RED);
                 else robot.setGotoStatusLeft("Ngoài tầm (Click)", Color.RED);
             }
         }
@@ -1430,7 +1428,67 @@ public class ArmPanel extends JPanel
 
     }
 
+    public static final class CollisionResult {
+        final boolean free;
+        final String reason;
+        final String arm;
+        final double distance;
+        final double threshold;
+        final int rightPointIndex;
+        final int leftPointIndex;
+        final double[] point;
+
+        private CollisionResult(boolean free, String reason, String arm, double distance, double threshold,
+                int rightPointIndex, int leftPointIndex, double[] point) {
+            this.free = free;
+            this.reason = reason;
+            this.arm = arm;
+            this.distance = distance;
+            this.threshold = threshold;
+            this.rightPointIndex = rightPointIndex;
+            this.leftPointIndex = leftPointIndex;
+            this.point = point;
+        }
+
+        static CollisionResult free() {
+            return new CollisionResult(true, "FREE", "", Double.POSITIVE_INFINITY, 0.0, -1, -1, null);
+        }
+
+        static CollisionResult torso(String arm, double distance, double threshold, int pointIndex, double[] point) {
+            return new CollisionResult(false, "TORSO", arm, distance, threshold,
+                    "RIGHT".equals(arm) ? pointIndex : -1, "LEFT".equals(arm) ? pointIndex : -1, point.clone());
+        }
+
+        static CollisionResult interArm(double distance, double threshold, int rightPointIndex, int leftPointIndex,
+                double[] point) {
+            return new CollisionResult(false, "INTER_ARM", "BOTH", distance, threshold,
+                    rightPointIndex, leftPointIndex, point.clone());
+        }
+
+        String toStatusText() {
+            if (free) {
+                return "OK";
+            }
+            return String.format(java.util.Locale.US, "Collision %s d=%.1f<%.1f", reason, distance, threshold);
+        }
+
+        @Override
+        public String toString() {
+            if (free) {
+                return "CollisionResult{free}";
+            }
+            return String.format(java.util.Locale.US,
+                    "CollisionResult{reason=%s, arm=%s, distance=%.2f, threshold=%.2f, rightPoint=%d, leftPoint=%d, point=[%.2f, %.2f, %.2f]}",
+                    reason, arm, distance, threshold, rightPointIndex, leftPointIndex,
+                    point == null ? 0.0 : point[0], point == null ? 0.0 : point[1], point == null ? 0.0 : point[2]);
+        }
+    }
+
     public static boolean isCollisionFree(double[] qRight, double[] qLeft) {
+        return diagnoseCollision(qRight, qLeft).free;
+    }
+
+    public static CollisionResult diagnoseCollision(double[] qRight, double[] qLeft) {
         // 1. Generate 3D check points for Right Arm
         double[][] ptsRight = computeAllJoints3DForAngles(qRight, true);
         java.util.List<double[]> pointsRight = getCheckPoints(ptsRight);
@@ -1445,17 +1503,21 @@ public class ArmPanel extends JPanel
         double safetyThreshold = 5.0;
         double torsoHeightLimit = 140.0;
 
-        for (double[] pt : pointsRight) {
+        for (int i = 0; i < pointsRight.size(); i++) {
+            double[] pt = pointsRight.get(i);
             if (pt[2] < torsoHeightLimit) {
-                if (getDistanceToTorso(pt[0], pt[1], pt[2]) < safetyThreshold) {
-                    return false; // Collision with torso
+                double distance = getDistanceToTorso(pt[0], pt[1], pt[2]);
+                if (distance < safetyThreshold) {
+                    return CollisionResult.torso("RIGHT", distance, safetyThreshold, i, pt);
                 }
             }
         }
-        for (double[] pt : pointsLeft) {
+        for (int i = 0; i < pointsLeft.size(); i++) {
+            double[] pt = pointsLeft.get(i);
             if (pt[2] < torsoHeightLimit) {
-                if (getDistanceToTorso(pt[0], pt[1], pt[2]) < safetyThreshold) {
-                    return false; // Collision with torso
+                double distance = getDistanceToTorso(pt[0], pt[1], pt[2]);
+                if (distance < safetyThreshold) {
+                    return CollisionResult.torso("LEFT", distance, safetyThreshold, i, pt);
                 }
             }
         }
@@ -1464,16 +1526,18 @@ public class ArmPanel extends JPanel
         // Check distance between all check points of Right and Left arm
         // Collision threshold: 25.0 mm
         double armCollisionThreshold = 25.0;
-        for (double[] pr : pointsRight) {
-            for (double[] pl : pointsLeft) {
+        for (int i = 0; i < pointsRight.size(); i++) {
+            double[] pr = pointsRight.get(i);
+            for (int j = 0; j < pointsLeft.size(); j++) {
+                double[] pl = pointsLeft.get(j);
                 double dist = Math.sqrt(Math.pow(pr[0] - pl[0], 2) + Math.pow(pr[1] - pl[1], 2) + Math.pow(pr[2] - pl[2], 2));
                 if (dist < armCollisionThreshold) {
-                    return false; // Collision between arms
+                    return CollisionResult.interArm(dist, armCollisionThreshold, i, j, pr);
                 }
             }
         }
 
-        return true; // No collision!
+        return CollisionResult.free();
     }
 
     private static java.util.List<double[]> getCheckPoints(double[][] pts) {
