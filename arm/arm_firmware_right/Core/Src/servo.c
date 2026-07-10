@@ -30,13 +30,13 @@ void Servo_Init(void) {
         
         float init_angle;
         if (i == 0) {
-            init_angle = 96.43f;
+            init_angle = 90.0f;
         } else if (i == 1) {
             init_angle = 35.0f;
         } else if (i == 2) {
             init_angle = 65.0f;
         } else if (i == 3) {
-            init_angle = 96.43f;
+            init_angle = 90.0f;
         } else if (i == 4) {
             init_angle = 96.43f;
         } else if (i == 5) {
