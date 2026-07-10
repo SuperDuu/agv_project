@@ -2580,6 +2580,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private void applyDualArmFrame(double[] rightFrame, double[] leftFrame) {
+        leftFrame[0] = rightFrame[0]; // Force left.q1 = right.q1 when applying out to GUI/UART
         for (int i = 0; i < NUM_JOINTS; i++) {
             anglesRight[i] = targetAnglesRight[i] = rightFrame[i];
             anglesLeft[i] = targetAnglesLeft[i] = leftFrame[i];
