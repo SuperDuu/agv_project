@@ -176,7 +176,7 @@ public class UartManager {
     // -----------------------------------------------------------------------
     // Serial port (jSerialComm via reflection for optional dependency)
     // -----------------------------------------------------------------------
-    private Object port;
+    private volatile Object port;
     private final boolean serialAvailable;
     private final Class<?> serialPortClass;
 
@@ -208,6 +208,44 @@ public class UartManager {
         return portList;
     }
 
+    private final java.util.concurrent.BlockingQueue<byte[]> writeQueue = new java.util.concurrent.LinkedBlockingQueue<>();
+    private Thread writeThread;
+    private volatile boolean writeThreadRunning = false;
+
+    private void startWriteThread() {
+        writeQueue.clear();
+        writeThreadRunning = true;
+        writeThread = new Thread(() -> {
+            while (writeThreadRunning && isConnected()) {
+                try {
+                    byte[] data = writeQueue.take();
+                    if (port != null) {
+                        try {
+                            int written = (int) serialPortClass.getMethod("writeBytes", byte[].class, int.class)
+                                    .invoke(port, data, data.length);
+                            if (written < 0) {
+                                System.err.println("UART Write Error: Connection lost. Closing port.");
+                                disconnect();
+                                break;
+                            }
+                        } catch (Throwable t) {
+                            System.err.println("UART Write Exception: " + t.getMessage() + ". Closing port.");
+                            disconnect();
+                            break;
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            writeThreadRunning = false;
+        });
+        writeThread.setDaemon(true);
+        writeThread.setName("UART-Write-Thread");
+        writeThread.start();
+    }
+
     public boolean connect(String portName, int baudRate) {
         if (!serialAvailable || serialPortClass == null) {
             System.err.println("Serial library not available. Cannot connect to " + portName);
@@ -223,6 +261,7 @@ public class UartManager {
             boolean opened = (boolean) serialPortClass.getMethod("openPort").invoke(port);
             if (opened) {
                 System.out.println("Connected to STM32 on " + portName + " at " + baudRate + " baud.");
+                startWriteThread();
                 return true;
             }
             System.out.println("Failed to open " + portName);
@@ -233,6 +272,12 @@ public class UartManager {
     }
 
     public void disconnect() {
+        writeThreadRunning = false;
+        if (writeThread != null) {
+            writeThread.interrupt();
+            writeThread = null;
+        }
+        writeQueue.clear();
         if (port != null) {
             try {
                 boolean isOpen = (boolean) serialPortClass.getMethod("isOpen").invoke(port);
@@ -246,31 +291,43 @@ public class UartManager {
         }
     }
 
-    /**
-     * Sends a raw byte array over the serial port.
-     * Used for Protocol V2.1 binary frames.
-     *
-     * @return true if all bytes were written successfully
-     */
-    public boolean sendBytes(byte[] data) {
-        if (port == null) return false;
-        try {
-            boolean isOpen = (boolean) serialPortClass.getMethod("isOpen").invoke(port);
-            if (isOpen) {
-                int written = (int) serialPortClass.getMethod("writeBytes", byte[].class, int.class)
-                        .invoke(port, data, data.length);
-                if (written < 0) {
-                    System.err.println("UART Write Error: Connection lost. Closing port.");
-                    disconnect();
-                    return false;
-                }
-                return written == data.length;
+    private boolean isImportantCommand(byte[] data) {
+        if (data == null || data.length == 0) return false;
+        String str = new String(data).trim();
+        if (str.contains("ESTOP") || str.contains("GRIP") || str.contains("RELEASE")) {
+            return true;
+        }
+        if (data.length >= 8 && (data[0] & 0xFF) == SOF1 && (data[1] & 0xFF) == SOF2) {
+            int cmd = data[6] & 0xFF;
+            if (cmd == CMD_ARM_GRIPPER) {
+                return true;
             }
-        } catch (Throwable t) {
-            System.err.println("UART Write Exception: " + t.getMessage() + ". Closing port.");
-            disconnect();
         }
         return false;
+    }
+
+    /**
+     * Sends a raw byte array over the serial port by adding it to the background writer queue.
+     * Used for Protocol V2.1 binary frames.
+     *
+     * @return true if added to queue successfully
+     */
+    public boolean sendBytes(byte[] data) {
+        if (port == null || !isConnected()) return false;
+        
+        // Prevent queue pile-up (latency) if serial is slow/congested.
+        if (writeQueue.size() > 5) {
+            java.util.List<byte[]> temp = new java.util.ArrayList<>();
+            writeQueue.drainTo(temp);
+            for (byte[] item : temp) {
+                if (isImportantCommand(item)) {
+                    writeQueue.offer(item);
+                }
+            }
+        }
+        
+        writeQueue.offer(data);
+        return true;
     }
 
     /**
