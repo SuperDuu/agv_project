@@ -2219,9 +2219,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         isRightArmSelected = true;
         String prefCfg = configComboRight.getSelectedIndex() == 0 ? "+" : "-";
 
-        double[] pickHover = solveIKSmartRight(pickX, pickY, pickZ + pickHoverLift, prefCfg);
+        double[] pickHover = solveRightDemoHover(pickX, pickY, pickZ, pickHoverLift, prefCfg);
         double[] pickQ = solveIKSmartRight(pickX, pickY, pickZ, prefCfg);
-        double[] placeHover = solveIKSmartRight(placeX, placeY, placeZ + placeHoverLift, prefCfg);
+        double[] placeHover = solveRightDemoHover(placeX, placeY, placeZ, placeHoverLift, prefCfg);
         double[] placeQ = solveIKSmartRight(placeX, placeY, placeZ, prefCfg);
         isRightArmSelected = savedArmSelection;
 
@@ -2291,6 +2291,21 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private double[] makeLeftHoldPose(double sharedQ1) {
         return new double[] { sharedQ1, 0, -20, 35, 0, 0 };
+    }
+
+    private double[] solveRightDemoHover(double x, double y, double z, double maxLift, String prefCfg) {
+        for (double lift = maxLift; lift >= 0.0; lift -= 2.5) {
+            double[] q = solveIKSmartRight(x, y, z + lift, prefCfg);
+            if (q != null) {
+                if (lift < maxLift) {
+                    System.out.printf(java.util.Locale.US,
+                            "[DEMO_IK] adjusted hover for [%.1f, %.1f, %.1f] from +%.1f to +%.1f%n",
+                            x, y, z, maxLift, lift);
+                }
+                return q;
+            }
+        }
+        return null;
     }
 
     private double[] withWrist(double[] q, double q5, double q6) {
