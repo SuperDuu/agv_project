@@ -92,6 +92,7 @@ void Servo_Test_Patterns(void) {
     }
     HAL_Delay(500);
 
+
     for (int16_t angle = 270; angle >= 0; angle -= 2) {
         for (uint8_t i = 0; i < MAX_SERVOS; i++) {
             Set_Servo_Angle(i, (uint16_t)angle);
