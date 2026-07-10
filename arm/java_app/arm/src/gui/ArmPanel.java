@@ -258,30 +258,63 @@ public class ArmPanel extends JPanel
             System.out.printf("[DEBUG_CLICK] Click position: (X=%.2f, Y=%.2f, Z=%.2f)\n", p0, p1, fixedZ);
         }
         
-        String prefCfgRight = robot.configComboRight.getSelectedIndex() == 0 ? "+" : "-";
-        double[] resultRight = robot.solveIKSmartRight(p0, p1, fixedZ, prefCfgRight);
-        if (MainFrame.DEBUG) {
-            System.out.printf("[DEBUG_CLICK] Right Arm Solver: %s\n", resultRight == null ? "FAILED" : "SUCCESS");
-        }
-        
-        String prefCfgLeft = robot.configComboLeft.getSelectedIndex() == 0 ? "+" : "-";
-        double[] resultLeft = robot.solveIKSmartLeft(p0, p1, fixedZ, prefCfgLeft);
-        if (MainFrame.DEBUG) {
-            System.out.printf("[DEBUG_CLICK] Left Arm Solver: %s\n", resultLeft == null ? "FAILED" : "SUCCESS");
-        }
-
+        double[] resultRight = null;
+        double[] resultLeft = null;
         CollisionResult rightCollision = CollisionResult.free();
-        if (resultRight != null) {
-            rightCollision = diagnoseCollision(resultRight, robot.getAnglesLeft());
-            if (!rightCollision.free) {
-                resultRight = null;
-            }
-        }
         CollisionResult leftCollision = CollisionResult.free();
-        if (resultLeft != null) {
-            leftCollision = diagnoseCollision(robot.getAnglesRight(), resultLeft);
-            if (!leftCollision.free) {
-                resultLeft = null;
+
+        boolean preferRight = robot.isRightArmSelected;
+        if (preferRight) {
+            String prefCfgRight = robot.configComboRight.getSelectedIndex() == 0 ? "+" : "-";
+            resultRight = robot.solveIKSmartRight(p0, p1, fixedZ, prefCfgRight);
+            if (MainFrame.DEBUG) {
+                System.out.printf("[DEBUG_CLICK] Right Arm Solver: %s\n", resultRight == null ? "FAILED" : "SUCCESS");
+            }
+            if (resultRight != null) {
+                rightCollision = diagnoseCollision(resultRight, robot.getAnglesLeft());
+                if (!rightCollision.free) {
+                    resultRight = null;
+                }
+            }
+
+            if (resultRight == null) {
+                String prefCfgLeft = robot.configComboLeft.getSelectedIndex() == 0 ? "+" : "-";
+                resultLeft = robot.solveIKSmartLeft(p0, p1, fixedZ, prefCfgLeft);
+                if (MainFrame.DEBUG) {
+                    System.out.printf("[DEBUG_CLICK] Left Arm Solver: %s\n", resultLeft == null ? "FAILED" : "SUCCESS");
+                }
+                if (resultLeft != null) {
+                    leftCollision = diagnoseCollision(robot.getAnglesRight(), resultLeft);
+                    if (!leftCollision.free) {
+                        resultLeft = null;
+                    }
+                }
+            }
+        } else {
+            String prefCfgLeft = robot.configComboLeft.getSelectedIndex() == 0 ? "+" : "-";
+            resultLeft = robot.solveIKSmartLeft(p0, p1, fixedZ, prefCfgLeft);
+            if (MainFrame.DEBUG) {
+                System.out.printf("[DEBUG_CLICK] Left Arm Solver: %s\n", resultLeft == null ? "FAILED" : "SUCCESS");
+            }
+            if (resultLeft != null) {
+                leftCollision = diagnoseCollision(robot.getAnglesRight(), resultLeft);
+                if (!leftCollision.free) {
+                    resultLeft = null;
+                }
+            }
+
+            if (resultLeft == null) {
+                String prefCfgRight = robot.configComboRight.getSelectedIndex() == 0 ? "+" : "-";
+                resultRight = robot.solveIKSmartRight(p0, p1, fixedZ, prefCfgRight);
+                if (MainFrame.DEBUG) {
+                    System.out.printf("[DEBUG_CLICK] Right Arm Solver: %s\n", resultRight == null ? "FAILED" : "SUCCESS");
+                }
+                if (resultRight != null) {
+                    rightCollision = diagnoseCollision(resultRight, robot.getAnglesLeft());
+                    if (!rightCollision.free) {
+                        resultRight = null;
+                    }
+                }
             }
         }
 
