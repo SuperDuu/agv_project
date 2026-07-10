@@ -41,6 +41,15 @@ public class ArmPanel extends JPanel
         }
         return workspaceMap;
     }
+
+    private void holdInactiveArmJoints(boolean inactiveRight) {
+        double[] current = inactiveRight ? robot.getAnglesRight() : robot.getAnglesLeft();
+        double[] target = inactiveRight ? robot.targetAnglesRight : robot.targetAnglesLeft;
+        for (int i = 1; i < NUM_JOINTS; i++) {
+            target[i] = current[i];
+        }
+    }
+
     ArrayList<double[]> workspacePoints = new ArrayList<>();
     ArrayList<double[]> workspacePointsRight = new ArrayList<>();
     ArrayList<double[]> workspacePointsLeft = new ArrayList<>();
@@ -308,12 +317,12 @@ public class ArmPanel extends JPanel
             robot.trajArmCombo.setSelectedIndex(chooseRight ? 0 : 1);
             if (chooseRight) {
                 robot.setTargetAnglesRight(chosenResult);
-                robot.setTargetAnglesLeft(robot.getAnglesLeft());
+                holdInactiveArmJoints(false);
                 robot.setGotoStatusRight(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
                 robot.setGotoStatusLeft("Hold", Color.BLUE);
             } else {
                 robot.setTargetAnglesLeft(chosenResult);
-                robot.setTargetAnglesRight(robot.getAnglesRight());
+                holdInactiveArmJoints(true);
                 robot.setGotoStatusLeft(String.format("OK (%.1f, %.1f, %.1f)", p0, p1, fixedZ), new Color(0, 140, 0));
                 robot.setGotoStatusRight("Hold", Color.BLUE);
             }
@@ -369,14 +378,14 @@ public class ArmPanel extends JPanel
                     WorkspaceMap.Entry best = candidates.get(0);
                     if (isRight) {
                         robot.setTargetAnglesRight(best.q);
-                        robot.setTargetAnglesLeft(robot.getAnglesLeft());
+                        holdInactiveArmJoints(false);
                         robot.setGotoStatusRight(
                                 String.format("Gợi ý gần nhất (%.1f,%.1f,%.1f)", best.x, best.y, best.z),
                                 new Color(0, 150, 50));
                         robot.setGotoStatusLeft("Hold", Color.BLUE);
                     } else {
                         robot.setTargetAnglesLeft(best.q);
-                        robot.setTargetAnglesRight(robot.getAnglesRight());
+                        holdInactiveArmJoints(true);
                         robot.setGotoStatusLeft(
                                 String.format("Gợi ý gần nhất (%.1f,%.1f,%.1f)", best.x, best.y, best.z),
                                 new Color(0, 150, 50));
