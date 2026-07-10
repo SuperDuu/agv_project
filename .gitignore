@@ -30,6 +30,7 @@ arm/java_app/arm/build/
 arm/java_app/arm/dist/
 arm/java_app/arm/uart_temp/
 arm/java_app/arm/.venv/
+arm/java_app/arm/demo_*_pick_place.csv
 *.class
 
 # Python cache artifacts
