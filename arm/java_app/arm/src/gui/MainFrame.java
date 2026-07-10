@@ -34,11 +34,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final double[] HOME_ACTUATOR_RIGHT = toActuatorSpace(HOME_ANGLES_RIGHT, true);
     private static final double[] HOME_ACTUATOR_LEFT = toActuatorSpace(HOME_ANGLES_LEFT, false);
     private static final String RIGHT_DEMO_CACHE_FILE = "demo_right_pick_place.csv";
-    private static final String RIGHT_DEMO_CACHE_VERSION = "right_pick_place_v1";
+    private static final String RIGHT_DEMO_CACHE_VERSION = "right_pick_place_v2";
     private static final String LEFT_DEMO_CACHE_FILE = "demo_left_pick_place.csv";
-    private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v1";
+    private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v2";
     private static final String DUAL_DEMO_CACHE_FILE = "demo_dual_pick_place.csv";
-    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v1";
+    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v3";
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = HOME_ANGLES_RIGHT.clone();
@@ -2385,6 +2385,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     frame[0][i] = Double.parseDouble(parts[i].trim());
                     frame[1][i] = Double.parseDouble(parts[i + NUM_JOINTS].trim());
                 }
+                frame[1][0] = frame[0][0];
                 frames.add(frame);
             }
 
@@ -2405,6 +2406,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             writer.println(version);
             writer.printf(java.util.Locale.US, "%d,%d%n", plan.gripFrameIndex, plan.releaseFrameIndex);
             for (double[][] frame : plan.frames) {
+                frame[1][0] = frame[0][0]; // Force left.q1 = right.q1 before writing
                 for (int arm = 0; arm < 2; arm++) {
                     for (int joint = 0; joint < NUM_JOINTS; joint++) {
                         if (arm != 0 || joint != 0) {
@@ -2479,7 +2481,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         }
         double[][] last = keyframes.get(keyframes.size() - 1);
-        frames.add(new double[][] { last[0].clone(), last[1].clone() });
+        double[] lastRight = last[0].clone();
+        double[] lastLeft = last[1].clone();
+        lastLeft[0] = lastRight[0];
+        frames.add(new double[][] { lastRight, lastLeft });
         return frames;
     }
 
@@ -2491,6 +2496,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 frame[arm][j] = a[arm][j] + diff * t;
             }
         }
+        frame[1][0] = frame[0][0]; // Force left.q1 = right.q1 during interpolation
         return frame;
     }
 
