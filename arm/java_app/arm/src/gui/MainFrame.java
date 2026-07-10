@@ -2177,6 +2177,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 { 0, -18, -55, 55, -12, 20 }
         });
         keyframes.add(new double[][] {
+                { 0, -25, 145, -88, 20, 0 },
+                { 0, -10, -60, 50, 0, 0 }
+        });
+        keyframes.add(new double[][] {
+                { 0, -35, 135, -90, 10, 0 },
+                { 0, -10, -60, 50, 0, 0 }
+        });
+        keyframes.add(new double[][] {
                 { -18, -28, 85, -72, 28, -35 },
                 { -18, -28, -85, 72, -28, 35 }
         });
