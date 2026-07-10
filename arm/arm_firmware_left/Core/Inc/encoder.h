@@ -22,6 +22,7 @@ void Encoder_Init(void);
 void Encoder_Update(void);
 int32_t Encoder_Get_Ticks(uint8_t index);
 void Encoder_Reset(uint8_t index);
+int32_t Encoder_Read_Raw(uint8_t index);
 
 #ifdef __cplusplus
 }

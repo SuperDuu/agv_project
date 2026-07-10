@@ -26,7 +26,7 @@ void JointControl_Init(void) {
         } else if (i == 1) {
             joint->servo_command_angle = 10.0f;  // 10 deg joint = 14 deg servo
         } else if (i == 2) {
-            joint->servo_command_angle = 0.0f;   // Start at 0 deg joint
+            joint->servo_command_angle = 192.86f; // 192.86 deg joint = 270 deg servo
         } else if (i == 3) {
             joint->servo_command_angle = 90.0f;  // Middle of 180-degree servo
         } else if (i == 5) {
@@ -60,11 +60,7 @@ void JointControl_Update(float dt) {
         JointController_t *joint = &joints[i];
         
         // 1. Read position feedback (ticks)
-        float ticks = (float)Encoder_Get_Ticks(joint->encoder_idx);
-        if (i <= 2) {
-            ticks = -ticks;
-        }
-        joint->current_pos = ticks;
+        joint->current_pos = (float)Encoder_Get_Ticks(joint->encoder_idx);
         
         // 2. Calculate current velocity (ticks/sec)
         joint->current_vel = (joint->current_pos - joint->last_pos) / dt;

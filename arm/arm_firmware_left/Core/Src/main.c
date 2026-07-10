@@ -1,33 +1,34 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "servo.h"
+#include "arm_protocol.h"
 #include "encoder.h"
-#include "pid.h"
 #include "joint_control.h"
+#include "pid.h"
+#include "servo.h"
 #include <stdio.h>
 #include <string.h>
-#include "arm_protocol.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,43 +60,50 @@ TIM_HandleTypeDef htim12;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
-DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
-volatile float servo0_deg = 96.43f;
-volatile float servo1_deg = 35.0f;
-volatile float servo2_deg = 0.0f;
-volatile float servo3_deg = 0.0f;
-volatile float servo4_deg = 60.0f;
-volatile float servo5_deg = 0.0f;
+extern Encoder_t encoders[NUM_ENCODERS];
 
-uint8_t rx_byte;
-uint8_t rx_buffer[64];
-uint16_t rx_index = 0;
+/* Current servo target angles (joint space, degrees) */
+volatile float servo_deg[6] = {96.43f, 90.0f, 35.0f, 65.0f, 90, 96.43f};
 
-/* Protocol V2.1 binary parser state */
-static uint8_t  arm_frame_buf[ARM_PROTO_MAX_FRAME];
-static uint16_t arm_frame_idx   = 0;
-static uint16_t arm_expected_len = 0;
-static uint8_t  arm_parser_state = 0;  /* 0=SOF1, 1=SOF2, 2=ACCUMULATE */
-static uint8_t  arm_last_seq     = 0xFF;  /* for duplicate / stale drop  */
+/* -----------------------------------------------------------------------
+ * Protocol V2.1 binary parser state (replaces legacy text "R:" parser)
+ * Frame layout:
+ *   [SOF1][SOF2][DEST][SRC][LEN_L][LEN_H][CMD][SEQ][PAYLOAD...][CRC_L][CRC_H]
+ * ----------------------------------------------------------------------- */
+static uint8_t arm_rx_byte;
+static uint8_t rx_buffer[128];
+static uint16_t rx_index = 0;
+// static uint8_t  arm_dma_rx_buf[64];
+//static uint8_t arm_frame_buf[ARM_PROTO_MAX_FRAME];
+//static uint16_t arm_frame_idx = 0;
+//static uint16_t arm_expected_len = 0;
+//static uint8_t arm_parser_state = 0; /* 0=SOF1, 1=SOF2, 2=ACCUMULATE */
+static uint8_t arm_last_seq = 0xFF;  /* for duplicate / stale drop  */
 
 /* Last accepted joint positions in x100 (for Δθ guard) */
 static int16_t arm_q_last[6] = {9643, 3500, 0, 0, 6000, 0};
+/* Initial values match servo init: q0=96.43°, q1=35°, q2=0°, q3=0°, q4=60°,
+ * q5=0° */
 
 /* Debug counters */
-volatile uint32_t dbg_rx_ok    = 0;
-volatile uint32_t dbg_rx_delta = 0;
-volatile uint32_t dbg_rx_crc   = 0;
-volatile uint32_t dbg_rx_len   = 0;
+volatile uint32_t dbg_rx_ok = 0;
+volatile uint32_t dbg_rx_delta = 0; /* frames dropped by Δθ guard */
+volatile uint32_t dbg_rx_crc = 0;
+volatile uint32_t dbg_rx_len = 0;
 volatile uint32_t dbg_rx_raw_count = 0;
+volatile uint32_t dbg_rx_line_count = 0;
+volatile uint32_t dbg_rx_no_star = 0;
+volatile uint32_t dbg_rx_bad_hex = 0;
+volatile uint32_t dbg_rx_bad_prefix = 0;
+volatile uint8_t dbg_rx_last_byte = 0;
+volatile char dbg_rx_last_line[128] = {0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
-static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len);
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
@@ -144,10 +152,8 @@ int main(void)
 
   /* USER CODE END SysInit */
 
-
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
@@ -164,32 +170,59 @@ int main(void)
   Servo_Init();
 
   Encoder_Init();
-//  JointControl_Init();
-  HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
+
+  //  JointControl_Init();
+  ARM_Proto_ResetParser();
+
+  // Test loopback check: gửi 1 byte và nhận lại ngay lập tức qua polling để
+  // test loopback RX-TX
+  //  uint8_t tx_byte = 0xAA;
+  //  uint8_t rx_byte = 0;
+  //  HAL_UART_Transmit(&huart2, &tx_byte, 1, 10);
+  //  HAL_StatusTypeDef poll_res = HAL_UART_Receive(&huart2, &rx_byte, 1, 100);
+  //  // Đợi tối đa 100ms if (poll_res == HAL_OK && rx_byte == 0xAA) {
+  //      dbg_rx_raw_count = 9999; // Loopback thành công! (STM32 truyền nhận
+  //      nội bộ và chân GPIO OK)
+  //  } else {
+  //      dbg_rx_raw_count = 8880 + (uint32_t)poll_res; // Lỗi: 8883 nếu không
+  //      nhận lại được
+  //  }
+
+  HAL_UART_Receive_IT(&huart2, &arm_rx_byte, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+  while (1) {
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
     // JointControl_Update(0.010f);
-//    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_12);
-//    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-    Encoder_Update();
-  	Set_Servo_Angle(0, servo0_deg);
-  	Set_Servo_Angle(1, servo1_deg);
-  	Set_Servo_Angle(2, servo2_deg);
-  	Set_Servo_Angle(3, servo3_deg);
-  	Set_Servo_Angle(4, servo4_deg);
-  	Set_Servo_Angle(5, servo5_deg);
-     HAL_Delay(10);
+    //    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_12);
+    //
+    //    HAL_Delay(20);
+    //
+    //    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    //    Encoder_Update();
+
+    // Debug: xem raw counter từng encoder
+    //    dbg_enc0 = (int32_t)TIM1->CNT;
+    //    dbg_enc1 = (int32_t)TIM2->CNT;
+    //    dbg_enc2 = (int32_t)TIM3->CNT;
+    //    dbg_enc3 = (int32_t)TIM4->CNT;
+    //    dbg_enc4 = (int32_t)TIM5->CNT;
+
+    Set_Servo_Angle(0, servo_deg[1]);
+    Set_Servo_Angle(1, servo_deg[2]);
+    Set_Servo_Angle(2, servo_deg[3]);
+    Set_Servo_Angle(3, servo_deg[4]);
+    Set_Servo_Angle(4, servo_deg[5]);
+
+    HAL_Delay(10);
 
     // Call test pattern for PWM output testing
-//    Servo_Test_Patterns();
+    //    Servo_Test_Patterns();
   }
   /* USER CODE END 3 */
 }
@@ -541,17 +574,17 @@ static void MX_TIM8_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.Pulse = 2444;
+  sConfigOC.Pulse = 871;
   if (HAL_TIM_PWM_ConfigChannel(&htim8, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.Pulse = 500;
+  sConfigOC.Pulse = 1191;
   if (HAL_TIM_PWM_ConfigChannel(&htim8, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.Pulse = 1500;
+  sConfigOC.Pulse = 1525;
   if (HAL_TIM_PWM_ConfigChannel(&htim8, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
   {
     Error_Handler();
@@ -653,7 +686,7 @@ static void MX_TIM10_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 1500;
+  sConfigOC.Pulse = 1525;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim10, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -699,7 +732,7 @@ static void MX_TIM11_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 1525;
+  sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim11, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -741,7 +774,7 @@ static void MX_TIM12_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 1525;
+  sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim12, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -826,22 +859,6 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA2_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA2_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
-
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -878,168 +895,198 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
-    if (frame_len < ARM_PROTO_FRAME_OVERHEAD) return;
-    if (frame[ARM_PROTO_OFF_SOF1] != ARM_PROTO_SOF1) return;
-    if (frame[ARM_PROTO_OFF_SOF2] != ARM_PROTO_SOF2) return;
+  /* Basic sanity */
+  if (frame_len < ARM_PROTO_FRAME_OVERHEAD)
+    return;
+  if (frame[ARM_PROTO_OFF_SOF1] != ARM_PROTO_SOF1)
+    return;
+  if (frame[ARM_PROTO_OFF_SOF2] != ARM_PROTO_SOF2)
+    return;
 
-    uint8_t  dest        = frame[ARM_PROTO_OFF_DEST];
-    uint8_t  cmd         = frame[ARM_PROTO_OFF_CMD];
-    uint8_t  seq         = frame[ARM_PROTO_OFF_SEQ];
-    uint16_t payload_len = ARM_Proto_ReadU16LE(&frame[ARM_PROTO_OFF_LEN_L]);
+  uint8_t dest = frame[ARM_PROTO_OFF_DEST];
+  uint8_t cmd = frame[ARM_PROTO_OFF_CMD];
+  uint8_t seq = frame[ARM_PROTO_OFF_SEQ];
+  uint16_t payload_len = ARM_Proto_ReadU16LE(&frame[ARM_PROTO_OFF_LEN_L]);
 
-    if (dest != ARM_PROTO_MY_ADDR && dest != ARM_PROTO_ADDR_BROADCAST) return;
-    if (seq == arm_last_seq && cmd == ARM_PROTO_CMD_ARM_JOINT) return;
+  /* DEST filter — accept own address or broadcast */
+  if (dest != ARM_PROTO_MY_ADDR && dest != ARM_PROTO_ADDR_BROADCAST)
+    return;
 
-    uint16_t rx_crc   = ARM_Proto_ReadU16LE(&frame[8u + payload_len]);
-    uint16_t calc_crc = ARM_Proto_Crc16(&frame[2], (uint16_t)(6u + payload_len));
-    if (rx_crc != calc_crc) {
-        dbg_rx_crc++;
-        return;
+  /* SEQ dedup: drop frames with same SEQ as last processed (duplicate TX) */
+  if (seq == arm_last_seq && cmd == ARM_PROTO_CMD_ARM_JOINT)
+    return;
+
+  /* CRC: covers bytes [DEST .. last PAYLOAD byte] = 6 + payload_len bytes */
+  uint16_t rx_crc = ARM_Proto_ReadU16LE(&frame[8u + payload_len]);
+  uint16_t calc_crc = ARM_Proto_Crc16(&frame[2], (uint16_t)(6u + payload_len));
+  if (rx_crc != calc_crc) {
+    dbg_rx_crc++;
+    return;
+  }
+
+  const uint8_t *payload = &frame[ARM_PROTO_OFF_PAYLOAD];
+
+  switch (cmd) {
+  case ARM_PROTO_CMD_ARM_JOINT: {
+    if (payload_len != ARM_PROTO_PAYLOAD_JOINT) {
+      dbg_rx_len++;
+      return;
     }
 
-    const uint8_t *payload = &frame[ARM_PROTO_OFF_PAYLOAD];
+    uint8_t motion_mode = payload[0];
+    uint16_t max_delta_x100 = ARM_Proto_ReadU16LE(&payload[16]);
 
-    switch (cmd) {
-    case ARM_PROTO_CMD_ARM_JOINT: {
-        if (payload_len != ARM_PROTO_PAYLOAD_JOINT) {
-            dbg_rx_len++;
-            return;
+    int16_t q_new[6];
+    q_new[0] = ARM_Proto_ReadS16LE(&payload[2]);
+    q_new[1] = ARM_Proto_ReadS16LE(&payload[4]);
+    q_new[2] = ARM_Proto_ReadS16LE(&payload[6]);
+    q_new[3] = ARM_Proto_ReadS16LE(&payload[8]);
+    q_new[4] = ARM_Proto_ReadS16LE(&payload[10]);
+    q_new[5] = ARM_Proto_ReadS16LE(&payload[12]);
+
+    /* Δθ guard — drop frame if any joint exceeds max_delta_x100 */
+    if (max_delta_x100 > 0u) {
+      for (int i = 0; i < 6; i++) {
+        int32_t delta = (int32_t)q_new[i] - (int32_t)arm_q_last[i];
+        if (delta < 0)
+          delta = -delta;
+        if ((uint16_t)delta > max_delta_x100) {
+          dbg_rx_delta++;
+          return;
         }
-
-        uint8_t  motion_mode    = payload[0];
-        uint16_t max_delta_x100 = ARM_Proto_ReadU16LE(&payload[16]);
-
-        int16_t q_new[6];
-        q_new[0] = ARM_Proto_ReadS16LE(&payload[2]);
-        q_new[1] = ARM_Proto_ReadS16LE(&payload[4]);
-        q_new[2] = ARM_Proto_ReadS16LE(&payload[6]);
-        q_new[3] = ARM_Proto_ReadS16LE(&payload[8]);
-        q_new[4] = ARM_Proto_ReadS16LE(&payload[10]);
-        q_new[5] = ARM_Proto_ReadS16LE(&payload[12]);
-
-        if (max_delta_x100 > 0u) {
-            for (int i = 0; i < 6; i++) {
-                int32_t delta = (int32_t)q_new[i] - (int32_t)arm_q_last[i];
-                if (delta < 0) delta = -delta;
-                if ((uint16_t)delta > max_delta_x100) {
-                    dbg_rx_delta++;
-                    return;
-                }
-            }
-        }
-
-        if (motion_mode == ARM_PROTO_MOTION_ABS ||
-            motion_mode == ARM_PROTO_MOTION_HOME) {
-
-            servo0_deg = ARM_Proto_X100ToDeg(q_new[0]);
-            servo1_deg = ARM_Proto_X100ToDeg(q_new[1]);
-            servo2_deg = ARM_Proto_X100ToDeg(q_new[2]);
-            servo3_deg = ARM_Proto_X100ToDeg(q_new[3]);
-            servo4_deg = ARM_Proto_X100ToDeg(q_new[4]);
-            servo5_deg = ARM_Proto_X100ToDeg(q_new[5]);
-
-            for (int i = 0; i < 6; i++) arm_q_last[i] = q_new[i];
-            arm_last_seq = seq;
-            dbg_rx_ok++;
-
-        } else if (motion_mode == ARM_PROTO_MOTION_ESTOP) {
-            arm_last_seq = seq;
-        }
-        break;
+      }
     }
 
-    case ARM_PROTO_CMD_ARM_GRIPPER: {
-        if (payload_len != ARM_PROTO_PAYLOAD_GRIPPER) {
-            dbg_rx_len++;
-            return;
-        }
-        arm_last_seq = seq;
-        dbg_rx_ok++;
-        break;
-    }
+    /* Apply motion */
+    if (motion_mode == ARM_PROTO_MOTION_ABS ||
+        motion_mode == ARM_PROTO_MOTION_HOME) {
 
-    default:
-        break;
+//      for (int i = 0; i < 6; i++) {
+//        servo_deg[i] = ARM_Proto_X100ToDeg(q_new[i]);
+//      }
+        servo_deg[1] = -ARM_Proto_X100ToDeg(q_new[1])+90;
+        servo_deg[2] = ARM_Proto_X100ToDeg(q_new[2])+35;
+        servo_deg[3] = 65-ARM_Proto_X100ToDeg(q_new[3]);
+        servo_deg[4] = ARM_Proto_X100ToDeg(q_new[4])+90;
+        servo_deg[5] = ARM_Proto_X100ToDeg(q_new[5])+96.43;
+      /* Update last accepted position */
+      for (int i = 0; i < 6; i++)
+        arm_q_last[i] = q_new[i];
+      arm_last_seq = seq;
+      dbg_rx_ok++;
+
+    } else if (motion_mode == ARM_PROTO_MOTION_ESTOP) {
+      arm_last_seq = seq;
     }
+    break;
+  }
+
+  case ARM_PROTO_CMD_ARM_GRIPPER: {
+    if (payload_len != ARM_PROTO_PAYLOAD_GRIPPER) {
+      dbg_rx_len++;
+      return;
+    }
+    arm_last_seq = seq;
+    dbg_rx_ok++;
+    break;
+  }
+
+  default:
+    break;
+  }
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    if (huart->Instance == USART2) {
-        dbg_rx_raw_count++;
-        uint8_t b = rx_byte;
+  if (huart->Instance == USART2) {
+    dbg_rx_raw_count++;
+    uint8_t b = arm_rx_byte;
+    dbg_rx_last_byte = b;
 
-        if (b == '\n' || b == '\r') {
-            if (rx_index > 0) {
-                rx_buffer[rx_index] = '\0';
-                
-                // Check checksum
-                char *star = strchr((char*)rx_buffer, '*');
-                if (star != NULL) {
-                    *star = '\0';
-                    char *checksum_str = star + 1;
-                    
-                    uint8_t calc_sum = 0;
-                    for (char *c_ptr = (char*)rx_buffer; c_ptr < star; c_ptr++) {
-                        calc_sum ^= (uint8_t)(*c_ptr);
-                    }
-                    
-                    unsigned int rx_sum = 0;
-                    if (sscanf(checksum_str, "%2X", &rx_sum) == 1) {
-                        if (calc_sum == (uint8_t)rx_sum) {
+    if (b == '\n' || b == '\r') {
+      if (rx_index > 0) {
+        rx_buffer[rx_index] = '\0';
+
+        // Copy to debug buffer
+        strncpy((char *)dbg_rx_last_line, (char *)rx_buffer,
+                sizeof(dbg_rx_last_line) - 1);
+        dbg_rx_last_line[sizeof(dbg_rx_last_line) - 1] = '\0';
+        dbg_rx_line_count++;
+
+        // Check checksum
+        char *star = strchr((char *)rx_buffer, '*');
+        if (star != NULL) {
+          *star = '\0';
+          char *checksum_str = star + 1;
+
+          uint8_t calc_sum = 0;
+          for (char *c_ptr = (char *)rx_buffer; c_ptr < star; c_ptr++) {
+            calc_sum ^= (uint8_t)(*c_ptr);
+          }
+
+          unsigned int rx_sum = 0;
+          if (sscanf(checksum_str, "%2X", &rx_sum) == 1) {
+            if (calc_sum == (uint8_t)rx_sum) {
 #if defined(ARM_LEFT) || (ARM_PROTO_MY_ADDR == 0x02u)
-                            const char *prefix = "L:";
+              const char *prefix = "L:";
 #else
-                            const char *prefix = "R:";
+              const char *prefix = "R:";
 #endif
-                            if (strncmp((char*)rx_buffer, prefix, 2) == 0) {
-                                int q[6];
-                                if (sscanf((char*)rx_buffer + 2, "%d,%d,%d,%d,%d,%d", &q[0], &q[1], &q[2], &q[3], &q[4], &q[5]) == 6) {
-                                    dbg_rx_ok++;
-                                    servo0_deg = (float)q[0] / 100.0f;
-                                    servo1_deg = (float)q[1] / 100.0f;
-                                    servo2_deg = (float)q[2] / 100.0f;
-                                    servo3_deg = (float)q[3] / 100.0f;
-                                    servo4_deg = (float)q[4] / 100.0f;
-                                    servo5_deg = (float)q[5] / 100.0f;
-                                } else {
-                                    dbg_rx_len++;
-                                }
-                            }
-                        } else {
-                            dbg_rx_crc++;
-                        }
-                    }
+              if (strncmp((char *)rx_buffer, prefix, 2) == 0) {
+                int q[6];
+                if (sscanf((char *)rx_buffer + 2, "%d,%d,%d,%d,%d,%d", &q[0],
+                           &q[1], &q[2], &q[3], &q[4], &q[5]) == 6) {
+                  dbg_rx_ok++;
+//                  for (int i = 0; i < 6; i++) {
+//                    servo_deg[i] = (float)q[i] / 100.0f;
+//                  }
+                  servo_deg[1] =-(float)q[1] / 100.0f+90;
+                  servo_deg[2] = (float)q[2] / 100.0f+35;
+                  servo_deg[3] = 65.0f-(float)q[3] / 100.0f;
+                  servo_deg[4] = (float)q[4] / 100.0f+90;
+                  servo_deg[5] = (float)q[5] / 100.0f+96.43;
+                } else {
+                  dbg_rx_len++;
                 }
-                rx_index = 0;
-            }
-        } else {
-            if (rx_index < sizeof(rx_buffer) - 1) {
-                rx_buffer[rx_index++] = b;
+              } else {
+                dbg_rx_bad_prefix++;
+              }
             } else {
-                rx_index = 0;
+              dbg_rx_crc++;
             }
+          } else {
+            dbg_rx_bad_hex++;
+          }
+        } else {
+          dbg_rx_no_star++;
         }
-
-        if (HAL_UART_Receive_IT(&huart2, &rx_byte, 1) != HAL_OK) {
-            HAL_UART_AbortReceive(&huart2);
-            HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
-        }
+        rx_index = 0;
+      }
+    } else {
+      if (rx_index < sizeof(rx_buffer) - 1) {
+        rx_buffer[rx_index++] = b;
+      } else {
+        rx_index = 0;
+      }
     }
+
+    if (HAL_UART_Receive_IT(&huart2, &arm_rx_byte, 1) != HAL_OK) {
+      HAL_UART_AbortReceive(&huart2);
+      HAL_UART_Receive_IT(&huart2, &arm_rx_byte, 1);
+    }
+  }
 }
 
-static void ARM_Proto_ResetParser(void) {
-    rx_index = 0;
-}
+static void ARM_Proto_ResetParser(void) { rx_index = 0; }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
-    if (huart->Instance == USART2) {
-        __HAL_UART_CLEAR_OREFLAG(huart);
-        ARM_Proto_ResetParser();
-        if (HAL_UART_Receive_IT(huart, &rx_byte, 1) != HAL_OK) {
-            HAL_UART_AbortReceive(huart);
-            HAL_UART_Receive_IT(huart, &rx_byte, 1);
-        }
+  if (huart->Instance == USART2) {
+    __HAL_UART_CLEAR_OREFLAG(huart);
+    ARM_Proto_ResetParser();
+    if (HAL_UART_Receive_IT(huart, &arm_rx_byte, 1) != HAL_OK) {
+      HAL_UART_AbortReceive(huart);
+      HAL_UART_Receive_IT(huart, &arm_rx_byte, 1);
     }
+  }
 }
 /* USER CODE END 4 */
 
@@ -1052,8 +1099,7 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
-  while (1)
-  {
+  while (1) {
   }
   /* USER CODE END Error_Handler_Debug */
 }
@@ -1068,8 +1114,9 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* User can add his own implementation to report the file name and line
+     number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,
+     line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
