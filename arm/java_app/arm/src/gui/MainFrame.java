@@ -134,6 +134,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JSlider speedSlider = new JSlider(0, 120, 20);
     JLabel speedLabel = new JLabel("20 °/s");
     private static final int MOTION_DT_MS = 20;
+    private static final int DEMO_PLAYBACK_DT_MS = 40;
     private static final int ARM_TX_REFRESH_MS = 100;
     Timer motionTimer;
     Timer armTxRefreshTimer;
@@ -2465,7 +2466,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 setTitle(statusTitle + " dang chay...");
 
                 final int[] currentIndex = { 0 };
-                trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
+                trajectoryTimer = new Timer(DEMO_PLAYBACK_DT_MS, e -> {
                     if (currentIndex[0] >= frames.size()) {
                         trajectoryTimer.stop();
                         setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
