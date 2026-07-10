@@ -65,7 +65,7 @@ UART_HandleTypeDef huart2;
 extern Encoder_t encoders[NUM_ENCODERS];
 
 /* Current servo target angles (joint space, degrees) */
-volatile float servo_deg[6] = {96.43f, 90.0f, 192.86f - 35.0f, 192.86f - 65.0f, 90, 96.43f};
+volatile float servo_deg[6] = {96.43f, 90.0f, 35.0f, 65.0f, 90, 96.43f};
 
 /* -----------------------------------------------------------------------
  * Protocol V2.1 binary parser state (replaces legacy text "R:" parser)
@@ -965,8 +965,8 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
 //        servo_deg[i] = ARM_Proto_X100ToDeg(q_new[i]);
 //      }
         servo_deg[1] = -ARM_Proto_X100ToDeg(q_new[1])+90;
-        servo_deg[2] = 192.86f - (ARM_Proto_X100ToDeg(q_new[2])+35.0f);
-        servo_deg[3] = 192.86f - (65.0f-ARM_Proto_X100ToDeg(q_new[3]));
+        servo_deg[2] = ARM_Proto_X100ToDeg(q_new[2])+35;
+        servo_deg[3] = 65-ARM_Proto_X100ToDeg(q_new[3]);
         servo_deg[4] = ARM_Proto_X100ToDeg(q_new[4])+90;
         servo_deg[5] = ARM_Proto_X100ToDeg(q_new[5])+96.43;
       /* Update last accepted position */
@@ -1040,8 +1040,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 //                    servo_deg[i] = (float)q[i] / 100.0f;
 //                  }
                   servo_deg[1] =-(float)q[1] / 100.0f+90;
-                  servo_deg[2] = 192.86f - ((float)q[2] / 100.0f+35.0f);
-                  servo_deg[3] = 192.86f - (65.0f-(float)q[3] / 100.0f);
+                  servo_deg[2] = (float)q[2] / 100.0f+35;
+                  servo_deg[3] = 65.0f-(float)q[3] / 100.0f;
                   servo_deg[4] = (float)q[4] / 100.0f+90;
                   servo_deg[5] = (float)q[5] / 100.0f+96.43;
                 } else {
