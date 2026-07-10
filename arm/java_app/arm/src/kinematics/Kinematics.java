@@ -438,9 +438,9 @@ public class Kinematics {
 
     public static double[][] getToolMatrix() {
         return new double[][] {
-                { 1, 0, 0, 0 },
+                { 0, -1, 0, 0 },
                 { 0, 0, -1, -L7 },
-                { 0, 1, 0, 0 },
+                { 1, 0, 0, 0 },
                 { 0, 0, 0, 1 }
         };
     }
@@ -659,16 +659,16 @@ public class Kinematics {
     }
 
     public static void getToolMatrix(double[][] out) {
-        out[0][0] = 1;
-        out[0][1] = 0;
+        out[0][0] = 0;
+        out[0][1] = -1;
         out[0][2] = 0;
         out[0][3] = 0;
         out[1][0] = 0;
         out[1][1] = 0;
         out[1][2] = -1;
         out[1][3] = -L7;
-        out[2][0] = 0;
-        out[2][1] = 1;
+        out[2][0] = 1;
+        out[2][1] = 0;
         out[2][2] = 0;
         out[2][3] = 0;
         out[3][0] = 0;
