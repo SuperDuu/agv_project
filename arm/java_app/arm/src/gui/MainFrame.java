@@ -182,13 +182,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         setLayout(new BorderLayout());
         add(armPanel, BorderLayout.CENTER);
 
+        // Set defaults before listeners are attached, otherwise startup triggers IK.
+        gripperModeComboRight.setSelectedIndex(1);
+        gripperModeComboLeft.setSelectedIndex(1);
+
         buildControlPanel();
         buildTopPanel();
         buildMenuBar();
-
-        // Default gripper mode: FREE (Tự do) for both arms
-        gripperModeComboRight.setSelectedIndex(1);
-        gripperModeComboLeft.setSelectedIndex(1);
 
         setSize(1400, 780);
         setTitle("Mô Phỏng cánh tay Robot 6-DOF");
