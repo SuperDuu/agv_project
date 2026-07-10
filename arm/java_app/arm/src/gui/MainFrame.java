@@ -2663,17 +2663,17 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 double q1_base = isRight ? Math.atan2(pt[1], pt[0]) : -Math.atan2(pt[1], -pt[0]);
                 double yaw = q1_base + Math.toRadians(trajectoryLastYawOffset);
                 double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
-                double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
+                double[][] R_rot = { { 0, -ca, -sa }, { 1, 0, 0 }, { 0, -sa, ca } };
                 double cy2 = Math.cos(yaw), sy2 = Math.sin(yaw);
                 double[][] R_z, R_target;
                 if (isRight) {
                     R_z = new double[][] { { cy2, -sy2, 0 }, { sy2, cy2, 0 }, { 0, 0, 1 } };
-                    R_target = multiplyMatrices(R_z, R_y);
+                    R_target = multiplyMatrices(R_z, R_rot);
                 } else {
                     double yawR = -yaw;
                     double cyR = Math.cos(yawR), syR = Math.sin(yawR);
                     double[][] Rz_r = { { cyR, -syR, 0 }, { syR, cyR, 0 }, { 0, 0, 1 } };
-                    double[][] Rt_r = multiplyMatrices(Rz_r, R_y);
+                    double[][] Rt_r = multiplyMatrices(Rz_r, R_rot);
                     R_target = new double[][] {
                         {  Rt_r[0][0], -Rt_r[0][1], -Rt_r[0][2] },
                         { -Rt_r[1][0],  Rt_r[1][1],  Rt_r[1][2] },
@@ -3100,18 +3100,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double alpha_rad = 0.0;
         double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
-        double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
+        double[][] R_rot = { { 0, -ca, -sa }, { 1, 0, 0 }, { 0, -sa, ca } };
         double yaw = isRight ? Math.atan2(y, x) : -Math.atan2(y, -x);
         double[][] R_target;
         if (isRight) {
             double cy = Math.cos(yaw), sy = Math.sin(yaw);
             double[][] R_z = { { cy, -sy, 0 }, { sy, cy, 0 }, { 0, 0, 1 } };
-            R_target = kinematics.Kinematics.multiplyMatrices(R_z, R_y);
+            R_target = kinematics.Kinematics.multiplyMatrices(R_z, R_rot);
         } else {
             double yawR = -yaw;
             double cyR = Math.cos(yawR), syR = Math.sin(yawR);
             double[][] R_z_right = { { cyR, -syR, 0 }, { syR, cyR, 0 }, { 0, 0, 1 } };
-            double[][] R_target_right = kinematics.Kinematics.multiplyMatrices(R_z_right, R_y);
+            double[][] R_target_right = kinematics.Kinematics.multiplyMatrices(R_z_right, R_rot);
             R_target = new double[][] {
                 {  R_target_right[0][0], -R_target_right[0][1], -R_target_right[0][2] },
                 { -R_target_right[1][0],  R_target_right[1][1],  R_target_right[1][2] },
@@ -3132,16 +3132,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         alpha_rad = Math.toRadians(-30.0);
         ca = Math.cos(Math.PI + alpha_rad); sa = Math.sin(Math.PI + alpha_rad);
-        R_y[0][0] = ca; R_y[0][2] = sa; R_y[2][0] = -sa; R_y[2][2] = ca;
+        R_rot[0][1] = -ca; R_rot[0][2] = -sa; R_rot[2][1] = -sa; R_rot[2][2] = ca;
         if (isRight) {
             double cy = Math.cos(yaw), sy = Math.sin(yaw);
             double[][] R_z = { { cy, -sy, 0 }, { sy, cy, 0 }, { 0, 0, 1 } };
-            R_target = kinematics.Kinematics.multiplyMatrices(R_z, R_y);
+            R_target = kinematics.Kinematics.multiplyMatrices(R_z, R_rot);
         } else {
             double yawR = -yaw;
             double cyR = Math.cos(yawR), syR = Math.sin(yawR);
             double[][] R_z_right = { { cyR, -syR, 0 }, { syR, cyR, 0 }, { 0, 0, 1 } };
-            double[][] R_target_right = kinematics.Kinematics.multiplyMatrices(R_z_right, R_y);
+            double[][] R_target_right = kinematics.Kinematics.multiplyMatrices(R_z_right, R_rot);
             R_target = new double[][] {
                 {  R_target_right[0][0], -R_target_right[0][1], -R_target_right[0][2] },
                 { -R_target_right[1][0],  R_target_right[1][1],  R_target_right[1][2] },
@@ -3691,7 +3691,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         q1_base = Math.max(Math.toRadians(q1_min), Math.min(Math.toRadians(q1_max), q1_base));
         
         double ca = Math.cos(Math.PI + alpha_rad), sa = Math.sin(Math.PI + alpha_rad);
-        double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
+        double[][] R_rot = { { 0, -ca, -sa }, { 1, 0, 0 }, { 0, -sa, ca } };
 
         Double[] yawOffsets = { 0.0, -15.0, 15.0, -30.0, 30.0, -45.0, 45.0, -60.0, 60.0, -75.0, 75.0, -90.0, 90.0 };
         if (!Double.isNaN(preferredYaw)) {
@@ -3707,12 +3707,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (isRight) {
                 double cy = Math.cos(yaw), sy = Math.sin(yaw);
                 double[][] R_z = { { cy, -sy, 0 }, { sy, cy, 0 }, { 0, 0, 1 } };
-                R_target = multiplyMatrices(R_z, R_y);
+                R_target = multiplyMatrices(R_z, R_rot);
             } else {
                 double yawR = -yaw;
                 double cyR = Math.cos(yawR), syR = Math.sin(yawR);
                 double[][] R_z_right = { { cyR, -syR, 0 }, { syR, cyR, 0 }, { 0, 0, 1 } };
-                double[][] R_target_right = multiplyMatrices(R_z_right, R_y);
+                double[][] R_target_right = multiplyMatrices(R_z_right, R_rot);
                 R_target = new double[][] {
                     {  R_target_right[0][0], -R_target_right[0][1], -R_target_right[0][2] },
                     { -R_target_right[1][0],  R_target_right[1][1],  R_target_right[1][2] },
@@ -3739,12 +3739,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (isRight) {
                 double cy = Math.cos(yaw), sy = Math.sin(yaw);
                 double[][] R_z = { { cy, -sy, 0 }, { sy, cy, 0 }, { 0, 0, 1 } };
-                R_target = multiplyMatrices(R_z, R_y);
+                R_target = multiplyMatrices(R_z, R_rot);
             } else {
                 double yawR = -yaw;
                 double cyR = Math.cos(yawR), syR = Math.sin(yawR);
                 double[][] R_z_right = { { cyR, -syR, 0 }, { syR, cyR, 0 }, { 0, 0, 1 } };
-                double[][] R_target_right = multiplyMatrices(R_z_right, R_y);
+                double[][] R_target_right = multiplyMatrices(R_z_right, R_rot);
                 R_target = new double[][] {
                     {  R_target_right[0][0], -R_target_right[0][1], -R_target_right[0][2] },
                     { -R_target_right[1][0],  R_target_right[1][1],  R_target_right[1][2] },
@@ -3863,16 +3863,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (isRightArmSelected) {
             double c1 = Math.cos(q1), s1 = Math.sin(q1);
             double ca = Math.cos(-alpha_rad), sa = Math.sin(-alpha_rad);
-            double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
+            double[][] R_rot = { { 0, -ca, -sa }, { 1, 0, 0 }, { 0, -sa, ca } };
             double[][] R_z = { { c1, -s1, 0 }, { s1, c1, 0 }, { 0, 0, 1 } };
-            R_target = multiplyMatrices(R_z, R_y);
+            R_target = multiplyMatrices(R_z, R_rot);
         } else {
             double q1R = -q1;
             double c1R = Math.cos(q1R), s1R = Math.sin(q1R);
             double ca = Math.cos(-alpha_rad), sa = Math.sin(-alpha_rad);
-            double[][] R_y = { { ca, 0, sa }, { 0, 1, 0 }, { -sa, 0, ca } };
+            double[][] R_rot = { { 0, -ca, -sa }, { 1, 0, 0 }, { 0, -sa, ca } };
             double[][] R_z_right = { { c1R, -s1R, 0 }, { s1R, c1R, 0 }, { 0, 0, 1 } };
-            double[][] R_target_right = multiplyMatrices(R_z_right, R_y);
+            double[][] R_target_right = multiplyMatrices(R_z_right, R_rot);
             R_target = new double[][] {
                 {  R_target_right[0][0], -R_target_right[0][1], -R_target_right[0][2] },
                 { -R_target_right[1][0],  R_target_right[1][1],  R_target_right[1][2] },
