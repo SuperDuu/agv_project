@@ -38,7 +38,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final String LEFT_DEMO_CACHE_FILE = "demo_left_pick_place.csv";
     private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v2";
     private static final String DUAL_DEMO_CACHE_FILE = "demo_dual_pick_place.csv";
-    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v4";
+    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v5";
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = HOME_ANGLES_RIGHT.clone();
@@ -2233,35 +2233,37 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         final double pickY = 56.1;
         final double pickZ = 85.0;
-        final double handoffY = 0.0;
-        final double handoffZ = 118.0;
-        final double handoffX = 18.0;
         final double placeY = -42.8;
         final double placeZ = 120.0;
         final double pickHoverLift = 35.0;
-        final double handoffHoverLift = 18.0;
         final double placeHoverLift = 20.0;
 
         boolean savedArmSelection = isRightArmSelected;
         isRightArmSelected = true;
         double[] rightPickHover = solveDemoHover(true, 11.3, pickY, pickZ, pickHoverLift, prefCfgRight);
         double[] rightPick = solveDemoPoint(true, 11.3, pickY, pickZ, prefCfgRight);
-        double[] rightHandoffHover = solveDemoHover(true, handoffX, handoffY, handoffZ, handoffHoverLift, prefCfgRight);
-        double[] rightHandoff = solveDemoPoint(true, handoffX, handoffY, handoffZ, prefCfgRight);
 
         isRightArmSelected = false;
-        double[] leftHandoffHover = solveDemoHover(false, -handoffX, handoffY, handoffZ, handoffHoverLift, prefCfgLeft);
-        double[] leftHandoff = solveDemoPoint(false, -handoffX, handoffY, handoffZ, prefCfgLeft);
         double[] leftPlaceHover = solveDemoHover(false, -46.3, placeY, placeZ, placeHoverLift, prefCfgLeft);
         double[] leftPlace = solveDemoPoint(false, -46.3, placeY, placeZ, prefCfgLeft);
         isRightArmSelected = savedArmSelection;
 
+        double[] rightHandoffHover = new double[] { 0, 0, 55, -70, 0, 0 };
+        double[] rightHandoff = new double[] { 0, 0, 80, -90, 15, 0 };
+        double[] leftHandoffHover = new double[] { 0, 0, -55, 70, 0, 0 };
+        double[] leftHandoff = new double[] { 0, 0, -80, 90, 15, 0 };
+
         if (rightPickHover == null || rightPick == null || rightHandoffHover == null || rightHandoff == null
                 || leftHandoffHover == null || leftHandoff == null || leftPlaceHover == null || leftPlace == null) {
             System.out.printf(java.util.Locale.US,
-                    "[DEMO_IK] handoff failed | R pickHover=%s pick=%s handoffHover=%s handoff=%s | L handoffHover=%s handoff=%s placeHover=%s place=%s%n",
-                    rightPickHover != null, rightPick != null, rightHandoffHover != null, rightHandoff != null,
-                    leftHandoffHover != null, leftHandoff != null, leftPlaceHover != null, leftPlace != null);
+                    "[DEMO_IK] handoff failed | R pickHover=%s pick=%s | L placeHover=%s place=%s%n",
+                    rightPickHover != null, rightPick != null, leftPlaceHover != null, leftPlace != null);
+            return null;
+        }
+
+        if (!isWithinLimits(rightHandoffHover, true) || !isWithinLimits(rightHandoff, true)
+                || !isWithinLimits(leftHandoffHover, false) || !isWithinLimits(leftHandoff, false)) {
+            System.out.println("[DEMO_IK] handoff failed | manual handoff pose exceeds joint limits");
             return null;
         }
 
