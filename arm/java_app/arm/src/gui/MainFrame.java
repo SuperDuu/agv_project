@@ -2286,7 +2286,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { openRight, openLeft });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
-        java.util.List<double[][]> frames = interpolateDualArmKeyframes(keyframes, 5);
+        // Keep the wave demo on sparse keyframes and let the motion controller
+        // blend the travel, otherwise the per-frame arrival wait creates a stop-go feel.
+        java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
         return new DualDemoPlan(frames, -1, -1, -1, -1);
     }
 
