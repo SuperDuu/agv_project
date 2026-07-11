@@ -38,7 +38,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final String LEFT_DEMO_CACHE_FILE = "demo_left_pick_place.csv";
     private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v2";
     private static final String DUAL_DEMO_CACHE_FILE = "demo_dual_pick_place.csv";
-    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v6";
+    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v7";
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = HOME_ANGLES_RIGHT.clone();
@@ -2266,7 +2266,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return null;
         }
 
-        final int stepsPerSegment = 40;
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(new double[][] {
                 { 0, 0, 20, -35, 0, 0 },
@@ -2287,13 +2286,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 { 0, 0, -20, 35, 0, 0 }
         });
 
-        java.util.List<double[][]> frames = interpolateDualArmKeyframes(keyframes, stepsPerSegment);
+        java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
         DualDemoPlan plan = new DualDemoPlan(
                 frames,
-                stepsPerSegment * 2,
-                stepsPerSegment * 5,
-                stepsPerSegment * 6,
-                stepsPerSegment * 8);
+                2,
+                5,
+                6,
+                8);
         saveDualDemoPlanCache(plan, DUAL_DEMO_CACHE_FILE, cacheVersion);
         return plan;
     }
@@ -2495,6 +2494,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         copy[4] = q5;
         copy[5] = q6;
         return copy;
+    }
+
+    private java.util.List<double[][]> cloneDualArmFrames(java.util.List<double[][]> frames) {
+        java.util.List<double[][]> clones = new java.util.ArrayList<>(frames.size());
+        for (double[][] frame : frames) {
+            clones.add(new double[][] { frame[0].clone(), frame[1].clone() });
+        }
+        return clones;
     }
 
     private java.util.List<double[][]> interpolateDualArmKeyframes(java.util.List<double[][]> keyframes,
