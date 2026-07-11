@@ -38,7 +38,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final String LEFT_DEMO_CACHE_FILE = "demo_left_pick_place.csv";
     private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v2";
     private static final String DUAL_DEMO_CACHE_FILE = "demo_dual_pick_place.csv";
-    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v11";
+    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v12";
     private static final int DEMO_LOG_STRIDE = 5;
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
@@ -2247,8 +2247,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return cachedPlan;
         }
 
+        final double pickX = 11.3;
         final double pickY = 56.1;
         final double pickZ = 85.0;
+        final double placeX = 46.3;
         final double placeY = -42.8;
         final double placeZ = 120.0;
         final double pickHoverLift = 35.0;
@@ -2256,43 +2258,32 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         boolean savedArmSelection = isRightArmSelected;
         isRightArmSelected = true;
-        double[] rightPickHover = solveDemoHover(true, 11.3, pickY, pickZ, pickHoverLift, prefCfgRight);
-        double[] rightPick = solveDemoPoint(true, 11.3, pickY, pickZ, prefCfgRight);
+        double[] rightPickHover = solveDemoHover(true, pickX, pickY, pickZ, pickHoverLift, prefCfgRight);
+        double[] rightPick = solveDemoPoint(true, pickX, pickY, pickZ, prefCfgRight);
+        double[] rightPlaceHover = solveDemoHover(true, placeX, placeY, placeZ, placeHoverLift, prefCfgRight);
+        double[] rightPlace = solveDemoPoint(true, placeX, placeY, placeZ, prefCfgRight);
 
         isRightArmSelected = false;
-        double[] leftPlaceHover = solveDemoHover(false, -46.3, placeY, placeZ, placeHoverLift, prefCfgLeft);
-        double[] leftPlace = solveDemoPoint(false, -46.3, placeY, placeZ, prefCfgLeft);
+        double[] leftPickHover = solveDemoHover(false, -pickX, pickY, pickZ, pickHoverLift, prefCfgLeft);
+        double[] leftPick = solveDemoPoint(false, -pickX, pickY, pickZ, prefCfgLeft);
+        double[] leftPlaceHover = solveDemoHover(false, -placeX, placeY, placeZ, placeHoverLift, prefCfgLeft);
+        double[] leftPlace = solveDemoPoint(false, -placeX, placeY, placeZ, prefCfgLeft);
         isRightArmSelected = savedArmSelection;
 
-        double[] rightHandoffHover = new double[] { 0, 0, 55, -70, 0, 0 };
-        double[] rightHandoff = new double[] { 0, 0, 80, -90, 15, 0 };
-        double[] leftHandoffHover = new double[] { 0, 0, -55, 70, 0, 0 };
-        double[] leftHandoff = new double[] { 0, 0, -80, 90, 15, 0 };
-        double[] leftReadyOpen = new double[] { 0, 24, -28, 42, -12, 8 };
-        double[] leftReadyReach = new double[] { 0, 32, -45, 60, 10, 8 };
-        double[] leftTravel = new double[] { 0, 16, -38, 52, -6, 4 };
-        double[] leftCarryArc = new double[] { 0, -8, -58, 76, 18, -10 };
-        double[] leftSettle = new double[] { 0, 6, -34, 48, -8, 6 };
-        double[] rightPresent = new double[] { 0, -8, 58, -78, 8, -6 };
-        double[] rightEscort = new double[] { 0, -16, 42, -58, -8, -4 };
-        double[] rightRetreat = new double[] { 0, -26, 30, -44, 0, 0 };
+        double[] rightShow = new double[] { 0, -10, 45, -58, 18, -18 };
+        double[] leftShow = new double[] { 0, -10, -45, 58, 18, 18 };
 
-        if (rightPickHover == null || rightPick == null || rightHandoffHover == null || rightHandoff == null
-                || leftHandoffHover == null || leftHandoff == null || leftPlaceHover == null || leftPlace == null) {
+        if (rightPickHover == null || rightPick == null || rightPlaceHover == null || rightPlace == null
+                || leftPickHover == null || leftPick == null || leftPlaceHover == null || leftPlace == null) {
             System.out.printf(java.util.Locale.US,
-                    "[DEMO_IK] handoff failed | R pickHover=%s pick=%s | L placeHover=%s place=%s%n",
-                    rightPickHover != null, rightPick != null, leftPlaceHover != null, leftPlace != null);
+                    "[DEMO_IK] dual sync failed | R pickHover=%s pick=%s placeHover=%s place=%s | L pickHover=%s pick=%s placeHover=%s place=%s%n",
+                    rightPickHover != null, rightPick != null, rightPlaceHover != null, rightPlace != null,
+                    leftPickHover != null, leftPick != null, leftPlaceHover != null, leftPlace != null);
             return null;
         }
 
-        if (!isWithinLimits(rightHandoffHover, true) || !isWithinLimits(rightHandoff, true)
-                || !isWithinLimits(leftHandoffHover, false) || !isWithinLimits(leftHandoff, false)
-                || !isWithinLimits(leftReadyOpen, false) || !isWithinLimits(leftReadyReach, false)
-                || !isWithinLimits(leftTravel, false) || !isWithinLimits(leftCarryArc, false)
-                || !isWithinLimits(leftSettle, false) || !isWithinLimits(rightPresent, true)
-                || !isWithinLimits(rightEscort, true)
-                || !isWithinLimits(rightRetreat, true)) {
-            System.out.println("[DEMO_IK] handoff failed | manual handoff pose exceeds joint limits");
+        if (!isWithinLimits(rightShow, true) || !isWithinLimits(leftShow, false)) {
+            System.out.println("[DEMO_IK] dual sync failed | manual show pose exceeds joint limits");
             return null;
         }
 
@@ -2301,16 +2292,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 { 0, 0, 20, -35, 0, 0 },
                 { 0, 0, -20, 35, 0, 0 }
         });
-        keyframes.add(new double[][] { rightPickHover, withSharedQ1(leftReadyOpen, rightPickHover[0]) });
-        keyframes.add(new double[][] { rightPick, withSharedQ1(leftReadyReach, rightPick[0]) });
-        keyframes.add(new double[][] { rightPickHover, withSharedQ1(leftTravel, rightPickHover[0]) });
-        keyframes.add(new double[][] { rightHandoffHover, leftHandoffHover });
-        keyframes.add(new double[][] { withSharedQ1(rightPresent, rightHandoff[0]), leftHandoffHover });
-        keyframes.add(new double[][] { rightHandoff, leftHandoff });
-        keyframes.add(new double[][] { withSharedQ1(rightEscort, leftHandoffHover[0]), withSharedQ1(leftCarryArc, leftHandoffHover[0]) });
-        keyframes.add(new double[][] { withSharedQ1(rightEscort, leftPlaceHover[0]), withSharedQ1(leftCarryArc, leftPlaceHover[0]) });
-        keyframes.add(new double[][] { withSharedQ1(rightRetreat, leftPlace[0]), leftPlace });
-        keyframes.add(new double[][] { withSharedQ1(rightRetreat, leftPlaceHover[0]), withSharedQ1(leftSettle, leftPlaceHover[0]) });
+        keyframes.add(new double[][] { rightPickHover, leftPickHover });
+        keyframes.add(new double[][] { rightPick, leftPick });
+        keyframes.add(new double[][] { rightPickHover, leftPickHover });
+        keyframes.add(new double[][] { rightPlaceHover, leftPlaceHover });
+        keyframes.add(new double[][] { rightPlace, leftPlace });
+        keyframes.add(new double[][] { rightPlaceHover, leftPlaceHover });
+        keyframes.add(new double[][] { withSharedQ1(rightShow, rightPlaceHover[0]), withSharedQ1(leftShow, leftPlaceHover[0]) });
         keyframes.add(new double[][] {
                 { 0, 0, 20, -35, 0, 0 },
                 { 0, 0, -20, 35, 0, 0 }
@@ -2320,9 +2308,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         DualDemoPlan plan = new DualDemoPlan(
                 frames,
                 2,
+                2,
                 4,
-                6,
-                8);
+                4);
         saveDualDemoPlanCache(plan, DUAL_DEMO_CACHE_FILE, cacheVersion);
         return plan;
     }
@@ -2641,17 +2629,28 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     }
                     if (isArmAtTarget(true) && isArmAtTarget(false)) {
                         int reachedFrameIndex = currentIndex[0];
-                        if (reachedFrameIndex == plan.rightGripFrameIndex) {
+                        boolean rightGripNow = reachedFrameIndex == plan.rightGripFrameIndex;
+                        boolean leftGripNow = reachedFrameIndex == plan.leftGripFrameIndex;
+                        boolean rightReleaseNow = reachedFrameIndex == plan.rightReleaseFrameIndex;
+                        boolean leftReleaseNow = reachedFrameIndex == plan.leftReleaseFrameIndex;
+
+                        if (rightGripNow && leftGripNow) {
+                            setDemoGripperState(true, true, "Demo 2 Tay: hai tay kep");
+                            System.out.printf("[DEMO_TRACE] event frame=%d | both grip%n", reachedFrameIndex);
+                        } else if (rightReleaseNow && leftReleaseNow) {
+                            setDemoGripperState(false, false, "Demo 2 Tay: hai tay nha");
+                            System.out.printf("[DEMO_TRACE] event frame=%d | both release%n", reachedFrameIndex);
+                        } else if (rightGripNow) {
                             setSingleDemoGripState(true, true, "Demo 2 Tay: tay phai kep");
                             System.out.printf("[DEMO_TRACE] event frame=%d | right grip%n", reachedFrameIndex);
-                        } else if (reachedFrameIndex == plan.leftGripFrameIndex) {
-                            setSingleDemoGripState(false, true, "Demo 2 Tay: tay trai nhan");
+                        } else if (leftGripNow) {
+                            setSingleDemoGripState(false, true, "Demo 2 Tay: tay trai kep");
                             System.out.printf("[DEMO_TRACE] event frame=%d | left grip%n", reachedFrameIndex);
-                        } else if (reachedFrameIndex == plan.rightReleaseFrameIndex) {
+                        } else if (rightReleaseNow) {
                             setSingleDemoGripState(true, false, "Demo 2 Tay: tay phai nha");
                             System.out.printf("[DEMO_TRACE] event frame=%d | right release%n", reachedFrameIndex);
-                        } else if (reachedFrameIndex == plan.leftReleaseFrameIndex) {
-                            setSingleDemoGripState(false, false, "Demo 2 Tay: tay trai tha");
+                        } else if (leftReleaseNow) {
+                            setSingleDemoGripState(false, false, "Demo 2 Tay: tay trai nha");
                             System.out.printf("[DEMO_TRACE] event frame=%d | left release%n", reachedFrameIndex);
                         }
                         currentIndex[0]++;
