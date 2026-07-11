@@ -2308,49 +2308,43 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
         double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
-        double[] openRight = { sharedQ1, -20, 70, -84, 10, -20 };
-        double[] openLeft = { sharedQ1, -20, -70, 84, 10, 20 };
-        double[] sweepFrontRight = { sharedQ1, 28, 122, -92, 18, -40 };
-        double[] sweepBackLeft = { sharedQ1, -26, -52, 62, -8, 16 };
-        double[] highRight = { sharedQ1, -34, 92, -90, 32, -14 };
-        double[] highLeft = { sharedQ1, -18, -126, 94, 26, 34 };
-        double[] lowReachRight = { sharedQ1, 48, 136, -94, -10, -24 };
-        double[] lowSweepLeft = { sharedQ1, -38, -98, 88, 22, 26 };
-        double[] centerLiftRight = { sharedQ1, -44, 112, -92, 38, -18 };
-        double[] centerLiftLeft = { sharedQ1, -44, -112, 92, 38, 18 };
-        double[] lowSweepRight = { sharedQ1, -38, 98, -88, 22, -26 };
-        double[] lowReachLeft = { sharedQ1, 48, -136, 94, -10, 24 };
-        double[] highMirrorRight = { sharedQ1, -18, 126, -94, 26, -34 };
-        double[] highMirrorLeft = { sharedQ1, -34, -92, 90, 32, 14 };
-        double[] sweepBackRight = { sharedQ1, -26, 52, -62, -8, -16 };
-        double[] sweepFrontLeft = { sharedQ1, 28, -122, 92, 18, 40 };
-        double[] spreadRight = { sharedQ1, -12, 56, -72, 6, -28 };
-        double[] spreadLeft = { sharedQ1, -12, -56, 72, 6, 28 };
+        double[] readyRight = { sharedQ1, 18, 36, -74, 6, -12 };
+        double[] readyLeft = { sharedQ1, 18, -36, 74, 6, 12 };
+        double[] frontLowRight = { sharedQ1, 42, 28, -95, -10, -8 };
+        double[] frontLowLeft = { sharedQ1, 42, -28, 95, -10, 8 };
+        double[] frontMidRight = { sharedQ1, 56, 28, -95, 4, -18 };
+        double[] frontMidLeft = { sharedQ1, 56, -28, 95, 4, 18 };
+        double[] frontHighRight = { sharedQ1, 72, 22, -95, 30, -24 };
+        double[] frontHighLeft = { sharedQ1, 72, -22, 95, 30, 24 };
+        double[] presentRight = { sharedQ1, 58, 46, -88, 18, -34 };
+        double[] presentLeft = { sharedQ1, 58, -46, 88, 18, 34 };
+        double[] centerPulseRight = { sharedQ1, 34, 60, -80, 24, -20 };
+        double[] centerPulseLeft = { sharedQ1, 34, -60, 80, 24, 20 };
+        double[] highFoldRight = { sharedQ1, 24, 84, -82, 36, -12 };
+        double[] highFoldLeft = { sharedQ1, 24, -84, 82, 36, 12 };
 
-        if (!logDemoPoseOk("openRight", openRight, true) || !logDemoPoseOk("openLeft", openLeft, false)
-                || !logDemoPoseOk("sweepFrontRight", sweepFrontRight, true) || !logDemoPoseOk("sweepBackLeft", sweepBackLeft, false)
-                || !logDemoPoseOk("highRight", highRight, true) || !logDemoPoseOk("highLeft", highLeft, false)
-                || !logDemoPoseOk("lowReachRight", lowReachRight, true) || !logDemoPoseOk("lowSweepLeft", lowSweepLeft, false)
-                || !logDemoPoseOk("centerLiftRight", centerLiftRight, true) || !logDemoPoseOk("centerLiftLeft", centerLiftLeft, false)
-                || !logDemoPoseOk("lowSweepRight", lowSweepRight, true) || !logDemoPoseOk("lowReachLeft", lowReachLeft, false)
-                || !logDemoPoseOk("highMirrorRight", highMirrorRight, true) || !logDemoPoseOk("highMirrorLeft", highMirrorLeft, false)
-                || !logDemoPoseOk("sweepBackRight", sweepBackRight, true) || !logDemoPoseOk("sweepFrontLeft", sweepFrontLeft, false)
-                || !logDemoPoseOk("spreadRight", spreadRight, true) || !logDemoPoseOk("spreadLeft", spreadLeft, false)) {
+        if (!logDemoPoseOk("readyRight", readyRight, true) || !logDemoPoseOk("readyLeft", readyLeft, false)
+                || !logDemoPoseOk("frontLowRight", frontLowRight, true) || !logDemoPoseOk("frontLowLeft", frontLowLeft, false)
+                || !logDemoPoseOk("frontMidRight", frontMidRight, true) || !logDemoPoseOk("frontMidLeft", frontMidLeft, false)
+                || !logDemoPoseOk("frontHighRight", frontHighRight, true) || !logDemoPoseOk("frontHighLeft", frontHighLeft, false)
+                || !logDemoPoseOk("presentRight", presentRight, true) || !logDemoPoseOk("presentLeft", presentLeft, false)
+                || !logDemoPoseOk("centerPulseRight", centerPulseRight, true) || !logDemoPoseOk("centerPulseLeft", centerPulseLeft, false)
+                || !logDemoPoseOk("highFoldRight", highFoldRight, true) || !logDemoPoseOk("highFoldLeft", highFoldLeft, false)) {
             return null;
         }
 
         keyframes.add(new double[][] { homeRight, homeLeft });
-        keyframes.add(new double[][] { openRight, openLeft });
-        keyframes.add(new double[][] { sweepFrontRight, sweepBackLeft });
-        keyframes.add(new double[][] { highRight, highLeft });
-        keyframes.add(new double[][] { lowReachRight, lowSweepLeft });
-        keyframes.add(new double[][] { centerLiftRight, centerLiftLeft });
-        keyframes.add(new double[][] { lowSweepRight, lowReachLeft });
-        keyframes.add(new double[][] { highMirrorRight, highMirrorLeft });
-        keyframes.add(new double[][] { sweepBackRight, sweepFrontLeft });
-        keyframes.add(new double[][] { centerLiftRight, centerLiftLeft });
-        keyframes.add(new double[][] { spreadRight, spreadLeft });
-        keyframes.add(new double[][] { openRight, openLeft });
+        keyframes.add(new double[][] { readyRight, readyLeft });
+        keyframes.add(new double[][] { frontLowRight, frontLowLeft });
+        keyframes.add(new double[][] { frontMidRight, frontMidLeft });
+        keyframes.add(new double[][] { frontHighRight, frontHighLeft });
+        keyframes.add(new double[][] { presentRight, presentLeft });
+        keyframes.add(new double[][] { centerPulseRight, centerPulseLeft });
+        keyframes.add(new double[][] { frontHighRight, frontHighLeft });
+        keyframes.add(new double[][] { highFoldRight, highFoldLeft });
+        keyframes.add(new double[][] { presentRight, presentLeft });
+        keyframes.add(new double[][] { frontMidRight, frontMidLeft });
+        keyframes.add(new double[][] { readyRight, readyLeft });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
         java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
