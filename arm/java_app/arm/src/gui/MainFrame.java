@@ -460,21 +460,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private void buildTopPanel() {
         add(BorderLayout.NORTH, topPanel);
-        topPanel.setLayout(new BorderLayout(8, 0));
-
-        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 4));
-        JScrollPane actionScroll = new JScrollPane(actionPanel,
-                ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER,
-                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        actionScroll.setBorder(null);
-        actionScroll.getHorizontalScrollBar().setUnitIncrement(16);
-        actionScroll.setOpaque(false);
-        actionScroll.getViewport().setOpaque(false);
-
-        JPanel uartPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 4));
-
-        topPanel.add(actionScroll, BorderLayout.CENTER);
-        topPanel.add(uartPanel, BorderLayout.EAST);
+        topPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 5, 4));
 
         // Emergency Stop Button (prominent red button)
         JButton btnEStop = new JButton("⛔ E-STOP");
@@ -484,8 +470,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         btnEStop.setFocusPainted(false);
         btnEStop.setToolTipText("Emergency Stop — Dừng khẩn cấp (ESC)");
         btnEStop.addActionListener(e -> emergencyStop());
-        actionPanel.add(btnEStop);
-        actionPanel.add(createToolbarSeparator());
+        topPanel.add(btnEStop);
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
 
         JButton btnGripper = new JButton("Đóng / Mở Kẹp");
         btnGripper.addActionListener(e -> {
@@ -506,9 +492,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
             armPanel.repaint();
         });
-        actionPanel.add(btnGripper);
+        topPanel.add(btnGripper);
 
-        actionPanel.add(createToolbarSeparator());
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
 
         trajArmCombo.addActionListener(e -> {
             boolean right = (trajArmCombo.getSelectedIndex() == 0);
@@ -521,11 +507,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 trajectoryNeedsRecalculation = true;
             }
         });
-        actionPanel.add(new JLabel(" Tay Vẽ:"));
-        actionPanel.add(trajArmCombo);
+        topPanel.add(new JLabel(" Tay Vẽ:"));
+        topPanel.add(trajArmCombo);
 
         cbEnableDrawing.setText("Bật Vẽ");
-        actionPanel.add(cbEnableDrawing);
+        topPanel.add(cbEnableDrawing);
 
         JButton btnClearMouseDraw = new JButton("Xóa Hình");
         btnClearMouseDraw.addActionListener(evt -> {
@@ -533,7 +519,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             armPanel.repaint();
             trajectoryNeedsRecalculation = true;
         });
-        actionPanel.add(btnClearMouseDraw);
+        topPanel.add(btnClearMouseDraw);
 
         JButton btnStartTraj = new JButton("Chạy Quỹ Đạo");
         btnStartTraj.addActionListener(e -> {
@@ -548,23 +534,33 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 JOptionPane.showMessageDialog(this, "Có lỗi xảy ra", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
         });
-        actionPanel.add(btnStartTraj);
+        topPanel.add(btnStartTraj);
 
         btnDualArmDemo.addActionListener(e -> runDualArmShowcase());
-        actionPanel.add(btnDualArmDemo);
-        btnDualArmWaveDemo.addActionListener(e -> runDualArmWaveShowcase());
-        actionPanel.add(btnDualArmWaveDemo);
+        JComboBox<String> demoModeCombo = new JComboBox<>(new String[] { "Demo 2 Tay", "Mua 2 Tay" });
+        demoModeCombo.setPreferredSize(new Dimension(105, 25));
+        JButton btnRunDemo = new JButton("Chay Demo");
+        btnRunDemo.addActionListener(e -> {
+            if (demoModeCombo.getSelectedIndex() == 0) {
+                runDualArmShowcase();
+            } else {
+                runDualArmWaveShowcase();
+            }
+        });
+        topPanel.add(new JLabel(" Demo:"));
+        topPanel.add(demoModeCombo);
+        topPanel.add(btnRunDemo);
 
         JButton btnStopTraj = new JButton("Dừng");
         btnStopTraj.addActionListener(e -> {
             if (trajectoryTimer != null) trajectoryTimer.stop();
             setTitle("Mô Phỏng robot song song");
         });
-        actionPanel.add(btnStopTraj);
+        topPanel.add(btnStopTraj);
 
-        actionPanel.add(createToolbarSeparator());
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
 
-        actionPanel.add(new JLabel("  Tốc độ:"));
+        topPanel.add(new JLabel("  Tốc độ:"));
         speedSlider.setPreferredSize(new Dimension(100, 25));
         speedSlider.setMajorTickSpacing(30);
         speedSlider.setPaintTicks(true);
@@ -572,20 +568,20 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             speedLabel.setText(speedSlider.getValue() + " °/s");
             trajectoryNeedsRecalculation = true;
         });
-        actionPanel.add(speedSlider);
-        actionPanel.add(speedLabel);
+        topPanel.add(speedSlider);
+        topPanel.add(speedLabel);
 
         JButton btnRos2Plan = new JButton("ROS2 Plan");
         btnRos2Plan.setToolTipText("Gui toa do hien tai sang ROS 2 bridge");
         btnRos2Plan.addActionListener(e -> requestRos2Plan());
-        actionPanel.add(createToolbarSeparator());
-        actionPanel.add(btnRos2Plan);
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        topPanel.add(btnRos2Plan);
 
-        actionPanel.add(createToolbarSeparator());
-        actionPanel.add(fixedHeightCb);
-        actionPanel.add(new JLabel("Z:"));
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        topPanel.add(fixedHeightCb);
+        topPanel.add(new JLabel("Z:"));
         fixedHeightSpinner.setPreferredSize(new Dimension(55, 22));
-        actionPanel.add(fixedHeightSpinner);
+        topPanel.add(fixedHeightSpinner);
         fixedHeightSpinner.addChangeListener(ev -> {
             if (showWorkspaceSlice) {
                 updateWorkspaceSlice();
@@ -601,7 +597,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             armPanel.repaint();
         });
 
-        uartPanel.add(new JLabel(" COM:"));
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        topPanel.add(new JLabel(" COM:"));
         JComboBox<String> comPortCombo = new JComboBox<>();
         for (String portName : comm.UartManager.getAvailablePorts()) {
             comPortCombo.addItem(portName);
@@ -637,31 +634,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         });
 
-        uartPanel.add(comPortCombo);
-        uartPanel.add(btnRefreshCom);
-        uartPanel.add(btnConnect);
+        topPanel.add(comPortCombo);
+        topPanel.add(btnRefreshCom);
+        topPanel.add(btnConnect);
     }
-
-    private JComponent createToolbarSeparator() {
-        return new JComponent() {
-            {
-                Dimension size = new Dimension(8, 24);
-                setPreferredSize(size);
-                setMinimumSize(size);
-                setMaximumSize(size);
-                setOpaque(false);
-            }
-
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                g.setColor(new Color(190, 190, 190));
-                int x = getWidth() / 2;
-                g.drawLine(x, 3, x, getHeight() - 4);
-            }
-        };
-    }
-
     private java.util.List<double[]> parseTrajectory(String json) {
         java.util.List<double[]> trajectory = new java.util.ArrayList<>();
         int trajIndex = json.indexOf("\"trajectory\"");
