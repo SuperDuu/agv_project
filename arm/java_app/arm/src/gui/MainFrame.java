@@ -38,7 +38,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final String LEFT_DEMO_CACHE_FILE = "demo_left_pick_place.csv";
     private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v2";
     private static final String DUAL_DEMO_CACHE_FILE = "demo_dual_pick_place.csv";
-    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v7";
+    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v8";
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = HOME_ANGLES_RIGHT.clone();
@@ -2251,6 +2251,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] rightHandoff = new double[] { 0, 0, 80, -90, 15, 0 };
         double[] leftHandoffHover = new double[] { 0, 0, -55, 70, 0, 0 };
         double[] leftHandoff = new double[] { 0, 0, -80, 90, 15, 0 };
+        double[] leftReadyOpen = new double[] { 0, 18, -35, 48, 0, 0 };
+        double[] leftReadyReach = new double[] { 0, 28, -48, 62, 8, 0 };
+        double[] leftTravel = new double[] { 0, 12, -42, 55, 0, 0 };
+        double[] rightEscort = new double[] { 0, -12, 45, -62, 0, 0 };
+        double[] rightRetreat = new double[] { 0, -24, 35, -50, 0, 0 };
 
         if (rightPickHover == null || rightPick == null || rightHandoffHover == null || rightHandoff == null
                 || leftHandoffHover == null || leftHandoff == null || leftPlaceHover == null || leftPlace == null) {
@@ -2261,7 +2266,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         if (!isWithinLimits(rightHandoffHover, true) || !isWithinLimits(rightHandoff, true)
-                || !isWithinLimits(leftHandoffHover, false) || !isWithinLimits(leftHandoff, false)) {
+                || !isWithinLimits(leftHandoffHover, false) || !isWithinLimits(leftHandoff, false)
+                || !isWithinLimits(leftReadyOpen, false) || !isWithinLimits(leftReadyReach, false)
+                || !isWithinLimits(leftTravel, false) || !isWithinLimits(rightEscort, true)
+                || !isWithinLimits(rightRetreat, true)) {
             System.out.println("[DEMO_IK] handoff failed | manual handoff pose exceeds joint limits");
             return null;
         }
@@ -2271,16 +2279,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 { 0, 0, 20, -35, 0, 0 },
                 { 0, 0, -20, 35, 0, 0 }
         });
-        keyframes.add(new double[][] { rightPickHover, makeLeftHoldPose(rightPickHover[0]) });
-        keyframes.add(new double[][] { rightPick, makeLeftHoldPose(rightPick[0]) });
-        keyframes.add(new double[][] { rightPickHover, makeLeftHoldPose(rightPickHover[0]) });
+        keyframes.add(new double[][] { rightPickHover, withSharedQ1(leftReadyOpen, rightPickHover[0]) });
+        keyframes.add(new double[][] { rightPick, withSharedQ1(leftReadyReach, rightPick[0]) });
+        keyframes.add(new double[][] { rightPickHover, withSharedQ1(leftTravel, rightPickHover[0]) });
         keyframes.add(new double[][] { rightHandoffHover, leftHandoffHover });
         keyframes.add(new double[][] { rightHandoff, leftHandoffHover });
         keyframes.add(new double[][] { rightHandoff, leftHandoff });
-        keyframes.add(new double[][] { makeRightHoldPose(leftHandoffHover[0]), leftHandoffHover });
-        keyframes.add(new double[][] { makeRightHoldPose(leftPlaceHover[0]), leftPlaceHover });
-        keyframes.add(new double[][] { makeRightHoldPose(leftPlace[0]), leftPlace });
-        keyframes.add(new double[][] { makeRightHoldPose(leftPlaceHover[0]), leftPlaceHover });
+        keyframes.add(new double[][] { withSharedQ1(rightEscort, leftHandoffHover[0]), leftHandoffHover });
+        keyframes.add(new double[][] { withSharedQ1(rightEscort, leftPlaceHover[0]), leftPlaceHover });
+        keyframes.add(new double[][] { withSharedQ1(rightRetreat, leftPlace[0]), leftPlace });
+        keyframes.add(new double[][] { withSharedQ1(rightRetreat, leftPlaceHover[0]), leftPlaceHover });
         keyframes.add(new double[][] {
                 { 0, 0, 20, -35, 0, 0 },
                 { 0, 0, -20, 35, 0, 0 }
@@ -2290,7 +2298,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         DualDemoPlan plan = new DualDemoPlan(
                 frames,
                 2,
-                5,
+                4,
                 6,
                 8);
         saveDualDemoPlanCache(plan, DUAL_DEMO_CACHE_FILE, cacheVersion);
@@ -2493,6 +2501,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] copy = q.clone();
         copy[4] = q5;
         copy[5] = q6;
+        return copy;
+    }
+
+    private double[] withSharedQ1(double[] q, double sharedQ1) {
+        double[] copy = q.clone();
+        copy[0] = sharedQ1;
         return copy;
     }
 
