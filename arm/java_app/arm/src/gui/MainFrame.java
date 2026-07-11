@@ -2257,16 +2257,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
         double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
-        double[] openRight = { sharedQ1, -12, 52, -68, 12, -18 };
-        double[] openLeft = { sharedQ1, -12, -52, 68, 12, 18 };
-        double[] frontRight = { sharedQ1, 28, 92, -90, 18, -35 };
-        double[] backLeft = { sharedQ1, -30, -32, 42, -18, 22 };
+        double[] openRight = { sharedQ1, -18, 64, -82, 8, -24 };
+        double[] openLeft = { sharedQ1, -18, -64, 82, 8, 24 };
+        double[] frontRight = { sharedQ1, 34, 118, -95, 20, -42 };
+        double[] backLeft = { sharedQ1, -34, -18, 30, -22, 26 };
         double[] highRight = { sharedQ1, -24, 78, -88, 28, -12 };
         double[] highLeft = { sharedQ1, -24, -78, 88, 28, 12 };
-        double[] backRight = { sharedQ1, -30, 32, -42, -18, -22 };
-        double[] frontLeft = { sharedQ1, 28, -92, 90, 18, 35 };
-        double[] foldRight = { sharedQ1, -18, 38, -52, -12, 16 };
-        double[] foldLeft = { sharedQ1, -18, -38, 52, -12, -16 };
+        double[] backRight = { sharedQ1, -34, 18, -30, -22, -26 };
+        double[] frontLeft = { sharedQ1, 34, -118, 95, 20, 42 };
+        double[] foldRight = { sharedQ1, -20, 44, -58, -10, 18 };
+        double[] foldLeft = { sharedQ1, -20, -44, 58, -10, -18 };
 
         if (!isWithinLimits(openRight, true) || !isWithinLimits(frontRight, true)
                 || !isWithinLimits(highRight, true) || !isWithinLimits(backRight, true)
