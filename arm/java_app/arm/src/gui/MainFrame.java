@@ -526,14 +526,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         topPanel.add(btnStartTraj);
 
         btnDualArmDemo.addActionListener(e -> runDualArmShowcase());
-        JComboBox<String> demoModeCombo = new JComboBox<>(new String[] { "Demo 2 Tay", "Mua 2 Tay" });
-        demoModeCombo.setPreferredSize(new Dimension(92, 25));
+        JComboBox<String> demoModeCombo = new JComboBox<>(new String[] { "Demo 2 Tay", "Mua 2 Tay", "Mua 2 Tay+" });
+        demoModeCombo.setPreferredSize(new Dimension(110, 25));
         JButton btnRunDemo = new JButton("Demo");
         btnRunDemo.addActionListener(e -> {
             if (demoModeCombo.getSelectedIndex() == 0) {
                 runDualArmShowcase();
-            } else {
+            } else if (demoModeCombo.getSelectedIndex() == 1) {
                 runDualArmWaveShowcase();
+            } else {
+                runDualArmWaveLongShowcase();
             }
         });
         topPanel.add(demoModeCombo);
@@ -2229,6 +2231,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         runDualArmPlayback(plan, "Mua 2 Tay");
     }
 
+    private void runDualArmWaveLongShowcase() {
+        DualDemoPlan plan = buildDualArmWaveLongDemo();
+        if (plan == null || plan.frames.isEmpty()) {
+            setGotoStatusRight("Mua 2 Tay+: loi pose", Color.RED);
+            setGotoStatusLeft("Mua 2 Tay+: loi pose", Color.RED);
+            return;
+        }
+        runDualArmPlayback(plan, "Mua 2 Tay+");
+    }
+
     private static class DualDemoPlan {
         final java.util.List<double[][]> frames;
         final int rightGripFrameIndex;
@@ -2266,11 +2278,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] foldRight = { sharedQ1, -20, 44, -58, -10, 18 };
         double[] foldLeft = { sharedQ1, -20, -44, 58, -10, -18 };
 
-        if (!logWavePoseOk("openRight", openRight, true) || !logWavePoseOk("frontRight", frontRight, true)
-                || !logWavePoseOk("highRight", highRight, true) || !logWavePoseOk("backRight", backRight, true)
-                || !logWavePoseOk("foldRight", foldRight, true) || !logWavePoseOk("openLeft", openLeft, false)
-                || !logWavePoseOk("backLeft", backLeft, false) || !logWavePoseOk("highLeft", highLeft, false)
-                || !logWavePoseOk("frontLeft", frontLeft, false) || !logWavePoseOk("foldLeft", foldLeft, false)) {
+        if (!logDemoPoseOk("openRight", openRight, true) || !logDemoPoseOk("frontRight", frontRight, true)
+                || !logDemoPoseOk("highRight", highRight, true) || !logDemoPoseOk("backRight", backRight, true)
+                || !logDemoPoseOk("foldRight", foldRight, true) || !logDemoPoseOk("openLeft", openLeft, false)
+                || !logDemoPoseOk("backLeft", backLeft, false) || !logDemoPoseOk("highLeft", highLeft, false)
+                || !logDemoPoseOk("frontLeft", frontLeft, false) || !logDemoPoseOk("foldLeft", foldLeft, false)) {
             return null;
         }
 
@@ -2286,6 +2298,61 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // Keep the wave demo on sparse keyframes and let the motion controller
         // blend the travel, otherwise the per-frame arrival wait creates a stop-go feel.
+        java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
+        return new DualDemoPlan(frames, -1, -1, -1, -1);
+    }
+
+    private DualDemoPlan buildDualArmWaveLongDemo() {
+        double sharedQ1 = targetAnglesRight[0];
+        java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
+
+        double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
+        double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
+        double[] openRight = { sharedQ1, -20, 70, -84, 10, -20 };
+        double[] openLeft = { sharedQ1, -20, -70, 84, 10, 20 };
+        double[] sweepFrontRight = { sharedQ1, 28, 122, -92, 18, -40 };
+        double[] sweepBackLeft = { sharedQ1, -26, -52, 62, -8, 16 };
+        double[] highRight = { sharedQ1, -34, 92, -90, 32, -14 };
+        double[] highLeft = { sharedQ1, -18, -126, 94, 26, 34 };
+        double[] lowReachRight = { sharedQ1, 48, 136, -94, -10, -24 };
+        double[] lowSweepLeft = { sharedQ1, -38, -98, 88, 22, 26 };
+        double[] centerLiftRight = { sharedQ1, -44, 112, -92, 38, -18 };
+        double[] centerLiftLeft = { sharedQ1, -44, -112, 92, 38, 18 };
+        double[] lowSweepRight = { sharedQ1, -38, 98, -88, 22, -26 };
+        double[] lowReachLeft = { sharedQ1, 48, -136, 94, -10, 24 };
+        double[] highMirrorRight = { sharedQ1, -18, 126, -94, 26, -34 };
+        double[] highMirrorLeft = { sharedQ1, -34, -92, 90, 32, 14 };
+        double[] sweepBackRight = { sharedQ1, -26, 52, -62, -8, -16 };
+        double[] sweepFrontLeft = { sharedQ1, 28, -122, 92, 18, 40 };
+        double[] spreadRight = { sharedQ1, -12, 56, -72, 6, -28 };
+        double[] spreadLeft = { sharedQ1, -12, -56, 72, 6, 28 };
+
+        if (!logDemoPoseOk("openRight", openRight, true) || !logDemoPoseOk("openLeft", openLeft, false)
+                || !logDemoPoseOk("sweepFrontRight", sweepFrontRight, true) || !logDemoPoseOk("sweepBackLeft", sweepBackLeft, false)
+                || !logDemoPoseOk("highRight", highRight, true) || !logDemoPoseOk("highLeft", highLeft, false)
+                || !logDemoPoseOk("lowReachRight", lowReachRight, true) || !logDemoPoseOk("lowSweepLeft", lowSweepLeft, false)
+                || !logDemoPoseOk("centerLiftRight", centerLiftRight, true) || !logDemoPoseOk("centerLiftLeft", centerLiftLeft, false)
+                || !logDemoPoseOk("lowSweepRight", lowSweepRight, true) || !logDemoPoseOk("lowReachLeft", lowReachLeft, false)
+                || !logDemoPoseOk("highMirrorRight", highMirrorRight, true) || !logDemoPoseOk("highMirrorLeft", highMirrorLeft, false)
+                || !logDemoPoseOk("sweepBackRight", sweepBackRight, true) || !logDemoPoseOk("sweepFrontLeft", sweepFrontLeft, false)
+                || !logDemoPoseOk("spreadRight", spreadRight, true) || !logDemoPoseOk("spreadLeft", spreadLeft, false)) {
+            return null;
+        }
+
+        keyframes.add(new double[][] { homeRight, homeLeft });
+        keyframes.add(new double[][] { openRight, openLeft });
+        keyframes.add(new double[][] { sweepFrontRight, sweepBackLeft });
+        keyframes.add(new double[][] { highRight, highLeft });
+        keyframes.add(new double[][] { lowReachRight, lowSweepLeft });
+        keyframes.add(new double[][] { centerLiftRight, centerLiftLeft });
+        keyframes.add(new double[][] { lowSweepRight, lowReachLeft });
+        keyframes.add(new double[][] { highMirrorRight, highMirrorLeft });
+        keyframes.add(new double[][] { sweepBackRight, sweepFrontLeft });
+        keyframes.add(new double[][] { centerLiftRight, centerLiftLeft });
+        keyframes.add(new double[][] { spreadRight, spreadLeft });
+        keyframes.add(new double[][] { openRight, openLeft });
+        keyframes.add(new double[][] { homeRight, homeLeft });
+
         java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
         return new DualDemoPlan(frames, -1, -1, -1, -1);
     }
@@ -2367,11 +2434,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return plan;
     }
 
-    private boolean logWavePoseOk(String name, double[] q, boolean isRight) {
+    private boolean logDemoPoseOk(String name, double[] q, boolean isRight) {
         boolean ok = isWithinLimits(q, isRight);
         if (!ok) {
             System.out.printf(java.util.Locale.US,
-                    "[DEMO_WAVE] invalid pose %s | arm=%s | q=[%.1f, %.1f, %.1f, %.1f, %.1f, %.1f]%n",
+                    "[DEMO_POSE] invalid pose %s | arm=%s | q=[%.1f, %.1f, %.1f, %.1f, %.1f, %.1f]%n",
                     name, isRight ? "R" : "L", q[0], q[1], q[2], q[3], q[4], q[5]);
         }
         return ok;
