@@ -9,6 +9,7 @@ extern TIM_HandleTypeDef htim12;
 
 // Global array of servos
 Servo_t servos[MAX_SERVOS];
+static uint8_t servo_outputs_enabled = 0;
 
 void Servo_Init(void) {
     // Configure the 10 servos mapping to TIM8-TIM12
@@ -24,31 +25,41 @@ void Servo_Init(void) {
     servos[8] = (Servo_t){&htim12, TIM_CHANNEL_1, 500, 2550, 270};
     servos[9] = (Servo_t){&htim12, TIM_CHANNEL_2, 500, 2550, 270};
 
-    // Start PWM first, then write the neutral compare value (135 degrees)
+    // Keep PWM detached at boot. Without position feedback, any startup pulse can
+    // drive the servo abruptly toward the configured angle.
     for (int i = 0; i < MAX_SERVOS; i++) {
-        HAL_TIM_PWM_Start(servos[i].htim, servos[i].channel); // Start PWM first
-        
-        float init_angle;
-        if (i == 0) {
-            init_angle = 90.0f;
-        } else if (i == 1) {
-            init_angle = 35.0f;
-        } else if (i == 2) {
-            init_angle = 65.0f;
-        } else if (i == 3) {
-            init_angle = 90.0f;
-        } else if (i == 4) {
-            init_angle = 96.43f;
-        } else if (i == 5) {
-            init_angle = 0.0f;    // Default to 0 degrees as requested
-        } else {
-            init_angle = (float)servos[i].max_angle / 2.0f; // Default 135 degrees
-        }
-        Set_Servo_Angle(i, init_angle); // Then set initial angle
+        __HAL_TIM_SET_COMPARE(servos[i].htim, servos[i].channel, 0);
     }
-    
-    // Enable Main Output (MOE) for advanced control timer TIM8
+
+    __HAL_TIM_MOE_DISABLE(&htim8);
+    servo_outputs_enabled = 0;
+}
+
+void Servo_EnableOutputs(void) {
+    if (servo_outputs_enabled) return;
+
+    for (int i = 0; i < MAX_SERVOS; i++) {
+        HAL_TIM_PWM_Start(servos[i].htim, servos[i].channel);
+    }
+
     __HAL_TIM_MOE_ENABLE(&htim8);
+    servo_outputs_enabled = 1;
+}
+
+void Servo_DisableOutputs(void) {
+    if (!servo_outputs_enabled) return;
+
+    for (int i = 0; i < MAX_SERVOS; i++) {
+        HAL_TIM_PWM_Stop(servos[i].htim, servos[i].channel);
+        __HAL_TIM_SET_COMPARE(servos[i].htim, servos[i].channel, 0);
+    }
+
+    __HAL_TIM_MOE_DISABLE(&htim8);
+    servo_outputs_enabled = 0;
+}
+
+uint8_t Servo_OutputsEnabled(void) {
+    return servo_outputs_enabled;
 }
 
 void Set_Servo_Angle(uint8_t index, float angle) {

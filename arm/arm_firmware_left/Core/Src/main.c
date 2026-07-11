@@ -66,6 +66,9 @@ extern Encoder_t encoders[NUM_ENCODERS];
 
 /* Current servo target angles (joint space, degrees) */
 volatile float servo_deg[6] = {96.43f, 90.0f, 35.0f, 65.0f, 90, 96.43f};
+static volatile uint8_t servo_targets_valid = 0;
+static volatile uint8_t servo_estop_requested = 0;
+static float servo_output_deg[6] = {96.43f, 90.0f, 35.0f, 65.0f, 90.0f, 96.43f};
 
 /* -----------------------------------------------------------------------
  * Protocol V2.1 binary parser state (replaces legacy text "R:" parser)
@@ -118,11 +121,73 @@ static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 static void ARM_Proto_ResetParser(void);
+static void Servo_ApplyTargets(void);
+static float Servo_SlewToward(float current, float target, float max_step);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define SERVO_SLEW_STEP_DEG 0.5f
 
+static float Servo_SlewToward(float current, float target, float max_step) {
+  float delta = target - current;
+  if (delta > max_step)
+    return current + max_step;
+  if (delta < -max_step)
+    return current - max_step;
+  return target;
+}
+
+static void Servo_ApplyTargets(void) {
+  float target_deg[6];
+  uint8_t targets_valid;
+  uint8_t estop_requested;
+
+  __disable_irq();
+  targets_valid = servo_targets_valid;
+  estop_requested = servo_estop_requested;
+  servo_estop_requested = 0;
+  for (int i = 0; i < 6; i++) {
+    target_deg[i] = servo_deg[i];
+  }
+  __enable_irq();
+
+  if (estop_requested) {
+    Servo_DisableOutputs();
+    __disable_irq();
+    servo_targets_valid = 0;
+    __enable_irq();
+    return;
+  }
+
+  if (!targets_valid) {
+    return;
+  }
+
+  if (!Servo_OutputsEnabled()) {
+    for (int i = 0; i < 6; i++) {
+      servo_output_deg[i] = target_deg[i];
+    }
+    Set_Servo_Angle(0, servo_output_deg[1]);
+    Set_Servo_Angle(1, servo_output_deg[2]);
+    Set_Servo_Angle(2, servo_output_deg[3]);
+    Set_Servo_Angle(3, servo_output_deg[4]);
+    Set_Servo_Angle(4, servo_output_deg[5]);
+    Servo_EnableOutputs();
+    return;
+  }
+
+  for (int i = 0; i < 6; i++) {
+    servo_output_deg[i] =
+        Servo_SlewToward(servo_output_deg[i], target_deg[i], SERVO_SLEW_STEP_DEG);
+  }
+
+  Set_Servo_Angle(0, servo_output_deg[1]);
+  Set_Servo_Angle(1, servo_output_deg[2]);
+  Set_Servo_Angle(2, servo_output_deg[3]);
+  Set_Servo_Angle(3, servo_output_deg[4]);
+  Set_Servo_Angle(4, servo_output_deg[5]);
+}
 /* USER CODE END 0 */
 
 /**
@@ -213,11 +278,7 @@ int main(void)
     //    dbg_enc3 = (int32_t)TIM4->CNT;
     //    dbg_enc4 = (int32_t)TIM5->CNT;
 
-    Set_Servo_Angle(0, servo_deg[1]);
-    Set_Servo_Angle(1, servo_deg[2]);
-    Set_Servo_Angle(2, servo_deg[3]);
-    Set_Servo_Angle(3, servo_deg[4]);
-    Set_Servo_Angle(4, servo_deg[5]);
+    Servo_ApplyTargets();
     HAL_Delay(10);
 
     // Call test pattern for PWM output testing
@@ -968,6 +1029,7 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
         servo_deg[3] = 65+ARM_Proto_X100ToDeg(q_new[3]);
         servo_deg[4] = ARM_Proto_X100ToDeg(q_new[4])+90;
         servo_deg[5] = ARM_Proto_X100ToDeg(q_new[5])+96.43;
+      servo_targets_valid = 1u;
       /* Update last accepted position */
       for (int i = 0; i < 6; i++)
         arm_q_last[i] = q_new[i];
@@ -975,6 +1037,7 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
       dbg_rx_ok++;
 
     } else if (motion_mode == ARM_PROTO_MOTION_ESTOP) {
+      servo_estop_requested = 1u;
       arm_last_seq = seq;
     }
     break;
@@ -1043,6 +1106,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
                   servo_deg[3] = 65.0f+(float)q[3] / 100.0f;
                   servo_deg[4] = (float)q[4] / 100.0f+90;
                   servo_deg[5] = (float)q[5] / 100.0f+96.43;
+                  servo_targets_valid = 1u;
                 } else {
                   dbg_rx_len++;
                 }
