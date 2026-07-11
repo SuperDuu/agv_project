@@ -136,7 +136,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JSlider speedSlider = new JSlider(0, 120, 20);
     JLabel speedLabel = new JLabel("20 °/s");
     private static final int MOTION_DT_MS = 20;
-    private static final int DEMO_PLAYBACK_DT_MS = 40;
     private static final int ARM_TX_REFRESH_MS = 100;
     Timer motionTimer;
     Timer armTxRefreshTimer;
@@ -2544,12 +2543,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         showTrailCb.setSelected(true);
         armPanel.repaint();
 
-        if (motionTimer != null) motionTimer.stop();
         if (trajectoryTimer != null) trajectoryTimer.stop();
 
         double[][] startFrame = frames.get(0);
-        setTargetAnglesRight(startFrame[0]);
-        setTargetAnglesLeft(startFrame[1]);
+        applyDualArmFrame(startFrame[0], startFrame[1]);
+        startMotionTimer();
         updateArm();
 
         setGotoStatusRight("Demo 2 Tay: ready", new Color(0, 90, 180));
@@ -2564,9 +2562,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 ((Timer) evt.getSource()).stop();
                 setTitle(statusTitle + " dang chay...");
 
-                final int[] currentIndex = { 0 };
-                trajectoryTimer = new Timer(DEMO_PLAYBACK_DT_MS, e -> {
+                final int[] currentIndex = { 1 };
+                final boolean[] waitingForArrival = { false };
+                trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
                     if (currentIndex[0] >= frames.size()) {
+                        if (!(isArmAtTarget(true) && isArmAtTarget(false))) {
+                            updateArm();
+                            return;
+                        }
                         trajectoryTimer.stop();
                         setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
                         setGotoStatusRight("Demo 2 Tay xong", new Color(0, 140, 0));
@@ -2575,21 +2578,27 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         return;
                     }
 
-                    int frameIndex = currentIndex[0];
-                    double[][] frame = frames.get(frameIndex);
-                    currentIndex[0]++;
-                    applyDualArmFrame(frame[0], frame[1]);
-                    if (frameIndex == plan.rightGripFrameIndex) {
-                        setSingleDemoGripState(true, true, "Demo 2 Tay: tay phai kep");
-                    } else if (frameIndex == plan.leftGripFrameIndex) {
-                        setSingleDemoGripState(false, true, "Demo 2 Tay: tay trai nhan");
-                    } else if (frameIndex == plan.rightReleaseFrameIndex) {
-                        setSingleDemoGripState(true, false, "Demo 2 Tay: tay phai nha");
-                    } else if (frameIndex == plan.leftReleaseFrameIndex) {
-                        setSingleDemoGripState(false, false, "Demo 2 Tay: tay trai tha");
+                    if (!waitingForArrival[0]) {
+                        int frameIndex = currentIndex[0];
+                        double[][] frame = frames.get(frameIndex);
+                        setDualArmTargetFrame(frame[0], frame[1]);
+                        waitingForArrival[0] = true;
+                    }
+                    if (isArmAtTarget(true) && isArmAtTarget(false)) {
+                        int reachedFrameIndex = currentIndex[0];
+                        if (reachedFrameIndex == plan.rightGripFrameIndex) {
+                            setSingleDemoGripState(true, true, "Demo 2 Tay: tay phai kep");
+                        } else if (reachedFrameIndex == plan.leftGripFrameIndex) {
+                            setSingleDemoGripState(false, true, "Demo 2 Tay: tay trai nhan");
+                        } else if (reachedFrameIndex == plan.rightReleaseFrameIndex) {
+                            setSingleDemoGripState(true, false, "Demo 2 Tay: tay phai nha");
+                        } else if (reachedFrameIndex == plan.leftReleaseFrameIndex) {
+                            setSingleDemoGripState(false, false, "Demo 2 Tay: tay trai tha");
+                        }
+                        currentIndex[0]++;
+                        waitingForArrival[0] = false;
                     }
                     updateArm();
-                    sendJointsToUart();
                 });
                 trajectoryTimer.start();
             }
@@ -2629,6 +2638,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             slidersLeft[i].addChangeListener(this);
             angleLblsLeft[i].setText((int) Math.round(anglesLeft[i]) + "°");
         }
+    }
+
+    private void setDualArmTargetFrame(double[] rightFrame, double[] leftFrame) {
+        leftFrame[0] = rightFrame[0];
+        System.arraycopy(rightFrame, 0, targetAnglesRight, 0, NUM_JOINTS);
+        System.arraycopy(leftFrame, 0, targetAnglesLeft, 0, NUM_JOINTS);
+        startMotionTimer();
     }
 
     private java.util.List<double[]> resamplePath(java.util.List<double[]> path, double speedUnitsPerSec) {
