@@ -485,7 +485,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         btnEStop.setToolTipText("Emergency Stop — Dừng khẩn cấp (ESC)");
         btnEStop.addActionListener(e -> emergencyStop());
         actionPanel.add(btnEStop);
-        actionPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        actionPanel.add(createToolbarSeparator());
 
         JButton btnGripper = new JButton("Đóng / Mở Kẹp");
         btnGripper.addActionListener(e -> {
@@ -508,7 +508,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         });
         actionPanel.add(btnGripper);
 
-        actionPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        actionPanel.add(createToolbarSeparator());
 
         trajArmCombo.addActionListener(e -> {
             boolean right = (trajArmCombo.getSelectedIndex() == 0);
@@ -562,7 +562,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         });
         actionPanel.add(btnStopTraj);
 
-        actionPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        actionPanel.add(createToolbarSeparator());
 
         actionPanel.add(new JLabel("  Tốc độ:"));
         speedSlider.setPreferredSize(new Dimension(100, 25));
@@ -578,10 +578,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         JButton btnRos2Plan = new JButton("ROS2 Plan");
         btnRos2Plan.setToolTipText("Gui toa do hien tai sang ROS 2 bridge");
         btnRos2Plan.addActionListener(e -> requestRos2Plan());
-        actionPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        actionPanel.add(createToolbarSeparator());
         actionPanel.add(btnRos2Plan);
 
-        actionPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        actionPanel.add(createToolbarSeparator());
         actionPanel.add(fixedHeightCb);
         actionPanel.add(new JLabel("Z:"));
         fixedHeightSpinner.setPreferredSize(new Dimension(55, 22));
@@ -640,6 +640,26 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         uartPanel.add(comPortCombo);
         uartPanel.add(btnRefreshCom);
         uartPanel.add(btnConnect);
+    }
+
+    private JComponent createToolbarSeparator() {
+        return new JComponent() {
+            {
+                Dimension size = new Dimension(8, 24);
+                setPreferredSize(size);
+                setMinimumSize(size);
+                setMaximumSize(size);
+                setOpaque(false);
+            }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                g.setColor(new Color(190, 190, 190));
+                int x = getWidth() / 2;
+                g.drawLine(x, 3, x, getHeight() - 4);
+            }
+        };
     }
 
     private java.util.List<double[]> parseTrajectory(String json) {
