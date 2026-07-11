@@ -538,8 +538,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         btnDualArmDemo.addActionListener(e -> runDualArmShowcase());
         JComboBox<String> demoModeCombo = new JComboBox<>(new String[] { "Demo 2 Tay", "Mua 2 Tay" });
-        demoModeCombo.setPreferredSize(new Dimension(105, 25));
-        JButton btnRunDemo = new JButton("Chay Demo");
+        demoModeCombo.setPreferredSize(new Dimension(92, 25));
+        JButton btnRunDemo = new JButton("Demo");
         btnRunDemo.addActionListener(e -> {
             if (demoModeCombo.getSelectedIndex() == 0) {
                 runDualArmShowcase();
@@ -547,7 +547,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 runDualArmWaveShowcase();
             }
         });
-        topPanel.add(new JLabel(" Demo:"));
         topPanel.add(demoModeCombo);
         topPanel.add(btnRunDemo);
 
@@ -570,32 +569,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         });
         topPanel.add(speedSlider);
         topPanel.add(speedLabel);
-
-        JButton btnRos2Plan = new JButton("ROS2 Plan");
-        btnRos2Plan.setToolTipText("Gui toa do hien tai sang ROS 2 bridge");
-        btnRos2Plan.addActionListener(e -> requestRos2Plan());
-        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
-        topPanel.add(btnRos2Plan);
-
-        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
-        topPanel.add(fixedHeightCb);
-        topPanel.add(new JLabel("Z:"));
-        fixedHeightSpinner.setPreferredSize(new Dimension(55, 22));
-        topPanel.add(fixedHeightSpinner);
-        fixedHeightSpinner.addChangeListener(ev -> {
-            if (showWorkspaceSlice) {
-                updateWorkspaceSlice();
-            }
-            armPanel.repaint();
-        });
-        
-        fixedHeightCb.addActionListener(ev -> {
-            fixedHeightMode = fixedHeightCb.isSelected();
-            if (clickModeItem != null) {
-                clickModeItem.setSelected(fixedHeightMode);
-            }
-            armPanel.repaint();
-        });
 
         topPanel.add(new JSeparator(SwingConstants.VERTICAL));
         topPanel.add(new JLabel(" COM:"));
@@ -637,6 +610,32 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         topPanel.add(comPortCombo);
         topPanel.add(btnRefreshCom);
         topPanel.add(btnConnect);
+
+        JButton btnRos2Plan = new JButton("ROS2 Plan");
+        btnRos2Plan.setToolTipText("Gui toa do hien tai sang ROS 2 bridge");
+        btnRos2Plan.addActionListener(e -> requestRos2Plan());
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        topPanel.add(btnRos2Plan);
+
+        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        topPanel.add(fixedHeightCb);
+        topPanel.add(new JLabel("Z:"));
+        fixedHeightSpinner.setPreferredSize(new Dimension(55, 22));
+        topPanel.add(fixedHeightSpinner);
+        fixedHeightSpinner.addChangeListener(ev -> {
+            if (showWorkspaceSlice) {
+                updateWorkspaceSlice();
+            }
+            armPanel.repaint();
+        });
+        
+        fixedHeightCb.addActionListener(ev -> {
+            fixedHeightMode = fixedHeightCb.isSelected();
+            if (clickModeItem != null) {
+                clickModeItem.setSelected(fixedHeightMode);
+            }
+            armPanel.repaint();
+        });
     }
     private java.util.List<double[]> parseTrajectory(String json) {
         java.util.List<double[]> trajectory = new java.util.ArrayList<>();
