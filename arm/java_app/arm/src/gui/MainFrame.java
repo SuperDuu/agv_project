@@ -38,7 +38,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final String LEFT_DEMO_CACHE_FILE = "demo_left_pick_place.csv";
     private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v2";
     private static final String DUAL_DEMO_CACHE_FILE = "demo_dual_pick_place.csv";
-    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v9";
+    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v8";
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = HOME_ANGLES_RIGHT.clone();
@@ -2294,14 +2294,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 { 0, 0, -20, 35, 0, 0 }
         });
 
-        final int stepsPerSegment = 5;
-        java.util.List<double[][]> frames = interpolateDualArmKeyframes(keyframes, stepsPerSegment);
+        java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
         DualDemoPlan plan = new DualDemoPlan(
                 frames,
-                stepsPerSegment * 2,
-                stepsPerSegment * 4,
-                stepsPerSegment * 6,
-                stepsPerSegment * 8);
+                2,
+                4,
+                6,
+                8);
         saveDualDemoPlanCache(plan, DUAL_DEMO_CACHE_FILE, cacheVersion);
         return plan;
     }
