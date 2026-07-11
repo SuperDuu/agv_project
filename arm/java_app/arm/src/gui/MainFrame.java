@@ -2260,19 +2260,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] openRight = { sharedQ1, -18, 64, -82, 8, -24 };
         double[] openLeft = { sharedQ1, -18, -64, 82, 8, 24 };
         double[] frontRight = { sharedQ1, 34, 118, -95, 20, -42 };
-        double[] backLeft = { sharedQ1, -34, -18, 30, -22, 26 };
+        double[] backLeft = { sharedQ1, -34, -24, 30, -22, 26 };
         double[] highRight = { sharedQ1, -24, 78, -88, 28, -12 };
         double[] highLeft = { sharedQ1, -24, -78, 88, 28, 12 };
-        double[] backRight = { sharedQ1, -34, 18, -30, -22, -26 };
+        double[] backRight = { sharedQ1, -34, 24, -30, -22, -26 };
         double[] frontLeft = { sharedQ1, 34, -118, 95, 20, 42 };
         double[] foldRight = { sharedQ1, -20, 44, -58, -10, 18 };
         double[] foldLeft = { sharedQ1, -20, -44, 58, -10, -18 };
 
-        if (!isWithinLimits(openRight, true) || !isWithinLimits(frontRight, true)
-                || !isWithinLimits(highRight, true) || !isWithinLimits(backRight, true)
-                || !isWithinLimits(foldRight, true) || !isWithinLimits(openLeft, false)
-                || !isWithinLimits(backLeft, false) || !isWithinLimits(highLeft, false)
-                || !isWithinLimits(frontLeft, false) || !isWithinLimits(foldLeft, false)) {
+        if (!logWavePoseOk("openRight", openRight, true) || !logWavePoseOk("frontRight", frontRight, true)
+                || !logWavePoseOk("highRight", highRight, true) || !logWavePoseOk("backRight", backRight, true)
+                || !logWavePoseOk("foldRight", foldRight, true) || !logWavePoseOk("openLeft", openLeft, false)
+                || !logWavePoseOk("backLeft", backLeft, false) || !logWavePoseOk("highLeft", highLeft, false)
+                || !logWavePoseOk("frontLeft", frontLeft, false) || !logWavePoseOk("foldLeft", foldLeft, false)) {
             return null;
         }
 
@@ -2365,6 +2365,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 4);
         saveDualDemoPlanCache(plan, DUAL_DEMO_CACHE_FILE, cacheVersion);
         return plan;
+    }
+
+    private boolean logWavePoseOk(String name, double[] q, boolean isRight) {
+        boolean ok = isWithinLimits(q, isRight);
+        if (!ok) {
+            System.out.printf(java.util.Locale.US,
+                    "[DEMO_WAVE] invalid pose %s | arm=%s | q=[%.1f, %.1f, %.1f, %.1f, %.1f, %.1f]%n",
+                    name, isRight ? "R" : "L", q[0], q[1], q[2], q[3], q[4], q[5]);
+        }
+        return ok;
     }
 
     private DualDemoPlan buildPickPlaceDemo(boolean rightDemo) {
