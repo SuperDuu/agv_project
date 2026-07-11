@@ -2323,20 +2323,20 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // --- Phase 2: Alternate wave (asymmetric!) ---
         double[] highR       = { sharedQ1, -24,  78,  -88,   28,  -12 };
-        double[] lowFrontR   = { sharedQ1,  42,  28,  -95,  -10,   -8 };
+        double[] lowFrontR   = { sharedQ1,  42,  46,  -82,  -10,   -8 };
         double[] highL       = { sharedQ1, -24, -78,   88,   28,   12 };
-        double[] lowFrontL   = { sharedQ1,  42, -28,   95,  -10,    8 };
+        double[] lowFrontL   = { sharedQ1,  42, -46,   82,  -10,    8 };
 
         // --- Phase 3: Present / display ---
         double[] presentR    = { sharedQ1,  58,  46,  -88,   18,  -34 };
         double[] presentL    = { sharedQ1,  58, -46,   88,   18,   34 };
-        double[] sweepLowR   = { sharedQ1,  72,  22,  -95,   30,  -24 };
-        double[] sweepLowL   = { sharedQ1,  72, -22,   95,   30,   24 };
+        double[] sweepLowR   = { sharedQ1,  72,  42,  -82,   30,  -24 };
+        double[] sweepLowL   = { sharedQ1,  72, -42,   82,   30,   24 };
 
         // --- Phase 4: Cross-body (elbow exchange, wrist twist) ---
         double[] crossFrontR = { sharedQ1,  34, 118,  -95,   20,  -42 };
-        double[] crossBackL  = { sharedQ1, -34, -24,   30,  -22,   26 };
-        double[] crossBackR  = { sharedQ1, -34,  24,  -30,  -22,  -26 };
+        double[] crossBackL  = { sharedQ1, -34, -40,   38,  -22,   26 };
+        double[] crossBackR  = { sharedQ1, -34,  40,  -38,  -22,  -26 };
         double[] crossFrontL = { sharedQ1,  34,-118,   95,   20,   42 };
 
         // --- Phase 5: Elbow fold / wrist roll ---
@@ -2352,8 +2352,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] pulseCenterL= { sharedQ1,  34, -60,   80,   24,   20 };
         double[] reachUpR    = { sharedQ1, -10, 100,  -55,   45,    0 };
         double[] reachUpL    = { sharedQ1, -10,-100,   55,   45,    0 };
-        double[] bowR        = { sharedQ1,  56,  28,  -55,    4,  -18 };
-        double[] bowL        = { sharedQ1,  56, -28,   55,    4,   18 };
+        double[] bowR        = { sharedQ1,  56,  48,  -55,    4,  -18 };
+        double[] bowL        = { sharedQ1,  56, -48,   55,    4,   18 };
 
         // --- Validate all poses against joint limits ---
         String[][] poseNames = {
