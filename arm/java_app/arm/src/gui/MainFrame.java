@@ -2306,46 +2306,125 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double sharedQ1 = targetAnglesRight[0];
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
 
-        double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
-        double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
-        double[] readyRight = { sharedQ1, 18, 36, -74, 6, -12 };
-        double[] readyLeft = { sharedQ1, 18, -36, 74, 6, 12 };
-        double[] frontLowRight = { sharedQ1, 42, 28, -95, -10, -8 };
-        double[] frontLowLeft = { sharedQ1, 42, -28, 95, -10, 8 };
-        double[] frontMidRight = { sharedQ1, 56, 28, -95, 4, -18 };
-        double[] frontMidLeft = { sharedQ1, 56, -28, 95, 4, 18 };
-        double[] frontHighRight = { sharedQ1, 72, 22, -95, 30, -24 };
-        double[] frontHighLeft = { sharedQ1, 72, -22, 95, 30, 24 };
-        double[] presentRight = { sharedQ1, 58, 46, -88, 18, -34 };
-        double[] presentLeft = { sharedQ1, 58, -46, 88, 18, 34 };
-        double[] centerPulseRight = { sharedQ1, 34, 60, -80, 24, -20 };
-        double[] centerPulseLeft = { sharedQ1, 34, -60, 80, 24, 20 };
-        double[] highFoldRight = { sharedQ1, 24, 84, -82, 36, -12 };
-        double[] highFoldLeft = { sharedQ1, 24, -84, 82, 36, 12 };
+        // ===== POSE LIBRARY =====
+        // Joint limits: R q1[-45,45] q2[-90,90] q3[20,165] q4[-95,-15] q5[-90,90] q6[-60,60]
+        //               L q1[-45,45] q2[-90,90] q3[-165,-20] q4[15,95] q5[-90,90] q6[-60,60]
+        // Poses designed using workspace CSV analysis for high manipulability
 
-        if (!logDemoPoseOk("readyRight", readyRight, true) || !logDemoPoseOk("readyLeft", readyLeft, false)
-                || !logDemoPoseOk("frontLowRight", frontLowRight, true) || !logDemoPoseOk("frontLowLeft", frontLowLeft, false)
-                || !logDemoPoseOk("frontMidRight", frontMidRight, true) || !logDemoPoseOk("frontMidLeft", frontMidLeft, false)
-                || !logDemoPoseOk("frontHighRight", frontHighRight, true) || !logDemoPoseOk("frontHighLeft", frontHighLeft, false)
-                || !logDemoPoseOk("presentRight", presentRight, true) || !logDemoPoseOk("presentLeft", presentLeft, false)
-                || !logDemoPoseOk("centerPulseRight", centerPulseRight, true) || !logDemoPoseOk("centerPulseLeft", centerPulseLeft, false)
-                || !logDemoPoseOk("highFoldRight", highFoldRight, true) || !logDemoPoseOk("highFoldLeft", highFoldLeft, false)) {
-            return null;
+        // --- Home / Neutral ---
+        double[] homeR  = { sharedQ1,   0,  20,  -35,    0,    0 };
+        double[] homeL  = { sharedQ1,   0, -20,   35,    0,    0 };
+
+        // --- Phase 1: Intro - gentle open ---
+        double[] readyR      = { sharedQ1,  18,  36,  -74,    6,  -12 };
+        double[] readyL      = { sharedQ1,  18, -36,   74,    6,   12 };
+        double[] openWideR   = { sharedQ1, -18,  64,  -82,    8,  -24 };
+        double[] openWideL   = { sharedQ1, -18, -64,   82,    8,   24 };
+
+        // --- Phase 2: Alternate wave (asymmetric!) ---
+        double[] highR       = { sharedQ1, -24,  78,  -88,   28,  -12 };
+        double[] lowFrontR   = { sharedQ1,  42,  28,  -95,  -10,   -8 };
+        double[] highL       = { sharedQ1, -24, -78,   88,   28,   12 };
+        double[] lowFrontL   = { sharedQ1,  42, -28,   95,  -10,    8 };
+
+        // --- Phase 3: Present / display ---
+        double[] presentR    = { sharedQ1,  58,  46,  -88,   18,  -34 };
+        double[] presentL    = { sharedQ1,  58, -46,   88,   18,   34 };
+        double[] sweepLowR   = { sharedQ1,  72,  22,  -95,   30,  -24 };
+        double[] sweepLowL   = { sharedQ1,  72, -22,   95,   30,   24 };
+
+        // --- Phase 4: Cross-body (elbow exchange, wrist twist) ---
+        double[] crossFrontR = { sharedQ1,  34, 118,  -95,   20,  -42 };
+        double[] crossBackL  = { sharedQ1, -34, -24,   30,  -22,   26 };
+        double[] crossBackR  = { sharedQ1, -34,  24,  -30,  -22,  -26 };
+        double[] crossFrontL = { sharedQ1,  34,-118,   95,   20,   42 };
+
+        // --- Phase 5: Elbow fold / wrist roll ---
+        double[] foldR       = { sharedQ1, -20,  44,  -58,  -10,   18 };
+        double[] foldL       = { sharedQ1, -20, -44,   58,  -10,  -18 };
+        double[] tiltWristR  = { sharedQ1,   6,  92,  -95,   60,  -40 };
+        double[] tiltWristL  = { sharedQ1,   6, -92,   95,   60,   40 };
+
+        // --- Phase 6: Sweep / grand gesture ---
+        double[] highFoldR   = { sharedQ1,  24,  84,  -82,   36,  -12 };
+        double[] highFoldL   = { sharedQ1,  24, -84,   82,   36,   12 };
+        double[] pulseCenterR= { sharedQ1,  34,  60,  -80,   24,  -20 };
+        double[] pulseCenterL= { sharedQ1,  34, -60,   80,   24,   20 };
+        double[] reachUpR    = { sharedQ1, -10, 100,  -55,   45,    0 };
+        double[] reachUpL    = { sharedQ1, -10,-100,   55,   45,    0 };
+        double[] bowR        = { sharedQ1,  56,  28,  -55,    4,  -18 };
+        double[] bowL        = { sharedQ1,  56, -28,   55,    4,   18 };
+
+        // --- Validate all poses against joint limits ---
+        String[][] poseNames = {
+            { "readyR", "readyL" }, { "openWideR", "openWideL" },
+            { "highR", "highL" }, { "lowFrontR", "lowFrontL" },
+            { "presentR", "presentL" }, { "sweepLowR", "sweepLowL" },
+            { "crossFrontR", "crossBackL" }, { "crossBackR", "crossFrontL" },
+            { "foldR", "foldL" }, { "tiltWristR", "tiltWristL" },
+            { "highFoldR", "highFoldL" }, { "pulseCenterR", "pulseCenterL" },
+            { "reachUpR", "reachUpL" }, { "bowR", "bowL" }
+        };
+        double[][][] posePairs = {
+            { readyR, readyL }, { openWideR, openWideL },
+            { highR, highL }, { lowFrontR, lowFrontL },
+            { presentR, presentL }, { sweepLowR, sweepLowL },
+            { crossFrontR, crossBackL }, { crossBackR, crossFrontL },
+            { foldR, foldL }, { tiltWristR, tiltWristL },
+            { highFoldR, highFoldL }, { pulseCenterR, pulseCenterL },
+            { reachUpR, reachUpL }, { bowR, bowL }
+        };
+        for (int i = 0; i < posePairs.length; i++) {
+            if (!logDemoPoseOk(poseNames[i][0], posePairs[i][0], true)
+                    || !logDemoPoseOk(poseNames[i][1], posePairs[i][1], false)) {
+                return null;
+            }
         }
 
-        keyframes.add(new double[][] { homeRight, homeLeft });
-        keyframes.add(new double[][] { readyRight, readyLeft });
-        keyframes.add(new double[][] { frontLowRight, frontLowLeft });
-        keyframes.add(new double[][] { frontMidRight, frontMidLeft });
-        keyframes.add(new double[][] { frontHighRight, frontHighLeft });
-        keyframes.add(new double[][] { presentRight, presentLeft });
-        keyframes.add(new double[][] { centerPulseRight, centerPulseLeft });
-        keyframes.add(new double[][] { frontHighRight, frontHighLeft });
-        keyframes.add(new double[][] { highFoldRight, highFoldLeft });
-        keyframes.add(new double[][] { presentRight, presentLeft });
-        keyframes.add(new double[][] { frontMidRight, frontMidLeft });
-        keyframes.add(new double[][] { readyRight, readyLeft });
-        keyframes.add(new double[][] { homeRight, homeLeft });
+        // ===== CHOREOGRAPHY SEQUENCE =====
+        // Act 1: Intro (home → ready → open)
+        keyframes.add(new double[][] { homeR,       homeL       });
+        keyframes.add(new double[][] { readyR,      readyL      });
+        keyframes.add(new double[][] { openWideR,   openWideL   });
+
+        // Act 2: Alternating wave (asymmetric arm heights)
+        keyframes.add(new double[][] { highR,       lowFrontL   });  // R high, L low
+        keyframes.add(new double[][] { lowFrontR,   highL       });  // R low, L high
+        keyframes.add(new double[][] { highR,       lowFrontL   });  // repeat for rhythm
+        keyframes.add(new double[][] { openWideR,   openWideL   });  // sync center
+
+        // Act 3: Present & sweep
+        keyframes.add(new double[][] { presentR,    presentL    });
+        keyframes.add(new double[][] { sweepLowR,   sweepLowL   });
+        keyframes.add(new double[][] { presentR,    presentL    });
+
+        // Act 4: Cross-body exchange
+        keyframes.add(new double[][] { crossFrontR, crossBackL  });  // R forward, L back
+        keyframes.add(new double[][] { crossBackR,  crossFrontL });  // swap!
+        keyframes.add(new double[][] { crossFrontR, crossBackL  });  // back again
+        keyframes.add(new double[][] { readyR,      readyL      });  // recenter
+
+        // Act 5: Fold & wrist roll
+        keyframes.add(new double[][] { foldR,       foldL       });
+        keyframes.add(new double[][] { tiltWristR,  tiltWristL  });
+        keyframes.add(new double[][] { foldR,       foldL       });
+
+        // Act 6: Grand sweep & reach
+        keyframes.add(new double[][] { pulseCenterR,pulseCenterL});
+        keyframes.add(new double[][] { highFoldR,   highFoldL   });
+        keyframes.add(new double[][] { reachUpR,    reachUpL    });  // arms up high
+        keyframes.add(new double[][] { highFoldR,   highFoldL   });
+
+        // Act 7: Asymmetric wave reprise (opposite side)
+        keyframes.add(new double[][] { lowFrontR,   highL       });
+        keyframes.add(new double[][] { highR,       lowFrontL   });
+        keyframes.add(new double[][] { pulseCenterR,pulseCenterL});
+
+        // Act 8: Bow & return home
+        keyframes.add(new double[][] { bowR,        bowL        });
+        keyframes.add(new double[][] { presentR,    presentL    });
+        keyframes.add(new double[][] { readyR,      readyL      });
+        keyframes.add(new double[][] { homeR,       homeL       });
 
         java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
         return new DualDemoPlan(frames, -1, -1, -1, -1);
