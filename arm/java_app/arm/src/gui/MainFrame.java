@@ -38,7 +38,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final String LEFT_DEMO_CACHE_FILE = "demo_left_pick_place.csv";
     private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v2";
     private static final String DUAL_DEMO_CACHE_FILE = "demo_dual_pick_place.csv";
-    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v5";
+    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v6";
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = HOME_ANGLES_RIGHT.clone();
@@ -2267,7 +2267,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return null;
         }
 
-        final int stepsPerSegment = 45;
+        final int stepsPerSegment = 40;
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(new double[][] {
                 { 0, 0, 20, -35, 0, 0 },
@@ -2275,19 +2275,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         });
         keyframes.add(new double[][] { rightPickHover, makeLeftHoldPose(rightPickHover[0]) });
         keyframes.add(new double[][] { rightPick, makeLeftHoldPose(rightPick[0]) });
-        keyframes.add(new double[][] { rightPick, makeLeftHoldPose(rightPick[0]) });
         keyframes.add(new double[][] { rightPickHover, makeLeftHoldPose(rightPickHover[0]) });
         keyframes.add(new double[][] { rightHandoffHover, leftHandoffHover });
         keyframes.add(new double[][] { rightHandoff, leftHandoffHover });
         keyframes.add(new double[][] { rightHandoff, leftHandoff });
-        keyframes.add(new double[][] { rightHandoff, leftHandoff });
         keyframes.add(new double[][] { makeRightHoldPose(leftHandoffHover[0]), leftHandoffHover });
         keyframes.add(new double[][] { makeRightHoldPose(leftPlaceHover[0]), leftPlaceHover });
         keyframes.add(new double[][] { makeRightHoldPose(leftPlace[0]), leftPlace });
-        keyframes.add(new double[][] { makeRightHoldPose(leftPlace[0]), leftPlace });
         keyframes.add(new double[][] { makeRightHoldPose(leftPlaceHover[0]), leftPlaceHover });
-        keyframes.add(new double[][] { makeRightHoldPose(leftPlaceHover[0]), withWrist(leftPlaceHover, -45, 45) });
-        keyframes.add(new double[][] { makeRightHoldPose(leftPlaceHover[0]), withWrist(leftPlaceHover, 45, -45) });
         keyframes.add(new double[][] {
                 { 0, 0, 20, -35, 0, 0 },
                 { 0, 0, -20, 35, 0, 0 }
@@ -2297,9 +2292,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         DualDemoPlan plan = new DualDemoPlan(
                 frames,
                 stepsPerSegment * 2,
+                stepsPerSegment * 5,
                 stepsPerSegment * 6,
-                stepsPerSegment * 7,
-                stepsPerSegment * 11);
+                stepsPerSegment * 8);
         saveDualDemoPlanCache(plan, DUAL_DEMO_CACHE_FILE, cacheVersion);
         return plan;
     }
