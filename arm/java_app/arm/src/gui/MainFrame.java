@@ -2257,26 +2257,30 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
         double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
-        double[] openRight = { sharedQ1, -10, 48, -62, 18, -18 };
-        double[] openLeft = { sharedQ1, -10, -48, 62, 18, 18 };
-        double[] highRight = { sharedQ1, -28, 72, -88, -18, 22 };
-        double[] highLeft = { sharedQ1, -28, -72, 88, -18, -22 };
-        double[] sweepRight = { sharedQ1, 18, 55, -72, 30, -30 };
-        double[] sweepLeft = { sharedQ1, 18, -55, 72, 30, 30 };
-        double[] foldRight = { sharedQ1, -22, 35, -48, -25, 15 };
-        double[] foldLeft = { sharedQ1, -22, -35, 48, -25, -15 };
+        double[] openRight = { sharedQ1, -12, 52, -68, 12, -18 };
+        double[] openLeft = { sharedQ1, -12, -52, 68, 12, 18 };
+        double[] frontRight = { sharedQ1, 28, 92, -90, 18, -35 };
+        double[] backLeft = { sharedQ1, -30, -32, 42, -18, 22 };
+        double[] highRight = { sharedQ1, -24, 78, -88, 28, -12 };
+        double[] highLeft = { sharedQ1, -24, -78, 88, 28, 12 };
+        double[] backRight = { sharedQ1, -30, 32, -42, -18, -22 };
+        double[] frontLeft = { sharedQ1, 28, -92, 90, 18, 35 };
+        double[] foldRight = { sharedQ1, -18, 38, -52, -12, 16 };
+        double[] foldLeft = { sharedQ1, -18, -38, 52, -12, -16 };
 
-        if (!isWithinLimits(openRight, true) || !isWithinLimits(highRight, true)
-                || !isWithinLimits(sweepRight, true) || !isWithinLimits(foldRight, true)
-                || !isWithinLimits(openLeft, false) || !isWithinLimits(highLeft, false)
-                || !isWithinLimits(sweepLeft, false) || !isWithinLimits(foldLeft, false)) {
+        if (!isWithinLimits(openRight, true) || !isWithinLimits(frontRight, true)
+                || !isWithinLimits(highRight, true) || !isWithinLimits(backRight, true)
+                || !isWithinLimits(foldRight, true) || !isWithinLimits(openLeft, false)
+                || !isWithinLimits(backLeft, false) || !isWithinLimits(highLeft, false)
+                || !isWithinLimits(frontLeft, false) || !isWithinLimits(foldLeft, false)) {
             return null;
         }
 
         keyframes.add(new double[][] { homeRight, homeLeft });
         keyframes.add(new double[][] { openRight, openLeft });
+        keyframes.add(new double[][] { frontRight, backLeft });
         keyframes.add(new double[][] { highRight, highLeft });
-        keyframes.add(new double[][] { sweepRight, sweepLeft });
+        keyframes.add(new double[][] { backRight, frontLeft });
         keyframes.add(new double[][] { highRight, highLeft });
         keyframes.add(new double[][] { foldRight, foldLeft });
         keyframes.add(new double[][] { openRight, openLeft });
