@@ -38,7 +38,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final String LEFT_DEMO_CACHE_FILE = "demo_left_pick_place.csv";
     private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v2";
     private static final String DUAL_DEMO_CACHE_FILE = "demo_dual_pick_place.csv";
-    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v8";
+    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v11";
     private static final int DEMO_LOG_STRIDE = 5;
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
@@ -2268,11 +2268,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] rightHandoff = new double[] { 0, 0, 80, -90, 15, 0 };
         double[] leftHandoffHover = new double[] { 0, 0, -55, 70, 0, 0 };
         double[] leftHandoff = new double[] { 0, 0, -80, 90, 15, 0 };
-        double[] leftReadyOpen = new double[] { 0, 18, -35, 48, 0, 0 };
-        double[] leftReadyReach = new double[] { 0, 28, -48, 62, 8, 0 };
-        double[] leftTravel = new double[] { 0, 12, -42, 55, 0, 0 };
-        double[] rightEscort = new double[] { 0, -12, 45, -62, 0, 0 };
-        double[] rightRetreat = new double[] { 0, -24, 35, -50, 0, 0 };
+        double[] leftReadyOpen = new double[] { 0, 24, -28, 42, -12, 8 };
+        double[] leftReadyReach = new double[] { 0, 32, -45, 60, 10, 8 };
+        double[] leftTravel = new double[] { 0, 16, -38, 52, -6, 4 };
+        double[] leftCarryArc = new double[] { 0, -8, -58, 76, 18, -10 };
+        double[] leftSettle = new double[] { 0, 6, -34, 48, -8, 6 };
+        double[] rightPresent = new double[] { 0, -8, 58, -78, 8, -6 };
+        double[] rightEscort = new double[] { 0, -16, 42, -58, -8, -4 };
+        double[] rightRetreat = new double[] { 0, -26, 30, -44, 0, 0 };
 
         if (rightPickHover == null || rightPick == null || rightHandoffHover == null || rightHandoff == null
                 || leftHandoffHover == null || leftHandoff == null || leftPlaceHover == null || leftPlace == null) {
@@ -2285,7 +2288,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (!isWithinLimits(rightHandoffHover, true) || !isWithinLimits(rightHandoff, true)
                 || !isWithinLimits(leftHandoffHover, false) || !isWithinLimits(leftHandoff, false)
                 || !isWithinLimits(leftReadyOpen, false) || !isWithinLimits(leftReadyReach, false)
-                || !isWithinLimits(leftTravel, false) || !isWithinLimits(rightEscort, true)
+                || !isWithinLimits(leftTravel, false) || !isWithinLimits(leftCarryArc, false)
+                || !isWithinLimits(leftSettle, false) || !isWithinLimits(rightPresent, true)
+                || !isWithinLimits(rightEscort, true)
                 || !isWithinLimits(rightRetreat, true)) {
             System.out.println("[DEMO_IK] handoff failed | manual handoff pose exceeds joint limits");
             return null;
@@ -2300,12 +2305,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { rightPick, withSharedQ1(leftReadyReach, rightPick[0]) });
         keyframes.add(new double[][] { rightPickHover, withSharedQ1(leftTravel, rightPickHover[0]) });
         keyframes.add(new double[][] { rightHandoffHover, leftHandoffHover });
-        keyframes.add(new double[][] { rightHandoff, leftHandoffHover });
+        keyframes.add(new double[][] { withSharedQ1(rightPresent, rightHandoff[0]), leftHandoffHover });
         keyframes.add(new double[][] { rightHandoff, leftHandoff });
-        keyframes.add(new double[][] { withSharedQ1(rightEscort, leftHandoffHover[0]), leftHandoffHover });
-        keyframes.add(new double[][] { withSharedQ1(rightEscort, leftPlaceHover[0]), leftPlaceHover });
+        keyframes.add(new double[][] { withSharedQ1(rightEscort, leftHandoffHover[0]), withSharedQ1(leftCarryArc, leftHandoffHover[0]) });
+        keyframes.add(new double[][] { withSharedQ1(rightEscort, leftPlaceHover[0]), withSharedQ1(leftCarryArc, leftPlaceHover[0]) });
         keyframes.add(new double[][] { withSharedQ1(rightRetreat, leftPlace[0]), leftPlace });
-        keyframes.add(new double[][] { withSharedQ1(rightRetreat, leftPlaceHover[0]), leftPlaceHover });
+        keyframes.add(new double[][] { withSharedQ1(rightRetreat, leftPlaceHover[0]), withSharedQ1(leftSettle, leftPlaceHover[0]) });
         keyframes.add(new double[][] {
                 { 0, 0, 20, -35, 0, 0 },
                 { 0, 0, -20, 35, 0, 0 }
