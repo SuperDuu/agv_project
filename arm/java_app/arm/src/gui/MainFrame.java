@@ -2420,10 +2420,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { highR,       lowFrontL   });
         keyframes.add(new double[][] { pulseCenterR,pulseCenterL});
 
-        // Act 8: Bow & return home
+        // Act 8: Bow & return home (with safe retract to avoid body collision)
         keyframes.add(new double[][] { bowR,        bowL        });
         keyframes.add(new double[][] { presentR,    presentL    });
         keyframes.add(new double[][] { readyR,      readyL      });
+        // Safe retract: keep elbow wide (q3=50) while shoulder settles to neutral
+        double[] retractSafeR = { sharedQ1, 0, 50, -50, 0, 0 };
+        double[] retractSafeL = { sharedQ1, 0, -50, 50, 0, 0 };
+        if (!logDemoPoseOk("retractSafeR", retractSafeR, true)
+                || !logDemoPoseOk("retractSafeL", retractSafeL, false)) {
+            return null;
+        }
+        keyframes.add(new double[][] { retractSafeR, retractSafeL });
         keyframes.add(new double[][] { homeR,       homeL       });
 
         java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
