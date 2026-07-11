@@ -39,6 +39,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v2";
     private static final String DUAL_DEMO_CACHE_FILE = "demo_dual_pick_place.csv";
     private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v8";
+    private static final int DEMO_LOG_STRIDE = 5;
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = HOME_ANGLES_RIGHT.clone();
@@ -2569,6 +2570,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[][] startFrame = frames.get(0);
         applyDualArmFrame(startFrame[0], startFrame[1]);
         startMotionTimer();
+        logDualDemoFrame("start", 0, frames.size(), startFrame[0], startFrame[1]);
         updateArm();
 
         setGotoStatusRight("Demo 2 Tay: ready", new Color(0, 90, 180));
@@ -2603,18 +2605,31 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         int frameIndex = currentIndex[0];
                         double[][] frame = frames.get(frameIndex);
                         setDualArmTargetFrame(frame[0], frame[1]);
+                        if (frameIndex == 1
+                                || frameIndex == plan.rightGripFrameIndex
+                                || frameIndex == plan.leftGripFrameIndex
+                                || frameIndex == plan.rightReleaseFrameIndex
+                                || frameIndex == plan.leftReleaseFrameIndex
+                                || frameIndex == frames.size() - 1
+                                || frameIndex % DEMO_LOG_STRIDE == 0) {
+                            logDualDemoFrame("target", frameIndex, frames.size(), frame[0], frame[1]);
+                        }
                         waitingForArrival[0] = true;
                     }
                     if (isArmAtTarget(true) && isArmAtTarget(false)) {
                         int reachedFrameIndex = currentIndex[0];
                         if (reachedFrameIndex == plan.rightGripFrameIndex) {
                             setSingleDemoGripState(true, true, "Demo 2 Tay: tay phai kep");
+                            System.out.printf("[DEMO_TRACE] event frame=%d | right grip%n", reachedFrameIndex);
                         } else if (reachedFrameIndex == plan.leftGripFrameIndex) {
                             setSingleDemoGripState(false, true, "Demo 2 Tay: tay trai nhan");
+                            System.out.printf("[DEMO_TRACE] event frame=%d | left grip%n", reachedFrameIndex);
                         } else if (reachedFrameIndex == plan.rightReleaseFrameIndex) {
                             setSingleDemoGripState(true, false, "Demo 2 Tay: tay phai nha");
+                            System.out.printf("[DEMO_TRACE] event frame=%d | right release%n", reachedFrameIndex);
                         } else if (reachedFrameIndex == plan.leftReleaseFrameIndex) {
                             setSingleDemoGripState(false, false, "Demo 2 Tay: tay trai tha");
+                            System.out.printf("[DEMO_TRACE] event frame=%d | left release%n", reachedFrameIndex);
                         }
                         currentIndex[0]++;
                         waitingForArrival[0] = false;
@@ -2641,6 +2656,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private void setSingleDemoGripState(boolean rightArm, boolean gripped, String statusText) {
         setDemoGripperState(rightArm ? gripped : isGrippedRight, rightArm ? isGrippedLeft : gripped, statusText);
+    }
+
+    private void logDualDemoFrame(String tag, int frameIndex, int totalFrames, double[] rightFrame, double[] leftFrame) {
+        double[] eeRight = armPanel.computeFK(rightFrame[0], rightFrame[1], rightFrame[2], rightFrame[3], rightFrame[4], rightFrame[5], true);
+        double[] eeLeft = armPanel.computeFK(leftFrame[0], leftFrame[1], leftFrame[2], leftFrame[3], leftFrame[4], leftFrame[5], false);
+        System.out.printf(java.util.Locale.US,
+                "[DEMO_TRACE] %s frame=%d/%d | R=(%.1f, %.1f, %.1f) | L=(%.1f, %.1f, %.1f)%n",
+                tag, frameIndex, totalFrames - 1,
+                eeRight[0], eeRight[1], eeRight[2],
+                eeLeft[0], eeLeft[1], eeLeft[2]);
     }
 
     private void applyDualArmFrame(double[] rightFrame, double[] leftFrame) {
