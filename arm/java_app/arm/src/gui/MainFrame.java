@@ -38,7 +38,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final String LEFT_DEMO_CACHE_FILE = "demo_left_pick_place.csv";
     private static final String LEFT_DEMO_CACHE_VERSION = "left_pick_place_v2";
     private static final String DUAL_DEMO_CACHE_FILE = "demo_dual_pick_place.csv";
-    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v10";
+    private static final String DUAL_DEMO_CACHE_VERSION = "dual_pick_place_v9";
 
     // θ-space: θ₃=q₃=20, θ₄=q₄-q₃=-15-20=-35 (Right)
     double[] anglesRight = HOME_ANGLES_RIGHT.clone();
@@ -2294,7 +2294,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 { 0, 0, -20, 35, 0, 0 }
         });
 
-        final int stepsPerSegment = 3;
+        final int stepsPerSegment = 5;
         java.util.List<double[][]> frames = interpolateDualArmKeyframes(keyframes, stepsPerSegment);
         DualDemoPlan plan = new DualDemoPlan(
                 frames,
@@ -2579,7 +2579,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final int[] waitMs = { 0 };
         Timer prepareTimer = new Timer(50, evt -> {
             waitMs[0] += 50;
-            boolean arrived = isDualArmCloseEnoughForDemo();
+            boolean arrived = isArmAtTarget(true) && isArmAtTarget(false);
             if (arrived || waitMs[0] >= 5000) {
                 ((Timer) evt.getSource()).stop();
                 setTitle(statusTitle + " dang chay...");
@@ -2588,7 +2588,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 final boolean[] waitingForArrival = { false };
                 trajectoryTimer = new Timer(MOTION_DT_MS, e -> {
                     if (currentIndex[0] >= frames.size()) {
-                        if (!isDualArmCloseEnoughForDemo()) {
+                        if (!(isArmAtTarget(true) && isArmAtTarget(false))) {
                             updateArm();
                             return;
                         }
@@ -2606,7 +2606,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         setDualArmTargetFrame(frame[0], frame[1]);
                         waitingForArrival[0] = true;
                     }
-                    if (isDualArmCloseEnoughForDemo()) {
+                    if (isArmAtTarget(true) && isArmAtTarget(false)) {
                         int reachedFrameIndex = currentIndex[0];
                         if (reachedFrameIndex == plan.rightGripFrameIndex) {
                             setSingleDemoGripState(true, true, "Demo 2 Tay: tay phai kep");
@@ -4680,19 +4680,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
     }
 
-    private boolean isDualArmCloseEnoughForDemo() {
-        return isArmAtTarget(true, 2.0) && isArmAtTarget(false, 2.0);
-    }
-
     private boolean isArmAtTarget(boolean isRight) {
-        return isArmAtTarget(isRight, 0.5);
-    }
-
-    private boolean isArmAtTarget(boolean isRight, double toleranceDeg) {
         double[] current = isRight ? anglesRight : anglesLeft;
         double[] target = isRight ? targetAnglesRight : targetAnglesLeft;
         for (int i = 0; i < NUM_JOINTS; i++) {
-            if (Math.abs(current[i] - target[i]) > toleranceDeg) {
+            if (Math.abs(current[i] - target[i]) > 0.5) { // Within 0.5 degrees
                 return false;
             }
         }
