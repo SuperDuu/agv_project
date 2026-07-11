@@ -140,6 +140,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private static final int ARM_TX_REFRESH_MS = 100;
     Timer motionTimer;
     Timer armTxRefreshTimer;
+    boolean dualDemoActive = false;
 
     boolean showWorkspace = false;
     Thread explorationThread;
@@ -1036,6 +1037,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // 1. Interpolate Right Arm
         for (int i = 0; i < NUM_JOINTS; i++) {
             double diff = targetAnglesRight[i] - anglesRight[i];
+            double jointMaxStep = maxStep * getMotionSpeedScale(i);
 
             // Shortest path interpolation (Angle Wrapping)
             while (diff > 180)
@@ -1050,8 +1052,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 }
             } else {
                 double step = diff * 0.25;
-                if (Math.abs(step) > maxStep) {
-                    step = Math.signum(step) * maxStep;
+                if (Math.abs(step) > jointMaxStep) {
+                    step = Math.signum(step) * jointMaxStep;
                 }
                 anglesRight[i] += step;
                 moving = true;
@@ -1066,6 +1068,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // 2. Interpolate Left Arm
         for (int i = 0; i < NUM_JOINTS; i++) {
             double diff = targetAnglesLeft[i] - anglesLeft[i];
+            double jointMaxStep = maxStep * getMotionSpeedScale(i);
 
             // Shortest path interpolation (Angle Wrapping)
             while (diff > 180)
@@ -1080,8 +1083,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 }
             } else {
                 double step = diff * 0.25;
-                if (Math.abs(step) > maxStep) {
-                    step = Math.signum(step) * maxStep;
+                if (Math.abs(step) > jointMaxStep) {
+                    step = Math.signum(step) * jointMaxStep;
                 }
                 anglesLeft[i] += step;
                 moving = true;
@@ -1786,6 +1789,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (!text.equals(label.getText())) {
             label.setText(text);
         }
+    }
+
+    private double getMotionSpeedScale(int jointIndex) {
+        if (!dualDemoActive) {
+            return 1.0;
+        }
+        if (jointIndex == 4) {
+            return 2.0;
+        }
+        if (jointIndex == 5) {
+            return 1.5;
+        }
+        return 1.0;
     }
 
     void resetAngles() {
@@ -2560,6 +2576,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (frames.isEmpty()) {
             return;
         }
+        dualDemoActive = true;
 
         armPanel.trail.clear();
         showTrailCb.setSelected(true);
@@ -2594,6 +2611,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                             return;
                         }
                         trajectoryTimer.stop();
+                        dualDemoActive = false;
                         setTitle("Mô Phỏng Cánh Tay Robot 6-DOF");
                         setGotoStatusRight("Demo 2 Tay xong", new Color(0, 140, 0));
                         setGotoStatusLeft("Demo 2 Tay xong", new Color(0, 140, 0));
