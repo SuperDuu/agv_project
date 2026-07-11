@@ -462,17 +462,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         add(BorderLayout.NORTH, topPanel);
         topPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 5, 4));
 
-        // Emergency Stop Button (prominent red button)
-        JButton btnEStop = new JButton("⛔ E-STOP");
-        btnEStop.setBackground(new Color(220, 30, 30));
-        btnEStop.setForeground(Color.WHITE);
-        btnEStop.setFont(new Font("Arial", Font.BOLD, 13));
-        btnEStop.setFocusPainted(false);
-        btnEStop.setToolTipText("Emergency Stop — Dừng khẩn cấp (ESC)");
-        btnEStop.addActionListener(e -> emergencyStop());
-        topPanel.add(btnEStop);
-        topPanel.add(new JSeparator(SwingConstants.VERTICAL));
-
         JButton btnGripper = new JButton("Đóng / Mở Kẹp");
         btnGripper.addActionListener(e -> {
             if (isRightArmSelected) {
