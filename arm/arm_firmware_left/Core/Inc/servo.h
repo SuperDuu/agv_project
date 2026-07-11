@@ -20,9 +20,6 @@ typedef struct {
 extern Servo_t servos[MAX_SERVOS];
 
 void Servo_Init(void);
-void Servo_EnableOutputs(void);
-void Servo_DisableOutputs(void);
-uint8_t Servo_OutputsEnabled(void);
 void Set_Servo_Angle(uint8_t index, float angle);
 void Servo_Test_Patterns(void);
 
