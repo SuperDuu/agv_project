@@ -90,6 +90,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     JButton btnReset = new JButton("Reset");
     JButton btnDemo = new JButton("Quỹ đạo Xoắn ốc");
     JButton btnDualArmDemo = new JButton("Demo 2 Tay");
+    JButton btnDualArmWaveDemo = new JButton("Mua 2 Tay");
     JButton btnTopView = new JButton("Hệ Trục (Top)");
     JButton btnPersp = new JButton("3D Perspective");
 
@@ -536,6 +537,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         btnDualArmDemo.addActionListener(e -> runDualArmShowcase());
         topPanel.add(btnDualArmDemo);
+        btnDualArmWaveDemo.addActionListener(e -> runDualArmWaveShowcase());
+        topPanel.add(btnDualArmWaveDemo);
 
         JButton btnStopTraj = new JButton("Dừng");
         btnStopTraj.addActionListener(e -> {
@@ -2218,6 +2221,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }.execute();
     }
 
+    private void runDualArmWaveShowcase() {
+        DualDemoPlan plan = buildDualArmWaveDemo();
+        if (plan == null || plan.frames.isEmpty()) {
+            setGotoStatusRight("Mua 2 Tay: loi pose", Color.RED);
+            setGotoStatusLeft("Mua 2 Tay: loi pose", Color.RED);
+            return;
+        }
+        runDualArmPlayback(plan, "Mua 2 Tay");
+    }
+
     private static class DualDemoPlan {
         final java.util.List<double[][]> frames;
         final int rightGripFrameIndex;
@@ -2236,6 +2249,41 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             this.rightReleaseFrameIndex = rightReleaseFrameIndex;
             this.leftReleaseFrameIndex = leftReleaseFrameIndex;
         }
+    }
+
+    private DualDemoPlan buildDualArmWaveDemo() {
+        double sharedQ1 = targetAnglesRight[0];
+        java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
+
+        double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
+        double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
+        double[] openRight = { sharedQ1, -10, 48, -62, 18, -18 };
+        double[] openLeft = { sharedQ1, -10, -48, 62, 18, 18 };
+        double[] highRight = { sharedQ1, -28, 72, -88, -18, 22 };
+        double[] highLeft = { sharedQ1, -28, -72, 88, -18, -22 };
+        double[] sweepRight = { sharedQ1, 18, 55, -72, 30, -30 };
+        double[] sweepLeft = { sharedQ1, 18, -55, 72, 30, 30 };
+        double[] foldRight = { sharedQ1, -22, 35, -48, -25, 15 };
+        double[] foldLeft = { sharedQ1, -22, -35, 48, -25, -15 };
+
+        if (!isWithinLimits(openRight, true) || !isWithinLimits(highRight, true)
+                || !isWithinLimits(sweepRight, true) || !isWithinLimits(foldRight, true)
+                || !isWithinLimits(openLeft, false) || !isWithinLimits(highLeft, false)
+                || !isWithinLimits(sweepLeft, false) || !isWithinLimits(foldLeft, false)) {
+            return null;
+        }
+
+        keyframes.add(new double[][] { homeRight, homeLeft });
+        keyframes.add(new double[][] { openRight, openLeft });
+        keyframes.add(new double[][] { highRight, highLeft });
+        keyframes.add(new double[][] { sweepRight, sweepLeft });
+        keyframes.add(new double[][] { highRight, highLeft });
+        keyframes.add(new double[][] { foldRight, foldLeft });
+        keyframes.add(new double[][] { openRight, openLeft });
+        keyframes.add(new double[][] { homeRight, homeLeft });
+
+        java.util.List<double[][]> frames = interpolateDualArmKeyframes(keyframes, 5);
+        return new DualDemoPlan(frames, -1, -1, -1, -1);
     }
 
     private DualDemoPlan buildDualPickPlaceDemo() {
