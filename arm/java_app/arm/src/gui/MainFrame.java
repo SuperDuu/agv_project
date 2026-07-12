@@ -2265,6 +2265,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final int leftReleaseDelayMs;
         final ChairDemoScene chairScene;
 
+        final java.util.Set<Integer> rightGripIndices = new java.util.HashSet<>();
+        final java.util.Set<Integer> leftGripIndices = new java.util.HashSet<>();
+        final java.util.Set<Integer> rightReleaseIndices = new java.util.HashSet<>();
+        final java.util.Set<Integer> leftReleaseIndices = new java.util.HashSet<>();
+        final java.util.Set<Integer> rightReleaseHighIndices = new java.util.HashSet<>();
+        final java.util.Map<Integer, Integer> customDelays = new java.util.HashMap<>();
+
         DualDemoPlan(java.util.List<double[][]> frames,
                 int rightGripFrameIndex,
                 int leftGripFrameIndex,
@@ -2294,6 +2301,32 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             this.rightReleaseDelayMs = rightReleaseDelayMs;
             this.leftReleaseDelayMs = leftReleaseDelayMs;
             this.chairScene = chairScene;
+
+            if (rightGripFrameIndex >= 0) {
+                rightGripIndices.add(rightGripFrameIndex);
+                if (rightGripDelayMs > 0) {
+                    customDelays.put(rightGripFrameIndex, rightGripDelayMs);
+                }
+            }
+            if (leftGripFrameIndex >= 0) {
+                leftGripIndices.add(leftGripFrameIndex);
+                if (leftGripDelayMs > 0) {
+                    customDelays.put(leftGripFrameIndex, leftGripDelayMs);
+                }
+            }
+            if (rightReleaseFrameIndex >= 0) {
+                rightReleaseIndices.add(rightReleaseFrameIndex);
+                if (rightReleaseDelayMs > 0) {
+                    customDelays.put(rightReleaseFrameIndex, rightReleaseDelayMs);
+                }
+                rightReleaseHighIndices.add(rightReleaseFrameIndex);
+            }
+            if (leftReleaseFrameIndex >= 0) {
+                leftReleaseIndices.add(leftReleaseFrameIndex);
+                if (leftReleaseDelayMs > 0) {
+                    customDelays.put(leftReleaseFrameIndex, leftReleaseDelayMs);
+                }
+            }
         }
     }
 
@@ -2518,17 +2551,50 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(new double[][] { homeRight, homeLeft });
         keyframes.add(new double[][] { readyRight, leftClear });
+        
+        // 1. Move to low chair
         keyframes.add(new double[][] { transferHighRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
-        int gripFrame = keyframes.size();
+        
+        // 2. Pick the object from low chair
+        int gripFrame1 = keyframes.size();
         keyframes.add(new double[][] { lowPickRight, leftClear });
+        
+        // 3. Move to high chair
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         keyframes.add(new double[][] { transferHighRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
-        int releaseFrame = keyframes.size();
+        
+        // 4. Place the object on high chair
+        int releaseFrame1 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
+        
+        // 5. Retract to ready position and wait
         keyframes.add(new double[][] { highHoverRight, leftClear });
         keyframes.add(new double[][] { retreatRight, leftClear });
+        int waitFrame = keyframes.size();
+        keyframes.add(new double[][] { readyRight, leftClear });
+        
+        // 6. Return to high chair to pick it up again
+        keyframes.add(new double[][] { transferHighRight, leftClear });
+        keyframes.add(new double[][] { highHoverRight, leftClear });
+        
+        // 7. Pick the object from high chair
+        int gripFrame2 = keyframes.size();
+        keyframes.add(new double[][] { highPlaceRight, leftClear });
+        
+        // 8. Move back to low chair
+        keyframes.add(new double[][] { highHoverRight, leftClear });
+        keyframes.add(new double[][] { transferHighRight, leftClear });
+        keyframes.add(new double[][] { lowHoverRight, leftClear });
+        
+        // 9. Place the object back on low chair
+        int releaseFrame2 = keyframes.size();
+        keyframes.add(new double[][] { lowPickRight, leftClear });
+        
+        // 10. Retract and go home
+        keyframes.add(new double[][] { lowHoverRight, leftClear });
+        keyframes.add(new double[][] { transferHighRight, leftClear });
         keyframes.add(new double[][] { readyRight, leftClear });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
@@ -2549,8 +2615,15 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return null;
         }
 
-        return new DualDemoPlan(frames, gripFrame, -1, releaseFrame, -1,
+        DualDemoPlan plan = new DualDemoPlan(frames, gripFrame1, -1, releaseFrame1, -1,
                 5000, 0, 5000, 0, scene);
+        plan.rightGripIndices.add(gripFrame2);
+        plan.rightReleaseIndices.add(releaseFrame2);
+        plan.customDelays.put(waitFrame, 5000);
+        plan.customDelays.put(gripFrame2, 5000);
+        plan.customDelays.put(releaseFrame2, 5000);
+
+        return plan;
     }
 
     private boolean validateChairDemoClearance(String label, java.util.List<double[][]> frames,
@@ -3008,10 +3081,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         double[][] frame = frames.get(frameIndex);
                         setDualArmTargetFrame(frame[0], frame[1]);
                         if (frameIndex == 1
-                                || frameIndex == plan.rightGripFrameIndex
-                                || frameIndex == plan.leftGripFrameIndex
-                                || frameIndex == plan.rightReleaseFrameIndex
-                                || frameIndex == plan.leftReleaseFrameIndex
+                                || plan.rightGripIndices.contains(frameIndex)
+                                || plan.leftGripIndices.contains(frameIndex)
+                                || plan.rightReleaseIndices.contains(frameIndex)
+                                || plan.leftReleaseIndices.contains(frameIndex)
                                 || frameIndex == frames.size() - 1
                                 || frameIndex % DEMO_LOG_STRIDE == 0) {
                             logDualDemoFrame("target", frameIndex, frames.size(), frame[0], frame[1]);
@@ -3020,10 +3093,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     }
                     if (isArmAtTarget(true) && isArmAtTarget(false)) {
                         int reachedFrameIndex = currentIndex[0];
-                        boolean rightGripNow = reachedFrameIndex == plan.rightGripFrameIndex;
-                        boolean leftGripNow = reachedFrameIndex == plan.leftGripFrameIndex;
-                        boolean rightReleaseNow = reachedFrameIndex == plan.rightReleaseFrameIndex;
-                        boolean leftReleaseNow = reachedFrameIndex == plan.leftReleaseFrameIndex;
+                        boolean rightGripNow = plan.rightGripIndices.contains(reachedFrameIndex);
+                        boolean leftGripNow = plan.leftGripIndices.contains(reachedFrameIndex);
+                        boolean rightReleaseNow = plan.rightReleaseIndices.contains(reachedFrameIndex);
+                        boolean leftReleaseNow = plan.leftReleaseIndices.contains(reachedFrameIndex);
                         int eventDelayMs = getDemoEventDelayMs(plan, reachedFrameIndex);
 
                         if (eventDelayMs > 0) {
@@ -3066,7 +3139,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         } else if (rightReleaseNow) {
                             setSingleDemoGripState(true, false, "Demo 2 Tay: tay phai nha");
                             if (plan.chairScene != null) {
-                                armPanel.setChairDemoObjectOnHigh(true);
+                                boolean onHigh = plan.rightReleaseHighIndices.contains(reachedFrameIndex);
+                                armPanel.setChairDemoObjectOnHigh(onHigh);
                             }
                             System.out.printf("[DEMO_TRACE] event frame=%d | right release%n", reachedFrameIndex);
                         } else if (leftReleaseNow) {
@@ -3085,20 +3159,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private int getDemoEventDelayMs(DualDemoPlan plan, int frameIndex) {
-        int delay = 0;
-        if (frameIndex == plan.rightGripFrameIndex) {
-            delay = Math.max(delay, plan.rightGripDelayMs);
-        }
-        if (frameIndex == plan.leftGripFrameIndex) {
-            delay = Math.max(delay, plan.leftGripDelayMs);
-        }
-        if (frameIndex == plan.rightReleaseFrameIndex) {
-            delay = Math.max(delay, plan.rightReleaseDelayMs);
-        }
-        if (frameIndex == plan.leftReleaseFrameIndex) {
-            delay = Math.max(delay, plan.leftReleaseDelayMs);
-        }
-        return delay;
+        return plan.customDelays.getOrDefault(frameIndex, 0);
     }
 
     private void setDemoGripperState(boolean rightGripped, boolean leftGripped, String statusText) {
