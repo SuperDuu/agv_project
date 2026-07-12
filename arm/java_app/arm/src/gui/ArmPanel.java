@@ -28,6 +28,8 @@ public class ArmPanel extends JPanel
     double[] clickTarget = null; // To draw where we clicked
     /** Up to 3 nearest reachable CSV suggestions (drawn in green when click is out-of-range). */
     List<double[]> suggestedPoints = new ArrayList<>();
+    private ChairRenderScene chairDemoScene = null;
+    private boolean chairDemoObjectOnHigh = false;
 
     /** Lazily-loaded workspace map from CSV file. */
     private WorkspaceMap workspaceMap = null;
@@ -78,6 +80,24 @@ public class ArmPanel extends JPanel
         addMouseListener(this);
         addMouseMotionListener(this);
         addMouseWheelListener(this);
+    }
+
+    public void setChairDemoScene(double[] lowChairCenter, double lowChairHeight,
+            double[] highChairCenter, double highChairHeight) {
+        chairDemoScene = new ChairRenderScene(lowChairCenter, lowChairHeight, highChairCenter, highChairHeight);
+        chairDemoObjectOnHigh = false;
+        repaint();
+    }
+
+    public void setChairDemoObjectOnHigh(boolean onHigh) {
+        chairDemoObjectOnHigh = onHigh;
+        repaint();
+    }
+
+    public void clearChairDemoScene() {
+        chairDemoScene = null;
+        chairDemoObjectOnHigh = false;
+        repaint();
     }
 
     // --- MouseListener ---
@@ -573,6 +593,7 @@ public class ArmPanel extends JPanel
         // Neck and Head
         drawables.add(new TubeSegment(new double[] { 0, 0, 130 }, new double[] { 0, 0, 138 }, 8, new Color(60, 60, 60)));
         drawables.add(new JointSphere(new double[] { 0, 0, 138 }, 12, new Color(75, 80, 85)));
+        addChairDemoDrawables(drawables, pts3dRight[NUM_JOINTS + 1]);
 
         int[] tubeWidths = { 9, 8, 7, 6, 5, 4, 4 };
         Color[] tubeColorsRight = {
@@ -663,10 +684,138 @@ public class ArmPanel extends JPanel
     // L-elbow method removed for 6-DOF robot
 
     // --- New Depth Sorting and Drawing Helpers ---
+    private static class ChairRenderScene {
+        final double[] lowChairCenter;
+        final double lowChairHeight;
+        final double[] highChairCenter;
+        final double highChairHeight;
+
+        ChairRenderScene(double[] lowChairCenter, double lowChairHeight,
+                double[] highChairCenter, double highChairHeight) {
+            this.lowChairCenter = lowChairCenter.clone();
+            this.lowChairHeight = lowChairHeight;
+            this.highChairCenter = highChairCenter.clone();
+            this.highChairHeight = highChairHeight;
+        }
+    }
+
+    private void addChairDemoDrawables(java.util.List<Drawable> drawables, double[] rightEndEffector) {
+        ChairRenderScene scene = chairDemoScene;
+        if (scene == null) {
+            return;
+        }
+
+        double chairHalfX = 16.0;
+        double chairHalfY = 14.0;
+        drawables.add(new BoxDrawable(scene.lowChairCenter[0], scene.lowChairCenter[1],
+                0.0, scene.lowChairHeight, chairHalfX, chairHalfY,
+                new Color(130, 150, 170), new Color(70, 85, 100)));
+        drawables.add(new BoxDrawable(scene.highChairCenter[0], scene.highChairCenter[1],
+                0.0, scene.highChairHeight, chairHalfX, chairHalfY,
+                new Color(150, 125, 95), new Color(90, 70, 50)));
+
+        double[] objectCenter;
+        if (robot != null && robot.isGrippedRight) {
+            objectCenter = rightEndEffector.clone();
+        } else if (chairDemoObjectOnHigh) {
+            objectCenter = new double[] { scene.highChairCenter[0], scene.highChairCenter[1], scene.highChairHeight + 5.0 };
+        } else {
+            objectCenter = new double[] { scene.lowChairCenter[0], scene.lowChairCenter[1], scene.lowChairHeight + 5.0 };
+        }
+        drawables.add(new BoxDrawable(objectCenter[0], objectCenter[1], objectCenter[2] - 5.0,
+                objectCenter[2] + 5.0, 5.0, 5.0,
+                new Color(230, 170, 40), new Color(150, 95, 20)));
+    }
+
     interface Drawable {
         double getDepth();
 
         void draw(Graphics2D g2, int cx, int cy);
+    }
+
+    class BoxDrawable implements Drawable {
+        final double centerX;
+        final double centerY;
+        final double zMin;
+        final double zMax;
+        final double halfX;
+        final double halfY;
+        final Color fill;
+        final Color border;
+        final double depth;
+
+        BoxDrawable(double centerX, double centerY, double zMin, double zMax,
+                double halfX, double halfY, Color fill, Color border) {
+            this.centerX = centerX;
+            this.centerY = centerY;
+            this.zMin = zMin;
+            this.zMax = zMax;
+            this.halfX = halfX;
+            this.halfY = halfY;
+            this.fill = fill;
+            this.border = border;
+            this.depth = getVz(new double[] { centerX, centerY, (zMin + zMax) / 2.0 });
+        }
+
+        private class Face {
+            final int[] indices;
+            final double depth;
+            final Color color;
+
+            Face(int[] indices, Color color, double[][] corners) {
+                this.indices = indices;
+                this.color = color;
+                double sum = 0.0;
+                for (int idx : indices) {
+                    sum += getVz(corners[idx]);
+                }
+                this.depth = sum / indices.length;
+            }
+        }
+
+        @Override
+        public double getDepth() {
+            return depth;
+        }
+
+        @Override
+        public void draw(Graphics2D g2, int cx, int cy) {
+            double[][] corners = {
+                { centerX - halfX, centerY - halfY, zMin },
+                { centerX + halfX, centerY - halfY, zMin },
+                { centerX + halfX, centerY + halfY, zMin },
+                { centerX - halfX, centerY + halfY, zMin },
+                { centerX - halfX, centerY - halfY, zMax },
+                { centerX + halfX, centerY - halfY, zMax },
+                { centerX + halfX, centerY + halfY, zMax },
+                { centerX - halfX, centerY + halfY, zMax }
+            };
+
+            int[][] sc = new int[8][2];
+            for (int i = 0; i < corners.length; i++) {
+                sc[i] = project(corners[i], cx, cy);
+            }
+
+            java.util.List<Face> faces = new java.util.ArrayList<>();
+            faces.add(new Face(new int[] { 0, 1, 5, 4 }, fill.darker(), corners));
+            faces.add(new Face(new int[] { 1, 2, 6, 5 }, fill, corners));
+            faces.add(new Face(new int[] { 2, 3, 7, 6 }, fill.brighter(), corners));
+            faces.add(new Face(new int[] { 3, 0, 4, 7 }, fill.darker().darker(), corners));
+            faces.add(new Face(new int[] { 4, 5, 6, 7 }, fill.brighter(), corners));
+            faces.sort((a, b) -> Double.compare(b.depth, a.depth));
+
+            for (Face face : faces) {
+                Polygon poly = new Polygon();
+                for (int idx : face.indices) {
+                    poly.addPoint(sc[idx][0], sc[idx][1]);
+                }
+                g2.setColor(face.color);
+                g2.fillPolygon(poly);
+                g2.setColor(border);
+                g2.setStroke(new BasicStroke(1.0f));
+                g2.drawPolygon(poly);
+            }
+        }
     }
 
     class TubeSegment implements Drawable {
