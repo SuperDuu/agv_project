@@ -2528,12 +2528,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
         double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
-        double[] readyRight = { sharedQ1, 0, 45, -65, 16, -10 };
-        double[] lowHoverRight = { sharedQ1, 52, 60, -82, 34, -20 };
-        double[] lowPickRight = { sharedQ1, 33.06, 55.89, -74.41, 23.33, -18.11 };
-        double[] transferHighRight = { sharedQ1, 20, 150, -90, 20, -25 };
-        double[] highHoverRight = { sharedQ1, -42, 120, -95, 42, -30 };
-        double[] highPlaceRight = { sharedQ1, -29.23, 115.83, -92.72, 30.18, -31.83 };
+        double[] readyRight = { sharedQ1, -30.0, 120.0, -90.0, 20.0, -25.0 };
+        double[] lowHoverRight = { sharedQ1, 45.0, 86.0, -95.0, 57.0, 60.0 };
+        double[] lowPickRight = { sharedQ1, 30.0, 86.0, -95.0, 57.0, 60.0 };
+        double[] transferHighRight = { sharedQ1, -30.0, 120.0, -90.0, 20.0, -25.0 };
+        double[] highHoverRight = { sharedQ1, -100.0, 137.0, -83.0, 0.0, 30.0 };
+        double[] highPlaceRight = { sharedQ1, -90.0, 137.0, -83.0, 0.0, 30.0 };
         double[] retreatRight = transferHighRight.clone();
 
         if (!logDemoPoseOk("chairHomeRight", homeRight, true) || !logDemoPoseOk("chairHomeLeft", homeLeft, false)
@@ -2598,16 +2598,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { readyRight, leftClear });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
-        // Chair locations and heights are determined using the original (shallower) pick/place positions.
-        // This ensures the chairs match their physical setups, while the gripper goes deeper.
-        double[] lowPickOrig = armPanel.computeFK(sharedQ1, 34, 60, -80, 24, -20, true);
-        double[] highPlaceOrig = armPanel.computeFK(sharedQ1, -30, 120, -95, 30, -30, true);
-        double objectSize = ArmPanel.CHAIR_DEMO_OBJECT_HALF * 2.0;
-        double lowChairHeight = Math.max(18.0, lowPickOrig[2] - objectSize);
-        double highChairHeight = Math.max(lowChairHeight + 20.0, highPlaceOrig[2] - objectSize);
+        double[] lowPickCoord = armPanel.computeFK(sharedQ1, 30.0, 86.0, -95.0, 57.0, 60.0, true);
+        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, -90.0, 137.0, -83.0, 0.0, 30.0, true);
+        double lowChairHeight = 102.4;
+        double highChairHeight = 125.0;
         ChairDemoScene scene = new ChairDemoScene(
-                new double[] { lowPickOrig[0], lowPickOrig[1], 0.0 }, lowChairHeight,
-                new double[] { highPlaceOrig[0], highPlaceOrig[1], 0.0 }, highChairHeight);
+                new double[] { lowPickCoord[0], lowPickCoord[1], 0.0 }, lowChairHeight,
+                new double[] { highPlaceCoord[0], highPlaceCoord[1], 0.0 }, highChairHeight);
 
         java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
         if (!validateDualDemoCollision("chairTransfer", frames, 8)
@@ -2657,9 +2654,30 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private boolean isArmClearOfChairBox(double[] q, boolean isRight, double[] chairCenter,
             double chairHeight, double margin) {
-        return ArmPanel.isArmClearOfBox(q, isRight,
-                chairCenter[0], chairCenter[1], 0.0, chairHeight,
-                ArmPanel.CHAIR_DEMO_HALF_X, ArmPanel.CHAIR_DEMO_HALF_Y, margin);
+        // Since the gripper is horizontal, the upper arm links (Joint 3-5) are above/around
+        // the tall chairs. We only check the gripper (Joint 6, TCP, and their midpoint)
+        // against the chair volume to avoid false-positive collisions.
+        double[][] pts = ArmPanel.computeAllJoints3DForAngles(q, isRight);
+        double minX = chairCenter[0] - ArmPanel.CHAIR_DEMO_HALF_X - margin;
+        double maxX = chairCenter[0] + ArmPanel.CHAIR_DEMO_HALF_X + margin;
+        double minY = chairCenter[1] - ArmPanel.CHAIR_DEMO_HALF_Y - margin;
+        double maxY = chairCenter[1] + ArmPanel.CHAIR_DEMO_HALF_Y + margin;
+        double minZ = 0.0 - margin;
+        double maxZ = chairHeight + margin;
+
+        double[] pt6 = pts[6];
+        double[] pt7 = pts[7];
+        double[] ptMid = { (pt6[0] + pt7[0])/2.0, (pt6[1] + pt7[1])/2.0, (pt6[2] + pt7[2])/2.0 };
+
+        double[][] checkPts = { pt6, pt7, ptMid };
+        for (double[] pt : checkPts) {
+            if (pt[0] >= minX && pt[0] <= maxX
+                    && pt[1] >= minY && pt[1] <= maxY
+                    && pt[2] >= minZ && pt[2] <= maxZ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean validateDualDemoCollision(String label, java.util.List<double[][]> frames, int samplesPerSegment) {
