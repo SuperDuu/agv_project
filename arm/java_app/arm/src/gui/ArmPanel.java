@@ -1789,7 +1789,7 @@ public class ArmPanel extends JPanel
         return list;
     }
 
-    private static double[][] computeAllJoints3DForAngles(double[] anglesDeg, boolean isRight) {
+    public static double[][] computeAllJoints3DForAngles(double[] anglesDeg, boolean isRight) {
         double[][] pts = new double[8][3];
         double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
         pts[0] = new double[] { 0, 0, 0 };
