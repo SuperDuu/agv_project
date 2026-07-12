@@ -2501,7 +2501,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] transferHighRight = { sharedQ1, 20, 90, -88, 42, -24 };
         double[] highHoverRight = { sharedQ1, -42, 120, -95, 42, -30 };
         double[] highPlaceRight = { sharedQ1, -30, 120, -95, 30, -30 };
-        double[] retreatRight = { sharedQ1, -20, 90, -80, 32, -18 };
+        double[] retreatRight = { sharedQ1, 20, 90, -88, 42, -24 };
 
         if (!logDemoPoseOk("chairHomeRight", homeRight, true) || !logDemoPoseOk("chairHomeLeft", homeLeft, false)
                 || !logDemoPoseOk("chairLeftClear", leftClear, false)
@@ -2531,21 +2531,60 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { readyRight, leftClear });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
-        java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
-        if (!validateDualDemoCollision("chairTransfer", frames, 8)) {
-            return null;
-        }
-
         double[] lowPick = armPanel.computeFK(lowPickRight[0], lowPickRight[1], lowPickRight[2],
                 lowPickRight[3], lowPickRight[4], lowPickRight[5], true);
         double[] highPlace = armPanel.computeFK(highPlaceRight[0], highPlaceRight[1], highPlaceRight[2],
                 highPlaceRight[3], highPlaceRight[4], highPlaceRight[5], true);
+        double lowChairHeight = Math.max(18.0, lowPick[2] - 18.0);
+        double highChairHeight = Math.max(lowChairHeight + 20.0, highPlace[2] - 24.0);
         ChairDemoScene scene = new ChairDemoScene(
-                new double[] { lowPick[0], lowPick[1], 0.0 }, Math.max(20.0, lowPick[2] - 8.0),
-                new double[] { highPlace[0], highPlace[1], 0.0 }, Math.max(35.0, highPlace[2] - 8.0));
+                new double[] { lowPick[0], lowPick[1], 0.0 }, lowChairHeight,
+                new double[] { highPlace[0], highPlace[1], 0.0 }, highChairHeight);
+
+        java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
+        if (!validateDualDemoCollision("chairTransfer", frames, 8)
+                || !validateChairDemoClearance("chairTransfer", frames, scene, 8)) {
+            return null;
+        }
 
         return new DualDemoPlan(frames, gripFrame, -1, releaseFrame, -1,
                 5000, 0, 5000, 0, scene);
+    }
+
+    private boolean validateChairDemoClearance(String label, java.util.List<double[][]> frames,
+            ChairDemoScene scene, int samplesPerSegment) {
+        for (int i = 0; i < frames.size(); i++) {
+            if (!isChairFrameClear(frames.get(i), scene)) {
+                System.out.printf("[DEMO_COLLISION] %s chair frame=%d%n", label, i);
+                return false;
+            }
+        }
+        for (int i = 0; i < frames.size() - 1; i++) {
+            for (int step = 1; step < samplesPerSegment; step++) {
+                double t = step / (double) samplesPerSegment;
+                double[][] interp = interpolateDualArmFrame(frames.get(i), frames.get(i + 1), t);
+                if (!isChairFrameClear(interp, scene)) {
+                    System.out.printf("[DEMO_COLLISION] %s chair segment=%d step=%d%n", label, i, step);
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean isChairFrameClear(double[][] frame, ChairDemoScene scene) {
+        double margin = 3.0;
+        return isArmClearOfChairBox(frame[0], true, scene.lowChairCenter, scene.lowChairHeight, margin)
+                && isArmClearOfChairBox(frame[1], false, scene.lowChairCenter, scene.lowChairHeight, margin)
+                && isArmClearOfChairBox(frame[0], true, scene.highChairCenter, scene.highChairHeight, margin)
+                && isArmClearOfChairBox(frame[1], false, scene.highChairCenter, scene.highChairHeight, margin);
+    }
+
+    private boolean isArmClearOfChairBox(double[] q, boolean isRight, double[] chairCenter,
+            double chairHeight, double margin) {
+        return ArmPanel.isArmClearOfBox(q, isRight,
+                chairCenter[0], chairCenter[1], 0.0, chairHeight,
+                ArmPanel.CHAIR_DEMO_HALF_X, ArmPanel.CHAIR_DEMO_HALF_Y, margin);
     }
 
     private boolean validateDualDemoCollision(String label, java.util.List<double[][]> frames, int samplesPerSegment) {

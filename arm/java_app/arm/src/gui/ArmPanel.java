@@ -23,6 +23,9 @@ public class ArmPanel extends JPanel
     private static final double TORSO_CENTER_Y = -6.0;
     private static final double TORSO_HALF_WIDTH = 14.0;
     private static final double TORSO_HEIGHT = 130.0;
+    static final double CHAIR_DEMO_HALF_X = 11.0;
+    static final double CHAIR_DEMO_HALF_Y = 9.0;
+    static final double CHAIR_DEMO_OBJECT_HALF = 2.5;
     int lastX, lastY;
     int demoStep = 0;
     double[] clickTarget = null; // To draw where we clicked
@@ -705,8 +708,8 @@ public class ArmPanel extends JPanel
             return;
         }
 
-        double chairHalfX = 16.0;
-        double chairHalfY = 14.0;
+        double chairHalfX = CHAIR_DEMO_HALF_X;
+        double chairHalfY = CHAIR_DEMO_HALF_Y;
         drawables.add(new BoxDrawable(scene.lowChairCenter[0], scene.lowChairCenter[1],
                 0.0, scene.lowChairHeight, chairHalfX, chairHalfY,
                 new Color(130, 150, 170), new Color(70, 85, 100)));
@@ -718,12 +721,14 @@ public class ArmPanel extends JPanel
         if (robot != null && robot.isGrippedRight) {
             objectCenter = rightEndEffector.clone();
         } else if (chairDemoObjectOnHigh) {
-            objectCenter = new double[] { scene.highChairCenter[0], scene.highChairCenter[1], scene.highChairHeight + 5.0 };
+            objectCenter = new double[] { scene.highChairCenter[0], scene.highChairCenter[1],
+                    scene.highChairHeight + CHAIR_DEMO_OBJECT_HALF };
         } else {
-            objectCenter = new double[] { scene.lowChairCenter[0], scene.lowChairCenter[1], scene.lowChairHeight + 5.0 };
+            objectCenter = new double[] { scene.lowChairCenter[0], scene.lowChairCenter[1],
+                    scene.lowChairHeight + CHAIR_DEMO_OBJECT_HALF };
         }
-        drawables.add(new BoxDrawable(objectCenter[0], objectCenter[1], objectCenter[2] - 5.0,
-                objectCenter[2] + 5.0, 5.0, 5.0,
+        drawables.add(new BoxDrawable(objectCenter[0], objectCenter[1], objectCenter[2] - CHAIR_DEMO_OBJECT_HALF,
+                objectCenter[2] + CHAIR_DEMO_OBJECT_HALF, CHAIR_DEMO_OBJECT_HALF, CHAIR_DEMO_OBJECT_HALF,
                 new Color(230, 170, 40), new Color(150, 95, 20)));
     }
 
@@ -1743,6 +1748,28 @@ public class ArmPanel extends JPanel
         }
 
         return CollisionResult.free();
+    }
+
+    public static boolean isArmClearOfBox(double[] q, boolean isRight,
+            double centerX, double centerY, double zMin, double zMax,
+            double halfX, double halfY, double margin) {
+        double[][] pts = computeAllJoints3DForAngles(q, isRight);
+        java.util.List<double[]> checkPoints = getCheckPoints(pts);
+        double minX = centerX - halfX - margin;
+        double maxX = centerX + halfX + margin;
+        double minY = centerY - halfY - margin;
+        double maxY = centerY + halfY + margin;
+        double minZ = zMin - margin;
+        double maxZ = zMax + margin;
+
+        for (double[] pt : checkPoints) {
+            if (pt[0] >= minX && pt[0] <= maxX
+                    && pt[1] >= minY && pt[1] <= maxY
+                    && pt[2] >= minZ && pt[2] <= maxZ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static java.util.List<double[]> getCheckPoints(double[][] pts) {
