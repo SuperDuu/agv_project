@@ -2498,10 +2498,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] readyRight = { sharedQ1, 0, 45, -65, 16, -10 };
         double[] lowHoverRight = { sharedQ1, 52, 60, -82, 34, -20 };
         double[] lowPickRight = { sharedQ1, 34, 60, -80, 24, -20 };
-        double[] transferHighRight = { sharedQ1, 20, 90, -88, 42, -24 };
+        double[] transferHighRight = { sharedQ1, 20, 150, -90, 20, -25 };
         double[] highHoverRight = { sharedQ1, -42, 120, -95, 42, -30 };
         double[] highPlaceRight = { sharedQ1, -30, 120, -95, 30, -30 };
-        double[] retreatRight = { sharedQ1, 20, 90, -88, 42, -24 };
+        double[] retreatRight = transferHighRight.clone();
 
         if (!logDemoPoseOk("chairHomeRight", homeRight, true) || !logDemoPoseOk("chairHomeLeft", homeLeft, false)
                 || !logDemoPoseOk("chairLeftClear", leftClear, false)
@@ -2518,6 +2518,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(new double[][] { homeRight, homeLeft });
         keyframes.add(new double[][] { readyRight, leftClear });
+        keyframes.add(new double[][] { transferHighRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         int gripFrame = keyframes.size();
         keyframes.add(new double[][] { lowPickRight, leftClear });
@@ -2535,8 +2536,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 lowPickRight[3], lowPickRight[4], lowPickRight[5], true);
         double[] highPlace = armPanel.computeFK(highPlaceRight[0], highPlaceRight[1], highPlaceRight[2],
                 highPlaceRight[3], highPlaceRight[4], highPlaceRight[5], true);
-        double lowChairHeight = Math.max(18.0, lowPick[2] - 18.0);
-        double highChairHeight = Math.max(lowChairHeight + 20.0, highPlace[2] - 24.0);
+        double objectSize = ArmPanel.CHAIR_DEMO_OBJECT_HALF * 2.0;
+        double lowChairHeight = Math.max(18.0, lowPick[2] - objectSize);
+        double highChairHeight = Math.max(lowChairHeight + 20.0, highPlace[2] - objectSize);
         ChairDemoScene scene = new ChairDemoScene(
                 new double[] { lowPick[0], lowPick[1], 0.0 }, lowChairHeight,
                 new double[] { highPlace[0], highPlace[1], 0.0 }, highChairHeight);
