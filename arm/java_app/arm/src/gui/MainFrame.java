@@ -2528,16 +2528,22 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
         double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
-        double[] readyRight = { sharedQ1, -30.0, 120.0, -90.0, 20.0, -25.0 };
-        double[] lowHoverRight = { sharedQ1, 45.0, 86.0, -95.0, 57.0, 60.0 };
-        double[] lowPickRight = { sharedQ1, 30.0, 86.0, -95.0, 57.0, 60.0 };
-        double[] transferHighRight = { sharedQ1, -30.0, 120.0, -90.0, 20.0, -25.0 };
-        double[] highHoverRight = { sharedQ1, -100.0, 137.0, -83.0, 0.0, 30.0 };
-        double[] highPlaceRight = { sharedQ1, -90.0, 137.0, -83.0, 0.0, 30.0 };
+        
+        // Define our safe lower configurations (Option B) with horizontal orientations!
+        double[] lowPickRight = { sharedQ1, 20.0, 48.0, -17.0, 40.0, 10.0 };
+        double[] lowHoverRight = { sharedQ1, 35.0, 48.0, -17.0, 40.0, 10.0 };
+        
+        double[] highPlaceRight = { sharedQ1, -64.0, 42.0, -19.0, -35.0, -45.0 };
+        double[] highHoverRight = { sharedQ1, -66.0, 42.0, -19.0, -35.0, -45.0 };
+        
+        double[] transferHighRight = { sharedQ1, -90.0, 120.0, -90.0, 40.0, 10.0 };
+        double[] readyRight = { sharedQ1, -90.0, 120.0, -90.0, 40.0, 10.0 };
+        double[] foldedHomeRight = { sharedQ1, 0.0, 120.0, -90.0, 40.0, 10.0 };
         double[] retreatRight = transferHighRight.clone();
 
         if (!logDemoPoseOk("chairHomeRight", homeRight, true) || !logDemoPoseOk("chairHomeLeft", homeLeft, false)
                 || !logDemoPoseOk("chairLeftClear", leftClear, false)
+                || !logDemoPoseOk("chairFoldedHomeRight", foldedHomeRight, true)
                 || !logDemoPoseOk("chairReadyRight", readyRight, true)
                 || !logDemoPoseOk("chairLowHoverRight", lowHoverRight, true)
                 || !logDemoPoseOk("chairLowPickRight", lowPickRight, true)
@@ -2550,6 +2556,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(new double[][] { homeRight, homeLeft });
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { readyRight, leftClear });
         
         // 1. Move to low chair
@@ -2596,12 +2603,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         keyframes.add(new double[][] { transferHighRight, leftClear });
         keyframes.add(new double[][] { readyRight, leftClear });
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
-        double[] lowPickCoord = armPanel.computeFK(sharedQ1, 30.0, 86.0, -95.0, 57.0, 60.0, true);
-        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, -90.0, 137.0, -83.0, 0.0, 30.0, true);
-        double lowChairHeight = 102.4;
-        double highChairHeight = 125.0;
+        double[] lowPickCoord = armPanel.computeFK(sharedQ1, 20.0, 48.0, -17.0, 40.0, 10.0, true);
+        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, -64.0, 42.0, -19.0, -35.0, -45.0, true);
+        double lowChairHeight = lowPickCoord[2] - 5.0;
+        double highChairHeight = highPlaceCoord[2] - 5.0;
         ChairDemoScene scene = new ChairDemoScene(
                 new double[] { lowPickCoord[0], lowPickCoord[1], 0.0 }, lowChairHeight,
                 new double[] { highPlaceCoord[0], highPlaceCoord[1], 0.0 }, highChairHeight);
