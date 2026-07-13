@@ -19,8 +19,9 @@ target_include_directories(moveit_planner PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(moveit_planner
-  rclcpp::rclcpp
+
+ament_target_dependencies(moveit_planner
+  rclcpp
   moveit_ros_planning_interface
   moveit_core
 )
