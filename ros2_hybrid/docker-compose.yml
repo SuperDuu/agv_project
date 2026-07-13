@@ -20,3 +20,7 @@ services:
     working_dir: /workspaces/agv_ros2
     stdin_open: true
     tty: true
+    # Auto-launch full stack (bridge + MoveIt2) when container starts
+    command: >
+      bash -c "source install/setup.bash &&
+               ros2 launch agv_arm_moveit full_stack.launch.py"
