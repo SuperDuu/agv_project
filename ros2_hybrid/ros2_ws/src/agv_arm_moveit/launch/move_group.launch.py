@@ -88,6 +88,14 @@ def generate_launch_description():
         parameters=[robot_description],
     )
 
+    # Start joint state publisher
+    joint_state_publisher_node = Node(
+        package="joint_state_publisher",
+        executable="joint_state_publisher",
+        output="screen",
+        parameters=[{"use_sim_time": False}]
+    )
+
     # Start moveit_planner node
     moveit_planner_node = Node(
         package="agv_arm_moveit",
@@ -104,6 +112,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         robot_state_publisher_node,
+        joint_state_publisher_node,
         move_group_node,
         moveit_planner_node
     ])
