@@ -2779,7 +2779,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] lowHover = makeRightFlatGripperPose(35.0, 80.0, flatA, 80.0);
         double[] highPlace = makeRightFlatGripperPose(-45.0, 80.0, flatA, -80.0);
         double[] highHover = highPlace.clone();
-        double[] flatHome = makeRightFlatGripperPose(0.0, 20.0, flatA, 0.0);
+        double[] flatHome = makeRightFlatGripperPose(0.0, 80.0, flatA, 0.0);
 
         double[] lowPickCoord = armPanel.computeFK(lowPick[0], lowPick[1], lowPick[2], lowPick[3],
                 lowPick[4], lowPick[5], true);
