@@ -521,9 +521,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         btnDualArmDemo.addActionListener(e -> runDualArmShowcase());
         JComboBox<String> demoModeCombo = new JComboBox<>(new String[] {
-                "Demo 2 Tay", "Mua 2 Tay", "Mua 2 Tay+", "Ghe Demo R", "Ghe Demo L", "Kep Song Song"
+                "Demo 2 Tay", "Mua 2 Tay", "Mua 2 Tay+", "Ghe Demo R", "Ghe Demo L", "Kep Song Song",
+                "Ghe Flat Q1"
         });
-        demoModeCombo.setPreferredSize(new Dimension(150, 25));
+        demoModeCombo.setPreferredSize(new Dimension(162, 25));
         JButton btnRunDemo = new JButton("Demo");
         btnRunDemo.addActionListener(e -> {
             if (demoModeCombo.getSelectedIndex() == 0) {
@@ -536,8 +537,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 runChairTransferShowcase();
             } else if (demoModeCombo.getSelectedIndex() == 4) {
                 runLeftChairTransferShowcase();
-            } else {
+            } else if (demoModeCombo.getSelectedIndex() == 5) {
                 runParallelGripperPlaneShowcase();
+            } else {
+                runFlatQ1ChairTransferShowcase();
             }
         });
         topPanel.add(demoModeCombo);
@@ -2273,6 +2276,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         runDualArmPlayback(plan, "Kep Song Song");
     }
 
+    private void runFlatQ1ChairTransferShowcase() {
+        DualDemoPlan plan = buildFlatQ1ChairTransferDemo();
+        if (plan == null || plan.frames.isEmpty()) {
+            setGotoStatusRight("Ghe Flat Q1: loi pose", Color.RED);
+            setGotoStatusLeft("Ghe Flat Q1: loi pose", Color.RED);
+            return;
+        }
+        runDualArmPlayback(plan, "Ghe Flat Q1");
+    }
+
     private static class DualDemoPlan {
         final java.util.List<double[][]> frames;
         final int rightGripFrameIndex;
@@ -2758,6 +2771,277 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         plan.customDelays.put(postReleaseFrame2, 2000);
 
         return plan;
+    }
+
+    private DualDemoPlan buildFlatQ1ChairTransferDemo() {
+        final double flatA = -15.0;
+        double[] lowPick = makeRightFlatGripperPose(35.0, 30.0, flatA, 80.0);
+        double[] lowHover = makeRightFlatGripperPose(35.0, 80.0, flatA, 80.0);
+        double[] highPlace = makeRightFlatGripperPose(-45.0, 80.0, flatA, -80.0);
+        double[] highHover = highPlace.clone();
+        double[] flatHome = makeRightFlatGripperPose(0.0, 20.0, flatA, 0.0);
+
+        double[] lowPickCoord = armPanel.computeFK(lowPick[0], lowPick[1], lowPick[2], lowPick[3],
+                lowPick[4], lowPick[5], true);
+        double[] highPlaceCoord = armPanel.computeFK(highPlace[0], highPlace[1], highPlace[2], highPlace[3],
+                highPlace[4], highPlace[5], true);
+        double chairDistance = distanceXY(lowPickCoord, highPlaceCoord);
+
+        ChairDemoScene scene = new ChairDemoScene(
+                new double[] { lowPickCoord[0], lowPickCoord[1], 0.0 }, lowPickCoord[2] - 12.0,
+                new double[] { highPlaceCoord[0], highPlaceCoord[1], 0.0 }, highPlaceCoord[2] - 12.0);
+
+        java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
+        keyframes.add(makeFlatQ1ChairFrame(flatHome));
+        appendFlatQ1ChairPath(keyframes, flatHome, lowHover, 24);
+
+        int preGripFrame1 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(lowPick));
+        int gripFrame1 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(lowPick));
+        int postGripFrame1 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(lowPick));
+
+        appendFlatQ1ChairPath(keyframes, lowPick, lowHover, 12);
+        appendFlatQ1ChairPath(keyframes, lowHover, highHover, 64);
+
+        int preReleaseFrame1 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(highPlace));
+        int releaseFrame1 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(highPlace));
+        int postReleaseFrame1 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(highPlace));
+
+        appendFlatQ1ChairPath(keyframes, highPlace, lowHover, 64);
+        appendFlatQ1ChairPath(keyframes, lowHover, flatHome, 24);
+        int homePauseFrame = keyframes.size() - 1;
+        appendFlatQ1ChairPath(keyframes, flatHome, lowHover, 24);
+        appendFlatQ1ChairPath(keyframes, lowHover, highHover, 64);
+
+        int preGripFrame2 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(highPlace));
+        int gripFrame2 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(highPlace));
+        int postGripFrame2 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(highPlace));
+
+        appendFlatQ1ChairPath(keyframes, highPlace, lowHover, 64);
+
+        int preReleaseFrame2 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(lowPick));
+        int releaseFrame2 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(lowPick));
+        int postReleaseFrame2 = keyframes.size();
+        keyframes.add(makeFlatQ1ChairFrame(lowPick));
+
+        appendFlatQ1ChairPath(keyframes, lowPick, lowHover, 12);
+        appendFlatQ1ChairPath(keyframes, lowHover, flatHome, 24);
+
+        java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
+        String validationLabel = "flatQ1ChairRight";
+        boolean valid = true;
+        if (chairDistance < 90.0) {
+            System.out.printf(java.util.Locale.US,
+                    "[DEMO_DEBUG] %s chairs too close | distanceXY=%.2f%n",
+                    validationLabel, chairDistance);
+            valid = false;
+        }
+        valid &= validateFlatQ1ChairDemo(validationLabel, frames, scene, 8);
+        writeFlatQ1ChairDebugFiles(validationLabel, frames, scene, chairDistance, valid);
+        if (!valid) {
+            return null;
+        }
+
+        DualDemoPlan plan = new DualDemoPlan(frames, gripFrame1, -1, releaseFrame1, -1, 0, 0, 0, 0, scene);
+        plan.rightGripIndices.add(gripFrame2);
+        plan.rightReleaseIndices.add(releaseFrame2);
+        plan.customDelays.put(preGripFrame1, 2000);
+        plan.customDelays.put(postGripFrame1, 5000);
+        plan.customDelays.put(preReleaseFrame1, 3000);
+        plan.customDelays.put(postReleaseFrame1, 2000);
+        plan.customDelays.put(homePauseFrame, 2000);
+        plan.customDelays.put(preGripFrame2, 2000);
+        plan.customDelays.put(postGripFrame2, 5000);
+        plan.customDelays.put(preReleaseFrame2, 3000);
+        plan.customDelays.put(postReleaseFrame2, 2000);
+        return plan;
+    }
+
+    private double[] makeRightFlatGripperPose(double q1, double q3, double aDeg, double q5) {
+        double aRad = Math.toRadians(aDeg);
+        double q5Rad = Math.toRadians(q5);
+        double q2 = Math.toDegrees(Math.atan(-Math.tan(q5Rad) * Math.sin(aRad)));
+        double q6 = Math.toDegrees(Math.atan(-Math.cos(q5Rad) / Math.tan(aRad)));
+        if (q6 < 0.0) {
+            q6 += 180.0;
+        }
+        return new double[] { q1, q2, q3, aDeg - q3, q5, q6 };
+    }
+
+    private double[][] makeFlatQ1ChairFrame(double[] rightPose) {
+        double[] leftClear = { rightPose[0], -10, -45, 58, 18, 18 };
+        return new double[][] { rightPose, leftClear };
+    }
+
+    private void appendFlatQ1ChairPath(java.util.List<double[][]> frames, double[] start, double[] end, int steps) {
+        for (int i = 1; i <= steps; i++) {
+            double t = i / (double) steps;
+            double q1 = lerp(start[0], end[0], t);
+            double q3 = lerp(start[2], end[2], t);
+            double aDeg = lerp(start[2] + start[3], end[2] + end[3], t);
+            double q5 = lerp(start[4], end[4], t);
+            frames.add(makeFlatQ1ChairFrame(makeRightFlatGripperPose(q1, q3, aDeg, q5)));
+        }
+    }
+
+    private static double lerp(double a, double b, double t) {
+        return a + (b - a) * t;
+    }
+
+    private boolean validateFlatQ1ChairDemo(String label, java.util.List<double[][]> frames,
+            ChairDemoScene scene, int samplesPerSegment) {
+        boolean ok = true;
+        ok &= validateFlatGripperPlane(label, frames, samplesPerSegment, 2.0);
+        ok &= validateDualDemoCollision(label, frames, samplesPerSegment);
+        ok &= validateChairDemoClearance(label, frames, scene, samplesPerSegment);
+        for (int i = 0; i < frames.size(); i++) {
+            double[] right = frames.get(i)[0];
+            double[] left = frames.get(i)[1];
+            if (!isWithinLimits(right, true)) {
+                System.out.printf("[DEMO_POSE] %s invalid right frame=%d%n", label, i);
+                ok = false;
+            }
+            if (!isWithinLimits(left, false)) {
+                System.out.printf("[DEMO_POSE] %s invalid left frame=%d%n", label, i);
+                ok = false;
+            }
+        }
+        return ok;
+    }
+
+    private boolean validateFlatGripperPlane(String label, java.util.List<double[][]> frames,
+            int samplesPerSegment, double toleranceDeg) {
+        double maxError = 0.0;
+        int maxFrame = -1;
+        int maxStep = 0;
+        for (int i = 0; i < frames.size(); i++) {
+            double error = gripperPlaneTiltDeg(frames.get(i)[0], true);
+            if (error > maxError) {
+                maxError = error;
+                maxFrame = i;
+                maxStep = 0;
+            }
+        }
+        for (int i = 0; i < frames.size() - 1; i++) {
+            for (int step = 1; step < samplesPerSegment; step++) {
+                double t = step / (double) samplesPerSegment;
+                double[][] interp = interpolateDualArmFrame(frames.get(i), frames.get(i + 1), t);
+                double error = gripperPlaneTiltDeg(interp[0], true);
+                if (error > maxError) {
+                    maxError = error;
+                    maxFrame = i;
+                    maxStep = step;
+                }
+            }
+        }
+        if (maxError > toleranceDeg) {
+            System.out.printf(java.util.Locale.US,
+                    "[DEMO_FLAT] %s max tilt %.3f deg > %.3f deg at frame=%d step=%d%n",
+                    label, maxError, toleranceDeg, maxFrame, maxStep);
+            return false;
+        }
+        System.out.printf(java.util.Locale.US,
+                "[DEMO_FLAT] %s max tilt %.3f deg <= %.3f deg%n",
+                label, maxError, toleranceDeg);
+        return true;
+    }
+
+    private double gripperPlaneTiltDeg(double[] qDeg, boolean isRight) {
+        double[] qRad = new double[NUM_JOINTS];
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            qRad[i] = Math.toRadians(qDeg[i]);
+        }
+        double[][] t = computeFKMatrix(qRad, isRight);
+        double ux = t[0][2], uy = t[1][2], uz = t[2][2];
+        double nx = t[0][0], ny = t[1][0], nz = t[2][0];
+        double bx = uy * nz - uz * ny;
+        double by = uz * nx - ux * nz;
+        double bz = ux * ny - uy * nx;
+        double blen = Math.sqrt(bx * bx + by * by + bz * bz);
+        if (blen < 1e-9) {
+            return 180.0;
+        }
+        double cos = Math.min(1.0, Math.abs(bz / blen));
+        return Math.toDegrees(Math.acos(cos));
+    }
+
+    private double maxFlatGripperPlaneTiltDeg(java.util.List<double[][]> frames, int samplesPerSegment) {
+        double maxError = 0.0;
+        for (int i = 0; i < frames.size(); i++) {
+            maxError = Math.max(maxError, gripperPlaneTiltDeg(frames.get(i)[0], true));
+        }
+        for (int i = 0; i < frames.size() - 1; i++) {
+            for (int step = 1; step < samplesPerSegment; step++) {
+                double t = step / (double) samplesPerSegment;
+                double[][] interp = interpolateDualArmFrame(frames.get(i), frames.get(i + 1), t);
+                maxError = Math.max(maxError, gripperPlaneTiltDeg(interp[0], true));
+            }
+        }
+        return maxError;
+    }
+
+    private double distanceXY(double[] a, double[] b) {
+        return Math.hypot(a[0] - b[0], a[1] - b[1]);
+    }
+
+    private void writeFlatQ1ChairDebugFiles(String label, java.util.List<double[][]> frames,
+            ChairDemoScene scene, double chairDistance, boolean valid) {
+        try {
+            java.nio.file.Path dir = java.nio.file.Paths.get("debug");
+            java.nio.file.Files.createDirectories(dir);
+            java.nio.file.Path csv = dir.resolve("flat_q1_chair_demo_frames.csv");
+            java.nio.file.Path report = dir.resolve("flat_q1_chair_demo_report.md");
+            java.util.List<String> csvLines = new java.util.ArrayList<>();
+            csvLines.add("frame,arm,q1,q2,q3,q4,q5,q6,tcp_x,tcp_y,tcp_z,flat_tilt_deg");
+            for (int i = 0; i < frames.size(); i++) {
+                appendFlatQ1DebugCsvLine(csvLines, i, "R", frames.get(i)[0], true);
+                appendFlatQ1DebugCsvLine(csvLines, i, "L", frames.get(i)[1], false);
+            }
+            java.nio.file.Files.write(csv, csvLines, java.nio.charset.StandardCharsets.UTF_8);
+
+            double maxTilt = maxFlatGripperPlaneTiltDeg(frames, 8);
+            double lowHeight = scene.lowChairHeight;
+            double highHeight = scene.highChairHeight;
+            java.util.List<String> reportLines = new java.util.ArrayList<>();
+            reportLines.add("# Flat Q1 Chair Demo Audit");
+            reportLines.add("");
+            reportLines.add("label: `" + label + "`");
+            reportLines.add("valid: `" + valid + "`");
+            reportLines.add(String.format(java.util.Locale.US, "frames: `%d`", frames.size()));
+            reportLines.add(String.format(java.util.Locale.US, "chair_distance_xy_mm: `%.2f`", chairDistance));
+            reportLines.add(String.format(java.util.Locale.US, "low_chair_height_mm: `%.2f`", lowHeight));
+            reportLines.add(String.format(java.util.Locale.US, "high_chair_height_mm: `%.2f`", highHeight));
+            reportLines.add(String.format(java.util.Locale.US, "max_gripper_plane_tilt_deg_with_interpolation: `%.4f`", maxTilt));
+            reportLines.add("");
+            reportLines.add("Self-check:");
+            reportLines.add("- The demo uses right-arm q1; q1 moves from +35 deg to -35 deg between the chairs.");
+            reportLines.add("- All right-arm poses are generated on the same horizontal-gripper manifold with A=q3+q4=-15 deg.");
+            reportLines.add("- The validator samples every frame and 7 interpolated points between frames; tolerance is +/-2 deg.");
+            reportLines.add("- The two chairs are intentionally separated mostly along Y.");
+            java.nio.file.Files.write(report, reportLines, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            System.out.println("[DEMO_DEBUG] failed to write flat q1 chair debug files: " + ex);
+        }
+    }
+
+    private void appendFlatQ1DebugCsvLine(java.util.List<String> lines, int frameIndex, String arm,
+            double[] q, boolean isRight) {
+        double[] tcp = armPanel.computeFK(q[0], q[1], q[2], q[3], q[4], q[5], isRight);
+        double tilt = isRight ? gripperPlaneTiltDeg(q, true) : Double.NaN;
+        lines.add(String.format(java.util.Locale.US,
+                "%d,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f",
+                frameIndex, arm, q[0], q[1], q[2], q[3], q[4], q[5],
+                tcp[0], tcp[1], tcp[2], tilt));
     }
 
     private boolean validateChairDemoClearance(String label, java.util.List<double[][]> frames,
