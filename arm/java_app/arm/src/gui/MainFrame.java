@@ -520,8 +520,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         topPanel.add(btnStartTraj);
 
         btnDualArmDemo.addActionListener(e -> runDualArmShowcase());
-        JComboBox<String> demoModeCombo = new JComboBox<>(new String[] { "Demo 2 Tay", "Mua 2 Tay", "Mua 2 Tay+", "Ghe Demo R", "Ghe Demo L" });
-        demoModeCombo.setPreferredSize(new Dimension(128, 25));
+        JComboBox<String> demoModeCombo = new JComboBox<>(new String[] {
+                "Demo 2 Tay", "Mua 2 Tay", "Mua 2 Tay+", "Ghe Demo R", "Ghe Demo L", "Kep Song Song"
+        });
+        demoModeCombo.setPreferredSize(new Dimension(150, 25));
         JButton btnRunDemo = new JButton("Demo");
         btnRunDemo.addActionListener(e -> {
             if (demoModeCombo.getSelectedIndex() == 0) {
@@ -532,8 +534,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 runDualArmWaveLongShowcase();
             } else if (demoModeCombo.getSelectedIndex() == 3) {
                 runChairTransferShowcase();
-            } else {
+            } else if (demoModeCombo.getSelectedIndex() == 4) {
                 runLeftChairTransferShowcase();
+            } else {
+                runParallelGripperPlaneShowcase();
             }
         });
         topPanel.add(demoModeCombo);
@@ -2259,6 +2263,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         runDualArmPlayback(plan, "Ghe Demo L");
     }
 
+    private void runParallelGripperPlaneShowcase() {
+        DualDemoPlan plan = buildParallelGripperPlaneDemo();
+        if (plan == null || plan.frames.isEmpty()) {
+            setGotoStatusRight("Kep Song Song: loi pose", Color.RED);
+            setGotoStatusLeft("Kep Song Song: loi pose", Color.RED);
+            return;
+        }
+        runDualArmPlayback(plan, "Kep Song Song");
+    }
+
     private static class DualDemoPlan {
         final java.util.List<double[][]> frames;
         final int rightGripFrameIndex;
@@ -2390,6 +2404,58 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // Keep the wave demo on sparse keyframes and let the motion controller
         // blend the travel, otherwise the per-frame arrival wait creates a stop-go feel.
+        java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
+        return new DualDemoPlan(frames, -1, -1, -1, -1);
+    }
+
+    private DualDemoPlan buildParallelGripperPlaneDemo() {
+        double sharedQ1 = targetAnglesRight[0];
+        java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
+
+        // Exact horizontal gripper-plane family for q2=0 and q5=0:
+        // q6 = 90 + q3 + q4 when q3 + q4 is between -90 and 0 degrees.
+        double[] homeR = { sharedQ1, 0, 20, -35, 0, 75 };
+        double[] homeL = { sharedQ1, 0, -35, 20, 0, 75 };
+        double[] lowR = { sharedQ1, 0, 20, -54, 0, 56 };
+        double[] lowL = { sharedQ1, 0, -54, 20, 0, 56 };
+        double[] midR = { sharedQ1, 0, 45, -75, 0, 60 };
+        double[] midL = { sharedQ1, 0, -75, 45, 0, 60 };
+        double[] foldR = { sharedQ1, 0, 75, -95, 0, 70 };
+        double[] foldL = { sharedQ1, 0, -95, 75, 0, 70 };
+        double[] flatR = { sharedQ1, 0, 95, -95, 0, 90 };
+        double[] flatL = { sharedQ1, 0, -95, 95, 0, 90 };
+
+        String[][] poseNames = {
+            { "parallelHomeR", "parallelHomeL" },
+            { "parallelLowR", "parallelLowL" },
+            { "parallelMidR", "parallelMidL" },
+            { "parallelFoldR", "parallelFoldL" },
+            { "parallelFlatR", "parallelFlatL" }
+        };
+        double[][][] posePairs = {
+            { homeR, homeL },
+            { lowR, lowL },
+            { midR, midL },
+            { foldR, foldL },
+            { flatR, flatL }
+        };
+        for (int i = 0; i < posePairs.length; i++) {
+            if (!logDemoPoseOk(poseNames[i][0], posePairs[i][0], true)
+                    || !logDemoPoseOk(poseNames[i][1], posePairs[i][1], false)) {
+                return null;
+            }
+        }
+
+        keyframes.add(new double[][] { homeR, homeL });
+        keyframes.add(new double[][] { lowR, lowL });
+        keyframes.add(new double[][] { midR, midL });
+        keyframes.add(new double[][] { foldR, foldL });
+        keyframes.add(new double[][] { flatR, flatL });
+        keyframes.add(new double[][] { foldR, foldL });
+        keyframes.add(new double[][] { midR, midL });
+        keyframes.add(new double[][] { lowR, lowL });
+        keyframes.add(new double[][] { homeR, homeL });
+
         java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
         return new DualDemoPlan(frames, -1, -1, -1, -1);
     }
