@@ -65,7 +65,7 @@ UART_HandleTypeDef huart2;
 extern Encoder_t encoders[NUM_ENCODERS];
 
 /* Current servo target angles (joint space, degrees) */
-volatile float servo_deg[6] = {96.43f, 90.0f, 35.0f, 65.0f, 90, 96.43f};
+volatile float servo_deg[6] = {96.43f, 90.0f, 35.0f, 65.0f, 90, 45.0f};
 
 /* -----------------------------------------------------------------------
  * Protocol V2.1 binary parser state (replaces legacy text "R:" parser)
@@ -85,7 +85,7 @@ static uint8_t arm_last_seq = 0xFF;  /* for duplicate / stale drop  */
 /* Last accepted joint positions in x100 (for Δθ guard) */
 static int16_t arm_q_last[6] = {9643, 3500, 0, 0, 6000, 0};
 /* Initial values match servo init: q0=96.43°, q1=35°, q2=0°, q3=0°, q4=60°,
- * q5=0° */
+ * q5=0° with 45° servo-center offset for the 0..90° joint-6 servo. */
 
 /* Debug counters */
 volatile uint32_t dbg_rx_ok = 0;
@@ -967,7 +967,7 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
         servo_deg[2] = -ARM_Proto_X100ToDeg(q_new[2])+35;
         servo_deg[3] = 65+ARM_Proto_X100ToDeg(q_new[3]);
         servo_deg[4] = -ARM_Proto_X100ToDeg(q_new[4])+90;
-        servo_deg[5] = ARM_Proto_X100ToDeg(q_new[5])+96.43;
+        servo_deg[5] = ARM_Proto_X100ToDeg(q_new[5])+45.0f;
       /* Update last accepted position */
       for (int i = 0; i < 6; i++)
         arm_q_last[i] = q_new[i];
@@ -1042,7 +1042,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
                   servo_deg[2] = -(float)q[2] / 100.0f+35;
                   servo_deg[3] = 65.0f+(float)q[3] / 100.0f;
                   servo_deg[4] = -(float)q[4] / 100.0f+90;
-                  servo_deg[5] = (float)q[5] / 100.0f+96.43;
+                  servo_deg[5] = (float)q[5] / 100.0f+45.0f;
                 } else {
                   dbg_rx_len++;
                 }

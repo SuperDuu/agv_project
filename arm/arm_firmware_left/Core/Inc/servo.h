@@ -14,7 +14,7 @@ typedef struct {
     uint32_t channel;
     uint16_t min_pulse; // 500us (0 degrees)
     uint16_t max_pulse; // 2500us (180 or 270 degrees)
-    uint16_t max_angle; // 180 or 270
+    uint16_t max_angle; // 90, 180, or 270
 } Servo_t;
 
 extern Servo_t servos[MAX_SERVOS];
