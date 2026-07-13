@@ -71,6 +71,18 @@ volatile float servo_deg[6] = {96.43f, 90.0f, 35.0f, 65.0f, 90, 96.43f};
 
 volatile uint32_t adc_value = 0;
 
+typedef enum {
+  GRIPPER_IDLE = 0,
+  GRIPPER_CLOSING,
+  GRIPPER_OPENING
+} GripperState_t;
+
+volatile GripperState_t gripper_state = GRIPPER_IDLE;
+volatile float gripper_angle = 0.0f;
+volatile uint32_t dbg_adc_val_at_stop = 0;
+volatile uint32_t dbg_gripper_stop_count = 0;
+volatile uint8_t bypass_adc_check = 0;
+
 /* -----------------------------------------------------------------------
  * Protocol V2.1 binary parser state (replaces legacy text "R:" parser)
  * Frame layout:
@@ -223,11 +235,56 @@ int main(void)
     //    dbg_enc3 = (int32_t)TIM4->CNT;
     //    dbg_enc4 = (int32_t)TIM5->CNT;
 
+    /* Auto-recovery from ADC Overrun (OVR) to keep ADC/DMA running */
+    if (__HAL_ADC_GET_FLAG(&hadc1, ADC_FLAG_OVR)) {
+      __HAL_ADC_CLEAR_FLAG(&hadc1, ADC_FLAG_OVR);
+      hadc1.Instance->CR2 |= (uint32_t)ADC_CR2_SWSTART;
+    }
+
+    /* Gripper closed-loop control with ADC force feedback */
+    if (bypass_adc_check == 2) {
+      /* Diagnostic sweep mode: sweeps gripper_angle between 0 and 45 continuously */
+      static int8_t sweep_dir = 1;
+      if (sweep_dir == 1) {
+        gripper_angle += 1.0f;
+        if (gripper_angle >= 60.0f) {
+          gripper_angle = 60.0f;
+          sweep_dir = -1;
+        }
+      } else {
+        gripper_angle -= 1.0f;
+        if (gripper_angle <= 0.0f) {
+          gripper_angle = 0.0f;
+          sweep_dir = 1;
+        }
+      }
+      gripper_state = GRIPPER_IDLE;
+    } else if (gripper_state == GRIPPER_CLOSING) {
+      if (bypass_adc_check == 0 && adc_value < 2500) {
+        dbg_adc_val_at_stop = adc_value;
+        dbg_gripper_stop_count++;
+        gripper_state = GRIPPER_IDLE; /* Stop immediately! */
+      } else {
+        gripper_angle += 0.5f; /* Moderate speed: 0.5 deg per 10ms (50 deg/sec) */
+        if (gripper_angle > 45.0f) {
+          gripper_angle = 45.0f;
+          gripper_state = GRIPPER_IDLE;
+        }
+      }
+    } else if (gripper_state == GRIPPER_OPENING) {
+      gripper_angle -= 1.0f; /* Opening speed: 1.0 deg per 10ms */
+      if (gripper_angle < 0.0f) {
+        gripper_angle = 0.0f;
+        gripper_state = GRIPPER_IDLE;
+      }
+    }
+
     Set_Servo_Angle(0, servo_deg[1]);
     Set_Servo_Angle(1, servo_deg[2]);
     Set_Servo_Angle(2, servo_deg[3]);
     Set_Servo_Angle(3, servo_deg[4]);
     Set_Servo_Angle(4, servo_deg[5]);
+    Set_Servo_Angle(5, gripper_angle); /* Command the gripper servo */
 
     HAL_Delay(10);
 
@@ -1019,6 +1076,18 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
       dbg_rx_len++;
       return;
     }
+    uint8_t action = payload[0];
+    if (action == 1) { /* grip */
+      gripper_state = GRIPPER_CLOSING;
+    } else if (action == 0) { /* release */
+      gripper_state = GRIPPER_OPENING;
+    } else if (action == 2) { /* toggle */
+      if (gripper_state == GRIPPER_CLOSING || gripper_angle > 90.0f) {
+        gripper_state = GRIPPER_OPENING;
+      } else {
+        gripper_state = GRIPPER_CLOSING;
+      }
+    }
     arm_last_seq = seq;
     dbg_rx_ok++;
     break;
@@ -1045,54 +1114,69 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
         dbg_rx_last_line[sizeof(dbg_rx_last_line) - 1] = '\0';
         dbg_rx_line_count++;
 
-        // Check checksum
-        char *star = strchr((char *)rx_buffer, '*');
-        if (star != NULL) {
-          *star = '\0';
-          char *checksum_str = star + 1;
+        if (strcmp((char *)rx_buffer, "R:GRIP") == 0 || strcmp((char *)rx_buffer, "L:GRIP") == 0) {
+          gripper_state = GRIPPER_CLOSING;
+          dbg_rx_ok++;
+          rx_index = 0;
+        } else if (strcmp((char *)rx_buffer, "R:RELEASE") == 0 || strcmp((char *)rx_buffer, "L:RELEASE") == 0) {
+          gripper_state = GRIPPER_OPENING;
+          dbg_rx_ok++;
+          rx_index = 0;
+        } else {
+          // Check checksum
+          char *star = strchr((char *)rx_buffer, '*');
+          if (star != NULL) {
+            *star = '\0';
+            char *checksum_str = star + 1;
 
-          uint8_t calc_sum = 0;
-          for (char *c_ptr = (char *)rx_buffer; c_ptr < star; c_ptr++) {
-            calc_sum ^= (uint8_t)(*c_ptr);
-          }
+            uint8_t calc_sum = 0;
+            for (char *c_ptr = (char *)rx_buffer; c_ptr < star; c_ptr++) {
+              calc_sum ^= (uint8_t)(*c_ptr);
+            }
 
-          unsigned int rx_sum = 0;
-          if (sscanf(checksum_str, "%2X", &rx_sum) == 1) {
-            if (calc_sum == (uint8_t)rx_sum) {
-#if defined(ARM_LEFT) || (ARM_PROTO_MY_ADDR == 0x02u)
-              const char *prefix = "L:";
-#else
-              const char *prefix = "R:";
-#endif
-              if (strncmp((char *)rx_buffer, prefix, 2) == 0) {
-                int q[6];
-                if (sscanf((char *)rx_buffer + 2, "%d,%d,%d,%d,%d,%d", &q[0],
-                           &q[1], &q[2], &q[3], &q[4], &q[5]) == 6) {
+            unsigned int rx_sum = 0;
+            if (sscanf(checksum_str, "%2X", &rx_sum) == 1) {
+              if (calc_sum == (uint8_t)rx_sum) {
+                if (strcmp((char *)rx_buffer, "R:GRIP") == 0 || strcmp((char *)rx_buffer, "L:GRIP") == 0) {
+                  gripper_state = GRIPPER_CLOSING;
                   dbg_rx_ok++;
-//                  for (int i = 0; i < 6; i++) {
-//                    servo_deg[i] = (float)q[i] / 100.0f;
-//                  }
-                  servo_deg[1] =-(float)q[1] / 100.0f+90;
-                  servo_deg[2] = (float)q[2] / 100.0f+35;
-                  servo_deg[3] = 65.0f-(float)q[3] / 100.0f;
-                  servo_deg[4] = -(float)q[4] / 100.0f+90;
-                  servo_deg[5] = (float)q[5] / 100.0f+96.43;
+                } else if (strcmp((char *)rx_buffer, "R:RELEASE") == 0 || strcmp((char *)rx_buffer, "L:RELEASE") == 0) {
+                  gripper_state = GRIPPER_OPENING;
+                  dbg_rx_ok++;
                 } else {
-                  dbg_rx_len++;
+#if defined(ARM_LEFT) || (ARM_PROTO_MY_ADDR == 0x02u)
+                  const char *prefix = "L:";
+#else
+                  const char *prefix = "R:";
+#endif
+                  if (strncmp((char *)rx_buffer, prefix, 2) == 0) {
+                    int q[6];
+                    if (sscanf((char *)rx_buffer + 2, "%d,%d,%d,%d,%d,%d", &q[0],
+                               &q[1], &q[2], &q[3], &q[4], &q[5]) == 6) {
+                      dbg_rx_ok++;
+                      servo_deg[1] =-(float)q[1] / 100.0f+90;
+                      servo_deg[2] = (float)q[2] / 100.0f+35;
+                      servo_deg[3] = 65.0f-(float)q[3] / 100.0f;
+                      servo_deg[4] = -(float)q[4] / 100.0f+90;
+                      servo_deg[5] = (float)q[5] / 100.0f+96.43;
+                    } else {
+                      dbg_rx_len++;
+                    }
+                  } else {
+                    dbg_rx_bad_prefix++;
+                  }
                 }
               } else {
-                dbg_rx_bad_prefix++;
+                dbg_rx_crc++;
               }
             } else {
-              dbg_rx_crc++;
+              dbg_rx_bad_hex++;
             }
           } else {
-            dbg_rx_bad_hex++;
+            dbg_rx_no_star++;
           }
-        } else {
-          dbg_rx_no_star++;
+          rx_index = 0;
         }
-        rx_index = 0;
       }
     } else {
       if (rx_index < sizeof(rx_buffer) - 1) {

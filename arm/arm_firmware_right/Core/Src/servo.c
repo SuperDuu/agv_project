@@ -58,7 +58,7 @@ void Set_Servo_Angle(uint8_t index, float angle) {
     if (index <= 2) {
         // Apply 5:7 gearbox scaling: servo_angle = joint_angle * 7 / 5
         target_angle = angle * 7.0f / 5.0f;
-    } else if (index == 4) {
+    } else if (index == 5) {
         // Apply 2:3 gearbox scaling: servo_angle = joint_angle * 3 / 2
         target_angle = angle * 3.0f / 2.0f;
     } else {
