@@ -2593,6 +2593,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // 5. Retract fully to the startup home pose before coming back
         keyframes.add(new double[][] { highHoverRight, leftClear });
         keyframes.add(new double[][] { highEntryRight, leftClear });
+        int homePauseFrame = keyframes.size();
         keyframes.add(new double[][] { homeRight, homeLeft });
 
         // 6. Return to the high chair to pick it up again
@@ -2657,6 +2658,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         plan.customDelays.put(postGripFrame1, 2000);
         plan.customDelays.put(preReleaseFrame1, 3000);
         plan.customDelays.put(postReleaseFrame1, 2000);
+        plan.customDelays.put(homePauseFrame, 2000);
         plan.customDelays.put(preGripFrame2, 3000);
         plan.customDelays.put(postGripFrame2, 2000);
         plan.customDelays.put(preReleaseFrame2, 3000);
