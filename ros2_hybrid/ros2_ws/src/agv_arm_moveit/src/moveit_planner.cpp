@@ -17,71 +17,77 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-// Resample a trajectory to a constant time step (e.g. 0.03s)
-std::vector<std::vector<double>> resample_trajectory(
+// Resample a geometric joint trajectory to a constant number of steps using chord-length parameterization
+std::vector<std::vector<double>> resample_geometric_path(
     const trajectory_msgs::msg::JointTrajectory& traj,
-    double dt = 0.03)
+    int steps)
 {
   std::vector<std::vector<double>> resampled;
   if (traj.points.empty()) return resampled;
-  
-  double total_time = rclcpp::Duration(traj.points.back().time_from_start).seconds();
-  double current_time = 0.0;
-  
-  size_t idx = 0;
-  while (current_time <= total_time) {
-    // Find the interval [idx, idx+1] containing current_time
-    while (idx < traj.points.size() - 1 && 
-           rclcpp::Duration(traj.points[idx + 1].time_from_start).seconds() < current_time) {
+  if (traj.points.size() == 1 || steps <= 0) {
+    std::vector<double> joints;
+    for (double val : traj.points.back().positions) {
+      joints.push_back(val * 180.0 / M_PI);
+    }
+    for (int i = 0; i < steps; ++i) {
+      resampled.push_back(joints);
+    }
+    return resampled;
+  }
+
+  // Convert all points to degrees
+  std::vector<std::vector<double>> path;
+  for (const auto& pt : traj.points) {
+    std::vector<double> joints;
+    for (double val : pt.positions) {
+      joints.push_back(val * 180.0 / M_PI);
+    }
+    path.push_back(joints);
+  }
+
+  // Compute cumulative distances in joint space (chord-length)
+  std::vector<double> d(path.size(), 0.0);
+  for (size_t i = 1; i < path.size(); ++i) {
+    double dist = 0.0;
+    for (size_t j = 0; j < path[i].size(); ++j) {
+      double diff = path[i][j] - path[i-1][j];
+      dist += diff * diff;
+    }
+    d[i] = d[i-1] + std::sqrt(dist);
+  }
+
+  double D = d.back();
+  if (D < 1e-6) {
+    // Start and goal are identical, return duplicate points
+    for (int k = 1; k <= steps; ++k) {
+      resampled.push_back(path.back());
+    }
+    return resampled;
+  }
+
+  for (int k = 1; k <= steps; ++k) {
+    double t = D * (static_cast<double>(k) / steps);
+    size_t idx = 0;
+    while (idx < d.size() - 1 && d[idx + 1] < t) {
       idx++;
     }
-    
-    if (idx >= traj.points.size() - 1) {
-      std::vector<double> joints;
-      for (double val : traj.points.back().positions) {
-        joints.push_back(val * 180.0 / M_PI); // Convert to degrees
-      }
-      resampled.push_back(joints);
-      break;
+    if (idx >= d.size() - 1) {
+      resampled.push_back(path.back());
+      continue;
     }
+    double t0 = d[idx];
+    double t1 = d[idx + 1];
+    double ratio = (t - t0) / (t1 - t0);
     
-    double t0 = rclcpp::Duration(traj.points[idx].time_from_start).seconds();
-    double t1 = rclcpp::Duration(traj.points[idx + 1].time_from_start).seconds();
-    double ratio = (current_time - t0) / (t1 - t0);
-    
-    std::vector<double> joints;
-    for (size_t j = 0; j < traj.points[idx].positions.size(); ++j) {
-      double p0 = traj.points[idx].positions[j];
-      double p1 = traj.points[idx + 1].positions[j];
-      double p_interp = p0 + (p1 - p0) * ratio;
-      joints.push_back(p_interp * 180.0 / M_PI); // Convert to degrees
+    std::vector<double> interp;
+    for (size_t j = 0; j < path[idx].size(); ++j) {
+      double p0 = path[idx][j];
+      double p1 = path[idx + 1][j];
+      interp.push_back(p0 + (p1 - p0) * ratio);
     }
-    resampled.push_back(joints);
-    
-    current_time += dt;
+    resampled.push_back(interp);
   }
   return resampled;
-}
-
-// Compute the horizontal orientation target (at lowHover/lowPick)
-geometry_msgs::msg::Quaternion get_tool0_orientation_at_joints(
-    moveit::core::RobotStatePtr kinematic_state,
-    const moveit::core::JointModelGroup* joint_model_group,
-    const std::vector<double>& joint_positions_deg)
-{
-  std::vector<double> joint_positions_rad;
-  for (double val : joint_positions_deg) {
-    joint_positions_rad.push_back(val * M_PI / 180.0);
-  }
-  kinematic_state->setJointGroupPositions(joint_model_group, joint_positions_rad);
-  const Eigen::Isometry3d& end_effector_state = kinematic_state->getGlobalLinkTransform("right_tool0");
-  Eigen::Quaterniond q(end_effector_state.rotation());
-  geometry_msgs::msg::Quaternion q_msg;
-  q_msg.x = q.x();
-  q_msg.y = q.y();
-  q_msg.z = q.z();
-  q_msg.w = q.w();
-  return q_msg;
 }
 
 int main(int argc, char** argv)
@@ -165,38 +171,38 @@ int main(int argc, char** argv)
   const moveit::core::JointModelGroup* joint_model_group = move_group.getRobotModel()->getJointModelGroup("right_arm");
   const moveit::core::JointModelGroup* left_joint_group = move_group.getRobotModel()->getJointModelGroup("left_arm");
   
-  // Define sequence segments
+  // Define sequence segments and their target step sizes matching Java
   struct Segment {
     std::string name;
     std::vector<double> start_joints;
     std::vector<double> target_joints;
-    bool use_constraints;
+    int steps;
   };
 
   std::vector<Segment> segments = {
-    {"HOME -> lowHover", HOME, lowHover, false},
-    {"lowHover -> lowPick", lowHover, lowPick, false},
-    {"lowPick -> lowHover", lowPick, lowHover, false},
-    {"lowHover -> lowExit", lowHover, lowExit, false},
-    {"lowExit -> highHover", lowExit, highHover, false},
-    {"highHover -> highPlace", highHover, highPlace, false},
-    {"highPlace -> highHover", highPlace, highHover, false},
-    {"highHover -> centerExit", highHover, centerExit, false},
-    {"centerExit -> flatHome", centerExit, flatHome, false},
-    {"flatHome -> HOME", flatHome, HOME, false},
-    // Second round (HOME -> highPlace -> lowPick -> HOME)
-    {"HOME -> flatHome", HOME, flatHome, false},
-    {"flatHome -> centerExit", flatHome, centerExit, false},
-    {"centerExit -> highHover", centerExit, highHover, false},
-    {"highHover -> highPlace", highHover, highPlace, false},
-    {"highPlace -> highHover", highPlace, highHover, false},
-    {"highHover -> centerExit", highHover, centerExit, false},
-    {"centerExit -> lowExit", centerExit, lowExit, false},
-    {"lowExit -> lowHover", lowExit, lowHover, false},
-    {"lowHover -> lowPick", lowHover, lowPick, false},
-    {"lowPick -> lowHover", lowPick, lowHover, false},
-    {"lowHover -> flatHome", lowHover, flatHome, false},
-    {"flatHome -> HOME", flatHome, HOME, false}
+    {"HOME -> lowHover", HOME, lowHover, 12},
+    {"lowHover -> lowPick", lowHover, lowPick, 6},
+    {"lowPick -> lowHover", lowPick, lowHover, 6},
+    {"lowHover -> lowExit", lowHover, lowExit, 16},
+    {"lowExit -> highHover", lowExit, highHover, 32},
+    {"highHover -> highPlace", highHover, highPlace, 3},
+    {"highPlace -> highHover", highPlace, highHover, 3},
+    {"highHover -> centerExit", highHover, centerExit, 24},
+    {"centerExit -> flatHome", centerExit, flatHome, 12},
+    {"flatHome -> HOME", flatHome, HOME, 12},
+    // Second round
+    {"HOME -> flatHome", HOME, flatHome, 12},
+    {"flatHome -> centerExit", flatHome, centerExit, 12},
+    {"centerExit -> highHover", centerExit, highHover, 24},
+    {"highHover -> highPlace", highHover, highPlace, 3},
+    {"highPlace -> highHover", highPlace, highHover, 3},
+    {"highHover -> centerExit", highHover, centerExit, 24},
+    {"centerExit -> lowExit", centerExit, lowExit, 16},
+    {"lowExit -> lowHover", lowExit, lowHover, 16},
+    {"lowHover -> lowPick", lowHover, lowPick, 6},
+    {"lowPick -> lowHover", lowPick, lowHover, 6},
+    {"lowHover -> flatHome", lowHover, flatHome, 12},
+    {"flatHome -> HOME", flatHome, HOME, 12}
   };
 
   std::vector<std::vector<double>> full_trajectory;
@@ -215,7 +221,7 @@ int main(int argc, char** argv)
     }
     start_state.setJointGroupPositions(joint_model_group, start_rad);
     
-    // Set left arm joints to tucked flat Q1 hold pose (keeping left q1 synchronized with right q1)
+    // Set left arm joints to tucked flat Q1 hold pose
     std::vector<double> left_rad = {
       seg.start_joints[0] * M_PI / 180.0,
       -10.0 * M_PI / 180.0,
@@ -245,8 +251,8 @@ int main(int argc, char** argv)
       break;
     }
 
-    // Resample trajectory at 0.03s interval
-    auto resampled = resample_trajectory(plan.trajectory.joint_trajectory, 0.03);
+    // Resample trajectory to specified steps geometrically
+    auto resampled = resample_geometric_path(plan.trajectory.joint_trajectory, seg.steps);
     full_trajectory.insert(full_trajectory.end(), resampled.begin(), resampled.end());
   }
 
