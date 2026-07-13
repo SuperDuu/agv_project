@@ -2681,10 +2681,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         plan.passThroughIndices.add(highEntryToLowFrame);
         plan.passThroughIndices.add(lowEntryToLowFrame);
         plan.passThroughIndices.add(lowApproachToLowFrame);
+        plan.customDelays.put(preGripFrame1, 2000);
         plan.customDelays.put(postGripFrame1, 5000);
         plan.customDelays.put(preReleaseFrame1, 3000);
         plan.customDelays.put(postReleaseFrame1, 2000);
         plan.customDelays.put(homePauseFrame, 2000);
+        plan.customDelays.put(preGripFrame2, 2000);
         plan.customDelays.put(postGripFrame2, 5000);
         plan.customDelays.put(preReleaseFrame2, 3000);
         plan.customDelays.put(postReleaseFrame2, 2000);
