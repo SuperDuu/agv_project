@@ -163,6 +163,7 @@ int main(int argc, char** argv)
 
   moveit::core::RobotStatePtr kinematic_state = move_group.getCurrentState();
   const moveit::core::JointModelGroup* joint_model_group = move_group.getRobotModel()->getJointModelGroup("right_arm");
+  const moveit::core::JointModelGroup* left_joint_group = move_group.getRobotModel()->getJointModelGroup("left_arm");
   
   // Define sequence segments
   struct Segment {
@@ -206,11 +207,25 @@ int main(int argc, char** argv)
     
     // Set start state
     moveit::core::RobotState start_state(*move_group.getCurrentState());
+    
+    // Set right arm joints
     std::vector<double> start_rad;
     for (double val : seg.start_joints) {
       start_rad.push_back(val * M_PI / 180.0);
     }
     start_state.setJointGroupPositions(joint_model_group, start_rad);
+    
+    // Set left arm joints to tucked flat Q1 hold pose (keeping left q1 synchronized with right q1)
+    std::vector<double> left_rad = {
+      seg.start_joints[0] * M_PI / 180.0,
+      -10.0 * M_PI / 180.0,
+      -45.0 * M_PI / 180.0,
+      58.0 * M_PI / 180.0,
+      18.0 * M_PI / 180.0,
+      18.0 * M_PI / 180.0
+    };
+    start_state.setJointGroupPositions(left_joint_group, left_rad);
+    
     move_group.setStartState(start_state);
 
     // Set goal
