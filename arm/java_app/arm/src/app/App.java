@@ -115,7 +115,7 @@ public class App {
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             return false;
-        }
+        }  
     }
 
     private static boolean isWindows() {
