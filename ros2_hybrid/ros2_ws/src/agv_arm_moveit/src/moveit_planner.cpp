@@ -314,21 +314,27 @@ int main(int argc, char** argv)
 
     RCLCPP_INFO(node->get_logger(), "CSV trajectory written to %s", csv_path.c_str());
 
+    const double flat_tilt_tolerance_deg = 2.0;
+    const bool flat_constraint_ok = max_tilt <= flat_tilt_tolerance_deg;
+
     // Generate MD report
     std::ofstream report_file(report_path);
     report_file << "# MoveIt2 Flat Q1 Chair Demo Audit\n\n"
                 << "- label: `moveitFlatQ1ChairRight`\n"
-                << "- valid: `true`\n"
+                << "- valid: `" << (flat_constraint_ok ? "true" : "false") << "`\n"
                 << "- frames: `" << full_trajectory.size() << "`\n"
                 << "- max_tilt_deg: `" << max_tilt << "`\n"
+                << "- flat_tilt_tolerance_deg: `" << flat_tilt_tolerance_deg << "`\n"
                 << "- max_joint_jump_deg: `" << max_joint_jump << "`\n"
                 << "- home_start_end: `true`\n"
                 << "- OMPL_planner: `RRTConnect`\n"
                 << "- OrientationConstraint: `Disabled`\n"
                 << "- CollisionObjects: `2 Chairs (low/high)`\n\n"
                 << "## Trajectory Summary\n"
-                << "MoveIt2 successfully computed a collision-free path that satisfies the horizontal gripper constraints during the transfer phase. "
-                << "The gripper tilt remained within target tolerance, and the arms avoided any collision with the physical chairs or the robot body.\n";
+                << "MoveIt2 computed a collision-free joint-space path around the chairs, but this run does not satisfy "
+                << "the horizontal gripper constraint when max_tilt_deg is above flat_tilt_tolerance_deg. "
+                << "Keep the Java analytical flat-manifold trajectory for the live demo unless MoveIt2 is changed to use "
+                << "strict orientation/path constraints or a custom state constraint that enforces q2/q6 as functions of q5 and q3+q4.\n";
     report_file.close();
 
     RCLCPP_INFO(node->get_logger(), "Report written to %s", report_path.c_str());
