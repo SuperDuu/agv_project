@@ -2797,8 +2797,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(new double[][] { HOME_ANGLES_RIGHT.clone(), HOME_ANGLES_LEFT.clone() });
         appendLinearDualArmPath(keyframes, HOME_ANGLES_RIGHT, HOME_ANGLES_LEFT,
-                flatHome, makeFlatQ1HoldPose(flatHome), 24);
-        appendFlatQ1ChairPath(keyframes, flatHome, lowHover, 24);
+                flatHome, makeFlatQ1HoldPose(flatHome), 12);
+        int firstFlatStartFrame = keyframes.size();
+        appendFlatQ1ChairPath(keyframes, flatHome, lowHover, 12);
 
         int preGripFrame1 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(lowPick));
@@ -2807,9 +2808,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postGripFrame1 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(lowPick));
 
-        appendFlatQ1ChairPath(keyframes, lowPick, lowHover, 12);
-        appendFlatQ1ChairPath(keyframes, lowHover, lowExit, 32);
-        appendFlatQ1ChairPath(keyframes, lowExit, highHover, 64);
+        appendFlatQ1ChairPath(keyframes, lowPick, lowHover, 6);
+        appendFlatQ1ChairPath(keyframes, lowHover, lowExit, 16);
+        appendFlatQ1ChairPath(keyframes, lowExit, highHover, 32);
 
         int preReleaseFrame1 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(highPlace));
@@ -2818,19 +2819,19 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postReleaseFrame1 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(highPlace));
 
-        appendFlatQ1ChairPath(keyframes, highPlace, lowExit, 64);
-        appendFlatQ1ChairPath(keyframes, lowExit, lowHover, 32);
-        appendFlatQ1ChairPath(keyframes, lowHover, flatHome, 24);
+        appendFlatQ1ChairPath(keyframes, highPlace, lowExit, 32);
+        appendFlatQ1ChairPath(keyframes, lowExit, lowHover, 16);
+        appendFlatQ1ChairPath(keyframes, lowHover, flatHome, 12);
         int firstFlatEndFrame = keyframes.size();
         appendLinearDualArmPath(keyframes, flatHome, makeFlatQ1HoldPose(flatHome),
-                HOME_ANGLES_RIGHT, HOME_ANGLES_LEFT, 24);
+                HOME_ANGLES_RIGHT, HOME_ANGLES_LEFT, 12);
         int homePauseFrame = keyframes.size() - 1;
         appendLinearDualArmPath(keyframes, HOME_ANGLES_RIGHT, HOME_ANGLES_LEFT,
-                flatHome, makeFlatQ1HoldPose(flatHome), 24);
+                flatHome, makeFlatQ1HoldPose(flatHome), 12);
         int secondFlatStartFrame = keyframes.size();
-        appendFlatQ1ChairPath(keyframes, flatHome, lowHover, 24);
-        appendFlatQ1ChairPath(keyframes, lowHover, lowExit, 32);
-        appendFlatQ1ChairPath(keyframes, lowExit, highHover, 64);
+        appendFlatQ1ChairPath(keyframes, flatHome, lowHover, 12);
+        appendFlatQ1ChairPath(keyframes, lowHover, lowExit, 16);
+        appendFlatQ1ChairPath(keyframes, lowExit, highHover, 32);
 
         int preGripFrame2 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(highPlace));
@@ -2839,8 +2840,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postGripFrame2 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(highPlace));
 
-        appendFlatQ1ChairPath(keyframes, highPlace, lowExit, 64);
-        appendFlatQ1ChairPath(keyframes, lowExit, lowHover, 32);
+        appendFlatQ1ChairPath(keyframes, highPlace, lowExit, 32);
+        appendFlatQ1ChairPath(keyframes, lowExit, lowHover, 16);
 
         int preReleaseFrame2 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(lowPick));
@@ -2849,11 +2850,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postReleaseFrame2 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(lowPick));
 
-        appendFlatQ1ChairPath(keyframes, lowPick, lowHover, 12);
-        appendFlatQ1ChairPath(keyframes, lowHover, flatHome, 24);
+        appendFlatQ1ChairPath(keyframes, lowPick, lowHover, 6);
+        appendFlatQ1ChairPath(keyframes, lowHover, flatHome, 12);
         int secondFlatEndFrame = keyframes.size();
         appendLinearDualArmPath(keyframes, flatHome, makeFlatQ1HoldPose(flatHome),
-                HOME_ANGLES_RIGHT, HOME_ANGLES_LEFT, 24);
+                HOME_ANGLES_RIGHT, HOME_ANGLES_LEFT, 12);
 
         java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
         String validationLabel = "flatQ1ChairRight";
@@ -2865,7 +2866,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             valid = false;
         }
         int[][] flatRanges = {
-                { 25, firstFlatEndFrame },
+                { firstFlatStartFrame, firstFlatEndFrame },
                 { secondFlatStartFrame, secondFlatEndFrame }
         };
         valid &= validateFlatQ1ChairDemo(validationLabel, frames, scene, 8, flatRanges);
@@ -2886,6 +2887,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         plan.customDelays.put(postGripFrame2, 3000);
         plan.customDelays.put(preReleaseFrame2, 2000);
         plan.customDelays.put(postReleaseFrame2, 3000);
+        markPassThroughFrames(plan, frames.size(),
+                preGripFrame1, gripFrame1, postGripFrame1,
+                preReleaseFrame1, releaseFrame1, postReleaseFrame1,
+                homePauseFrame,
+                preGripFrame2, gripFrame2, postGripFrame2,
+                preReleaseFrame2, releaseFrame2, postReleaseFrame2);
         return plan;
     }
 
@@ -2919,6 +2926,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 left[j] = lerp(startLeft[j], endLeft[j], t);
             }
             frames.add(new double[][] { right, left });
+        }
+    }
+
+    private void markPassThroughFrames(DualDemoPlan plan, int frameCount, int... stopFrames) {
+        java.util.Set<Integer> stops = new java.util.HashSet<>();
+        for (int frame : stopFrames) {
+            stops.add(frame);
+        }
+        for (int i = 1; i < frameCount - 1; i++) {
+            if (!stops.contains(i)) {
+                plan.passThroughIndices.add(i);
+            }
         }
     }
 
@@ -3104,11 +3123,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             int midHome = homeFrames.get(1);
             int lastHome = homeFrames.get(homeFrames.size() - 1);
             return new int[][] {
-                    { 25, Math.max(25, midHome - 23) },
-                    { Math.min(frames.size(), midHome + 25), Math.max(0, lastHome - 23) }
+                    { 13, Math.max(13, midHome - 11) },
+                    { Math.min(frames.size(), midHome + 13), Math.max(0, lastHome - 11) }
             };
         }
-        return new int[][] { { 25, Math.max(25, frames.size() - 25) } };
+        return new int[][] { { 13, Math.max(13, frames.size() - 13) } };
     }
 
     private boolean samePose(double[] a, double[] b, double toleranceDeg) {
