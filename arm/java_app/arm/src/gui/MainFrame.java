@@ -2535,8 +2535,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
         double[] lowApproachRight = { sharedQ1, 40.0, 80.0, -75.0, -90.0, 16.0 };
 
-        double[] highPlaceRight = { sharedQ1, 34.0, 70.0, -43.0, -90.0, 28.0 };
-        double[] highHoverRight = { sharedQ1, 38.0, 78.0, -49.0, -90.0, 32.0 };
+        double[] highPlaceRight = { sharedQ1, 40.0, 68.0, -27.0, -90.0, 24.0 };
+        double[] highHoverRight = { sharedQ1, 44.0, 76.0, -33.0, -90.0, 24.0 };
 
         double[] foldedHomeRight = { sharedQ1, 0.0, 120.0, -90.0, 0.0, -52.0 };
         double[] retreatRight = highHoverRight.clone();
@@ -2598,7 +2598,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { homeRight, homeLeft });
 
         double[] lowPickCoord = armPanel.computeFK(sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0, true);
-        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, 34.0, 70.0, -43.0, -90.0, 28.0, true);
+        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, 40.0, 68.0, -27.0, -90.0, 24.0, true);
         double lowChairHeight = lowPickCoord[2] - 5.0;
         double highChairHeight = highPlaceCoord[2] - 5.0;
         ChairDemoScene scene = new ChairDemoScene(
