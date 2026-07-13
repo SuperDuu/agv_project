@@ -115,6 +115,8 @@ def add_arm(robot, config, side):
         [0.0, 1.0, 0.0],
         [1.0, 0.0, 0.0],
     ]
+    if not is_right:
+        axes[5] = [-1.0, 0.0, 0.0]
 
     for index in range(6):
         link_name = f"{prefix}_link_{index + 1}"

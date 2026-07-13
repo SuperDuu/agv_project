@@ -49,14 +49,14 @@ class AgvArmPlanner(Node):
             self.get_logger().info(f"Loaded geometry from {config_path}")
         except Exception as exc:
             self.get_logger().warn(f"Failed to load yaml config ({exc}). Using prototype fallbacks.")
-            self.L0 = 120.0
-            self.L1 = 5.0
-            self.L2 = 10.0
-            self.L3 = 10.0
+            self.L0 = 130.0
+            self.L1 = 0.0
+            self.L2 = 32.0
+            self.L3 = 0.0
             self.L4 = 20.0
-            self.L5 = 20.0
-            self.L6 = 10.0
-            self.L7 = 10.0
+            self.L5 = 25.0
+            self.L6 = 0.0
+            self.L7 = 15.0
 
     def get_mdh_matrix(self, alpha, d, a, offset, q):
         theta = q + offset
@@ -81,13 +81,14 @@ class AgvArmPlanner(Node):
 
     def compute_fk(self, q, is_right):
         d2 = (self.L2 + self.L3) if is_right else -(self.L2 + self.L3)
+        q6_kinematic = q[5] if is_right else -q[5]
         params = [
             (0.0, self.L1 + self.L0, 0.0, -math.pi / 2, q[0]),
             (-math.pi / 2, d2, 0.0, -math.pi / 2, q[1]),
             (-math.pi / 2, 0.0, 0.0, -math.pi, q[2]),
             (0.0, 0.0, self.L4, -math.pi / 2, q[3]),
             (-math.pi / 2, self.L5 + self.L6, 0.0, 0.0, q[4]),
-            (-math.pi / 2, 0.0, 0.0, 0.0, q[5])
+            (-math.pi / 2, 0.0, 0.0, 0.0, q6_kinematic)
         ]
         T = np.eye(4)
         for alpha, d, a, offset, qi in params:
@@ -97,13 +98,14 @@ class AgvArmPlanner(Node):
 
     def compute_jacobian(self, q, is_right):
         d2 = (self.L2 + self.L3) if is_right else -(self.L2 + self.L3)
+        q6_kinematic = q[5] if is_right else -q[5]
         params = [
             (0.0, self.L1 + self.L0, 0.0, -math.pi / 2, q[0]),
             (-math.pi / 2, d2, 0.0, -math.pi / 2, q[1]),
             (-math.pi / 2, 0.0, 0.0, -math.pi, q[2]),
             (0.0, 0.0, self.L4, -math.pi / 2, q[3]),
             (-math.pi / 2, self.L5 + self.L6, 0.0, 0.0, q[4]),
-            (-math.pi / 2, 0.0, 0.0, 0.0, q[5])
+            (-math.pi / 2, 0.0, 0.0, 0.0, q6_kinematic)
         ]
         T = np.eye(4)
         z0 = []
@@ -118,7 +120,10 @@ class AgvArmPlanner(Node):
                 [0.0, 0.0, 0.0, 1.0]
             ])
             T_i_prime = T @ RxTx
-            z0.append(T_i_prime[0:3, 2])
+            joint_axis = T_i_prime[0:3, 2].copy()
+            if not is_right and len(z0) == 5:
+                joint_axis = -joint_axis
+            z0.append(joint_axis)
             p0.append(T_i_prime[0:3, 3])
 
             theta = qi + offset
@@ -178,10 +183,10 @@ class AgvArmPlanner(Node):
         q = np.array([math.radians(deg) for deg in q_init_deg])
 
         if is_right:
-            min_lim = np.array([math.radians(deg) for deg in [-45, -90, 20, -95, -90, -90]])
+            min_lim = np.array([math.radians(deg) for deg in [-45, -90, 20, -95, -90, 0]])
             max_lim = np.array([math.radians(deg) for deg in [45, 90, 165, -15, 90, 90]])
         else:
-            min_lim = np.array([math.radians(deg) for deg in [-45, -90, -165, 15, -90, -90]])
+            min_lim = np.array([math.radians(deg) for deg in [-45, -90, -165, 15, -90, 0]])
             max_lim = np.array([math.radians(deg) for deg in [45, 90, -20, 95, 90, 90]])
 
         T_target = np.eye(4)
