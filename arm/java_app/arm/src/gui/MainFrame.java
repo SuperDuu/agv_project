@@ -2270,6 +2270,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final java.util.Set<Integer> rightReleaseIndices = new java.util.HashSet<>();
         final java.util.Set<Integer> leftReleaseIndices = new java.util.HashSet<>();
         final java.util.Set<Integer> rightReleaseHighIndices = new java.util.HashSet<>();
+        final java.util.Set<Integer> passThroughIndices = new java.util.HashSet<>();
         final java.util.Map<Integer, Integer> customDelays = new java.util.HashMap<>();
 
         DualDemoPlan(java.util.List<double[][]> frames,
@@ -2534,6 +2535,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] lowPickRight = { sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0 };
         double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
         double[] lowApproachRight = { sharedQ1, 40.0, 80.0, -75.0, -90.0, 16.0 };
+        double[] centerCarryRight = { sharedQ1, -1.0, 114.0, -67.0, -90.0, 0.0 };
 
         double[] highPlaceRight = { sharedQ1, -66.0, 35.0, -39.0, -90.0, 3.0 };
         double[] highHoverRight = { sharedQ1, -70.0, 45.0, -51.0, -90.0, 11.0 };
@@ -2545,6 +2547,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 || !logDemoPoseOk("chairLeftClear", leftClear, false)
                 || !logDemoPoseOk("chairFoldedHomeRight", foldedHomeRight, true)
                 || !logDemoPoseOk("chairLowApproachRight", lowApproachRight, true)
+                || !logDemoPoseOk("chairCenterCarryRight", centerCarryRight, true)
                 || !logDemoPoseOk("chairLowHoverRight", lowHoverRight, true)
                 || !logDemoPoseOk("chairLowPickRight", lowPickRight, true)
                 || !logDemoPoseOk("chairHighHoverRight", highHoverRight, true)
@@ -2569,10 +2572,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postGripFrame1 = keyframes.size();
         keyframes.add(new double[][] { lowPickRight, leftClear });
 
-        // 3. Travel to the far high chair via the folded center pose
+        // 3. Travel to the far high chair via a high carry pose
         keyframes.add(new double[][] { lowHoverRight, leftClear });
+        int lowApproachToHighFrame = keyframes.size();
         keyframes.add(new double[][] { lowApproachRight, leftClear });
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        int centerCarryToHighFrame = keyframes.size();
+        keyframes.add(new double[][] { centerCarryRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
 
         // 4. Place the object on the high chair
@@ -2598,9 +2603,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postGripFrame2 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
 
-        // 7. Travel it back from the far high chair via the folded center pose
+        // 7. Travel it back from the far high chair via a high carry pose
         keyframes.add(new double[][] { highHoverRight, leftClear });
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        int centerCarryToLowFrame = keyframes.size();
+        keyframes.add(new double[][] { centerCarryRight, leftClear });
+        int lowApproachToLowFrame = keyframes.size();
         keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
 
@@ -2636,6 +2643,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 0, 0, 0, 0, scene);
         plan.rightGripIndices.add(gripFrame2);
         plan.rightReleaseIndices.add(releaseFrame2);
+        plan.passThroughIndices.add(lowApproachToHighFrame);
+        plan.passThroughIndices.add(centerCarryToHighFrame);
+        plan.passThroughIndices.add(centerCarryToLowFrame);
+        plan.passThroughIndices.add(lowApproachToLowFrame);
         plan.customDelays.put(preGripFrame1, 3000);
         plan.customDelays.put(postGripFrame1, 2000);
         plan.customDelays.put(preReleaseFrame1, 3000);
@@ -3134,7 +3145,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         }
                         waitingForArrival[0] = true;
                     }
-                    if (isArmAtTarget(true) && isArmAtTarget(false)) {
+                    boolean passThroughFrame = plan.passThroughIndices.contains(currentIndex[0]);
+                    boolean reachedCurrentFrame = passThroughFrame
+                            ? isDualArmNearTarget(3.0)
+                            : isArmAtTarget(true) && isArmAtTarget(false);
+                    if (reachedCurrentFrame) {
                         int reachedFrameIndex = currentIndex[0];
                         boolean rightGripNow = plan.rightGripIndices.contains(reachedFrameIndex);
                         boolean leftGripNow = plan.leftGripIndices.contains(reachedFrameIndex);
@@ -3203,6 +3218,21 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
     private int getDemoEventDelayMs(DualDemoPlan plan, int frameIndex) {
         return plan.customDelays.getOrDefault(frameIndex, 0);
+    }
+
+    private boolean isDualArmNearTarget(double toleranceDeg) {
+        return isArmNearTarget(true, toleranceDeg) && isArmNearTarget(false, toleranceDeg);
+    }
+
+    private boolean isArmNearTarget(boolean isRight, double toleranceDeg) {
+        double[] current = isRight ? anglesRight : anglesLeft;
+        double[] target = isRight ? targetAnglesRight : targetAnglesLeft;
+        for (int i = 0; i < NUM_JOINTS; i++) {
+            if (Math.abs(wrappedDegDiff(target[i], current[i])) > toleranceDeg) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void setDemoGripperState(boolean rightGripped, boolean leftGripped, String statusText) {
