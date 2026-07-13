@@ -34,6 +34,10 @@ bool isWithinLimits(const double thetaDeg[6], bool isRight) {
     return true;
 }
 
+double joint6KinematicAngle(const double q[6], bool isRight) {
+    return isRight ? q[5] : -q[5];
+}
+
 // Helper matrix functions
 void multiply4x4(const double A[4][4], const double B[4][4], double C[4][4]) {
     for (int i = 0; i < 4; i++) {
@@ -70,13 +74,14 @@ void computeFKMatrix(const double q[6], bool isRight, double T[4][4]) {
         }
     }
     double d2 = isRight ? (L2 + L3) : -(L2 + L3);
+    double q6Kinematic = joint6KinematicAngle(q, isRight);
     double params[6][5] = {
         { 0, L1 + L0, 0, -M_PI / 2, q[0] },
         { -M_PI / 2, d2, 0, -M_PI / 2, q[1] },
         { -M_PI / 2, 0, 0, -M_PI, q[2] },
         { 0, 0, L4, -M_PI / 2, q[3] },
         { -M_PI / 2, L5 + L6, 0, 0, q[4] },
-        { -M_PI / 2, 0, 0, 0, q[5] }
+        { -M_PI / 2, 0, 0, 0, q6Kinematic }
     };
     for (int i = 0; i < 6; i++) {
         double MDH[4][4], T_next[4][4];
@@ -181,13 +186,14 @@ void computeJacobianEE(const double q[6], bool isRight, double Je[6][6]) {
         for (int j = 0; j < 4; j++) T[i][j] = (i == j) ? 1.0 : 0.0;
     }
     double d2 = isRight ? (L2 + L3) : -(L2 + L3);
+    double q6Kinematic = joint6KinematicAngle(q, isRight);
     double params[6][5] = {
         { 0, L1 + L0, 0, -M_PI / 2, q[0] },
         { -M_PI / 2, d2, 0, -M_PI / 2, q[1] },
         { -M_PI / 2, 0, 0, -M_PI, q[2] },
         { 0, 0, L4, -M_PI / 2, q[3] },
         { -M_PI / 2, L5 + L6, 0, 0, q[4] },
-        { -M_PI / 2, 0, 0, 0, q[5] }
+        { -M_PI / 2, 0, 0, 0, q6Kinematic }
     };
     double z0[6][3];
     double p0[6][3];
@@ -268,6 +274,11 @@ void computeJacobianEE(const double q[6], bool isRight, double Je[6][6]) {
         Je[3][j] = RT[0][0] * J0[3][j] + RT[0][1] * J0[4][j] + RT[0][2] * J0[5][j];
         Je[4][j] = RT[1][0] * J0[3][j] + RT[1][1] * J0[4][j] + RT[1][2] * J0[5][j];
         Je[5][j] = RT[2][0] * J0[3][j] + RT[2][1] * J0[4][j] + RT[2][2] * J0[5][j];
+    }
+    if (!isRight) {
+        for (int i = 0; i < 6; i++) {
+            Je[i][5] = -Je[i][5];
+        }
     }
 }
 

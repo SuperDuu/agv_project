@@ -177,16 +177,21 @@ public class Kinematics {
         return computeFKMatrix(q, true);
     }
 
+    private static double joint6KinematicAngle(double[] q, boolean isRight) {
+        return isRight ? q[5] : -q[5];
+    }
+
     public static double[][] computeFKMatrix(double[] q, boolean isRight) {
         double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
         double d2 = isRight ? (L2 + L3) : -(L2 + L3);
+        double q6Kinematic = joint6KinematicAngle(q, isRight);
         double[][] params = {
                 { 0, L1 + L0, 0, -Math.PI / 2, q[0] },
                 { -Math.PI / 2, d2, 0, -Math.PI / 2, q[1] },
                 { -Math.PI / 2, 0, 0, -Math.PI, q[2] },
                 { 0, 0, L4, -Math.PI / 2, q[3] },
                 { -Math.PI / 2, L5 + L6, 0, 0, q[4] },
-                { -Math.PI / 2, 0, 0, 0, q[5] }
+                { -Math.PI / 2, 0, 0, 0, q6Kinematic }
         };
         for (int i = 0; i < NUM_JOINTS; i++) {
             T = multiply4x4(T, getMDHMatrix(params[i][0], params[i][1], params[i][2], params[i][3], params[i][4]));
@@ -202,13 +207,14 @@ public class Kinematics {
     public static double[][] computeJacobianEE(double[] q, boolean isRight) {
         double[][] T = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
         double d2 = isRight ? (L2 + L3) : -(L2 + L3);
+        double q6Kinematic = joint6KinematicAngle(q, isRight);
         double[][] params = {
                 { 0, L1 + L0, 0, -Math.PI / 2, q[0] },
                 { -Math.PI / 2, d2, 0, -Math.PI / 2, q[1] },
                 { -Math.PI / 2, 0, 0, -Math.PI, q[2] },
                 { 0, 0, L4, -Math.PI / 2, q[3] },
                 { -Math.PI / 2, L5 + L6, 0, 0, q[4] },
-                { -Math.PI / 2, 0, 0, 0, q[5] }
+                { -Math.PI / 2, 0, 0, 0, q6Kinematic }
         };
 
         double[][] z0 = new double[NUM_JOINTS][3];
@@ -285,6 +291,11 @@ public class Kinematics {
             Je[3][j] = RT[0][0] * J0[3][j] + RT[0][1] * J0[4][j] + RT[0][2] * J0[5][j];
             Je[4][j] = RT[1][0] * J0[3][j] + RT[1][1] * J0[4][j] + RT[1][2] * J0[5][j];
             Je[5][j] = RT[2][0] * J0[3][j] + RT[2][1] * J0[4][j] + RT[2][2] * J0[5][j];
+        }
+        if (!isRight) {
+            for (int i = 0; i < 6; i++) {
+                Je[i][5] = -Je[i][5];
+            }
         }
         return Je;
     }
@@ -618,7 +629,7 @@ public class Kinematics {
         params[5][1] = 0;
         params[5][2] = 0;
         params[5][3] = 0;
-        params[5][4] = q[5];
+        params[5][4] = joint6KinematicAngle(q, isRight);
 
         for (int i = 0; i < NUM_JOINTS; i++) {
             getMDHMatrix(params[i][0], params[i][1], params[i][2], params[i][3], params[i][4], ws.MDH);
@@ -826,7 +837,7 @@ public class Kinematics {
         params[5][1] = 0;
         params[5][2] = 0;
         params[5][3] = 0;
-        params[5][4] = q[5];
+        params[5][4] = joint6KinematicAngle(q, isRight);
 
         for (int i = 0; i < NUM_JOINTS; i++) {
             double alpha = params[i][0];
@@ -926,6 +937,11 @@ public class Kinematics {
             ws.Je[3][j] = ws.RT[0][0] * ws.J0[3][j] + ws.RT[0][1] * ws.J0[4][j] + ws.RT[0][2] * ws.J0[5][j];
             ws.Je[4][j] = ws.RT[1][0] * ws.J0[3][j] + ws.RT[1][1] * ws.J0[4][j] + ws.RT[1][2] * ws.J0[5][j];
             ws.Je[5][j] = ws.RT[2][0] * ws.J0[3][j] + ws.RT[2][1] * ws.J0[4][j] + ws.RT[2][2] * ws.J0[5][j];
+        }
+        if (!isRight) {
+            for (int i = 0; i < 6; i++) {
+                ws.Je[i][5] = -ws.Je[i][5];
+            }
         }
     }
 
