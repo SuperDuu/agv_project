@@ -127,7 +127,7 @@ public class App {
     }
 
     private static String getJSerialCommNativeName() {
-        if (isWindows()) {
+        if (isWindows()) {  
             return "jSerialComm.dll";
         }
         if (isMac()) {
