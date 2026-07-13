@@ -166,23 +166,6 @@ public class UartManager {
     }
 
     /**
-     * Builds a Protocol V2.1 Arm Gripper Command frame (CMD = 0x21, 4-byte payload).
-     *
-     * Payload layout:
-     *   [0] grip_action: 0=release, 1=grip, 2=toggle
-     *   [1..3] reserved = 0
-     */
-    public byte[] buildArmGripperFrame(int dest, int gripAction) {
-        ByteBuffer payload = ByteBuffer.allocate(4);
-        payload.order(ByteOrder.LITTLE_ENDIAN);
-        payload.put((byte) (gripAction & 0xFF));
-        payload.put((byte) 0);
-        payload.put((byte) 0);
-        payload.put((byte) 0);
-        return buildFrame(dest, CMD_ARM_GRIPPER, payload.array());
-    }
-
-    /**
      * Converts a floating-point degree value to int16 x100 fixed-point,
      * using round-half-up (not truncation).
      */

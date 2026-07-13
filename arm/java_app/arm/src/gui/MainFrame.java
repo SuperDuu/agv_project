@@ -3313,9 +3313,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (uartManager == null || !uartManager.isConnected()) {
             return;
         }
-        int dest = rightArm ? comm.UartManager.ADDR_ARM_RIGHT : comm.UartManager.ADDR_ARM_LEFT;
-        int action = gripped ? 1 : 0;
-        uartManager.sendBytes(uartManager.buildArmGripperFrame(dest, action));
         uartManager.sendData((rightArm ? "R:" : "L:") + (gripped ? "GRIP\n" : "RELEASE\n"));
         if (DEBUG) {
             System.out.printf("[GRIPPER_UART] %s %s%n", rightArm ? "R" : "L", gripped ? "GRIP" : "RELEASE");
