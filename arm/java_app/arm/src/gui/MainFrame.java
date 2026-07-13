@@ -526,8 +526,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         topPanel.add(btnStartTraj);
 
         btnDualArmDemo.addActionListener(e -> runDualArmShowcase());
-        JComboBox<String> demoModeCombo = new JComboBox<>(new String[] { "Demo 2 Tay", "Mua 2 Tay", "Mua 2 Tay+", "Ghe Demo" });
-        demoModeCombo.setPreferredSize(new Dimension(118, 25));
+        JComboBox<String> demoModeCombo = new JComboBox<>(new String[] { "Demo 2 Tay", "Mua 2 Tay", "Mua 2 Tay+", "Ghe Demo R", "Ghe Demo L" });
+        demoModeCombo.setPreferredSize(new Dimension(128, 25));
         JButton btnRunDemo = new JButton("Demo");
         btnRunDemo.addActionListener(e -> {
             if (demoModeCombo.getSelectedIndex() == 0) {
@@ -536,8 +536,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 runDualArmWaveShowcase();
             } else if (demoModeCombo.getSelectedIndex() == 2) {
                 runDualArmWaveLongShowcase();
-            } else {
+            } else if (demoModeCombo.getSelectedIndex() == 3) {
                 runChairTransferShowcase();
+            } else {
+                runLeftChairTransferShowcase();
             }
         });
         topPanel.add(demoModeCombo);
@@ -2244,13 +2246,23 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private void runChairTransferShowcase() {
-        DualDemoPlan plan = buildChairTransferDemo();
+        DualDemoPlan plan = buildChairTransferDemo(true);
         if (plan == null || plan.frames.isEmpty()) {
-            setGotoStatusRight("Ghe Demo: loi pose", Color.RED);
-            setGotoStatusLeft("Ghe Demo: loi pose", Color.RED);
+            setGotoStatusRight("Ghe Demo R: loi pose", Color.RED);
+            setGotoStatusLeft("Ghe Demo R: loi pose", Color.RED);
             return;
         }
-        runDualArmPlayback(plan, "Ghe Demo");
+        runDualArmPlayback(plan, "Ghe Demo R");
+    }
+
+    private void runLeftChairTransferShowcase() {
+        DualDemoPlan plan = buildChairTransferDemo(false);
+        if (plan == null || plan.frames.isEmpty()) {
+            setGotoStatusRight("Ghe Demo L: loi pose", Color.RED);
+            setGotoStatusLeft("Ghe Demo L: loi pose", Color.RED);
+            return;
+        }
+        runDualArmPlayback(plan, "Ghe Demo L");
     }
 
     private static class DualDemoPlan {
@@ -2270,6 +2282,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final java.util.Set<Integer> rightReleaseIndices = new java.util.HashSet<>();
         final java.util.Set<Integer> leftReleaseIndices = new java.util.HashSet<>();
         final java.util.Set<Integer> rightReleaseHighIndices = new java.util.HashSet<>();
+        final java.util.Set<Integer> leftReleaseHighIndices = new java.util.HashSet<>();
         final java.util.Set<Integer> passThroughIndices = new java.util.HashSet<>();
         final java.util.Map<Integer, Integer> customDelays = new java.util.HashMap<>();
 
@@ -2523,9 +2536,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return new DualDemoPlan(frames, -1, -1, -1, -1);
     }
 
-    private DualDemoPlan buildChairTransferDemo() {
+    private DualDemoPlan buildChairTransferDemo(boolean rightDemo) {
         double sharedQ1 = targetAnglesRight[0];
         double[] leftClear = { sharedQ1, -10, -45, 58, 18, 18 };
+        double[] rightClear = mirrorRightPoseToLeft(leftClear);
 
         double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
         double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
@@ -2542,96 +2556,107 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] highHoverRight = { sharedQ1, -70.0, 45.0, -51.0, -90.0, 11.0 };
 
         double[] retreatRight = highHoverRight.clone();
+        double[] lowPick = rightDemo ? lowPickRight : mirrorRightPoseToLeft(lowPickRight);
+        double[] lowHover = rightDemo ? lowHoverRight : mirrorRightPoseToLeft(lowHoverRight);
+        double[] lowApproach = rightDemo ? lowApproachRight : mirrorRightPoseToLeft(lowApproachRight);
+        double[] lowEntry = rightDemo ? lowEntryRight : mirrorRightPoseToLeft(lowEntryRight);
+        double[] highEntry = rightDemo ? highEntryRight : mirrorRightPoseToLeft(highEntryRight);
+        double[] highPlace = rightDemo ? highPlaceRight : mirrorRightPoseToLeft(highPlaceRight);
+        double[] highHover = rightDemo ? highHoverRight : mirrorRightPoseToLeft(highHoverRight);
+        double[] retreat = rightDemo ? retreatRight : mirrorRightPoseToLeft(retreatRight);
+        double[] holdPose = rightDemo ? leftClear : rightClear;
+        boolean movingIsRight = rightDemo;
+        String sideLabel = rightDemo ? "Right" : "Left";
 
         if (!logDemoPoseOk("chairHomeRight", homeRight, true) || !logDemoPoseOk("chairHomeLeft", homeLeft, false)
-                || !logDemoPoseOk("chairLeftClear", leftClear, false)
-                || !logDemoPoseOk("chairLowEntryRight", lowEntryRight, true)
-                || !logDemoPoseOk("chairHighEntryRight", highEntryRight, true)
-                || !logDemoPoseOk("chairLowApproachRight", lowApproachRight, true)
-                || !logDemoPoseOk("chairLowHoverRight", lowHoverRight, true)
-                || !logDemoPoseOk("chairLowPickRight", lowPickRight, true)
-                || !logDemoPoseOk("chairHighHoverRight", highHoverRight, true)
-                || !logDemoPoseOk("chairHighPlaceRight", highPlaceRight, true)
-                || !logDemoPoseOk("chairRetreatRight", retreatRight, true)) {
+                || !logDemoPoseOk("chairHold" + (rightDemo ? "Left" : "Right"), holdPose, !rightDemo)
+                || !logDemoPoseOk("chairLowEntry" + sideLabel, lowEntry, movingIsRight)
+                || !logDemoPoseOk("chairHighEntry" + sideLabel, highEntry, movingIsRight)
+                || !logDemoPoseOk("chairLowApproach" + sideLabel, lowApproach, movingIsRight)
+                || !logDemoPoseOk("chairLowHover" + sideLabel, lowHover, movingIsRight)
+                || !logDemoPoseOk("chairLowPick" + sideLabel, lowPick, movingIsRight)
+                || !logDemoPoseOk("chairHighHover" + sideLabel, highHover, movingIsRight)
+                || !logDemoPoseOk("chairHighPlace" + sideLabel, highPlace, movingIsRight)
+                || !logDemoPoseOk("chairRetreat" + sideLabel, retreat, movingIsRight)) {
             return null;
         }
 
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(new double[][] { homeRight, homeLeft });
-        keyframes.add(new double[][] { lowEntryRight, leftClear });
-        keyframes.add(new double[][] { lowApproachRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowEntry, holdPose));
+        keyframes.add(makeChairDemoFrame(rightDemo, lowApproach, holdPose));
 
         // 1. Move to the low chair in one smooth approach
-        keyframes.add(new double[][] { lowHoverRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowHover, holdPose));
 
         // 2. Pick the object from the low chair
         int preGripFrame1 = keyframes.size();
-        keyframes.add(new double[][] { lowPickRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowPick, holdPose));
         int gripFrame1 = keyframes.size();
-        keyframes.add(new double[][] { lowPickRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowPick, holdPose));
         int postGripFrame1 = keyframes.size();
-        keyframes.add(new double[][] { lowPickRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowPick, holdPose));
 
         // 3. Travel to the far high chair through a low, local corridor instead of the front spike pose
-        keyframes.add(new double[][] { lowHoverRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowHover, holdPose));
         int lowApproachToHighFrame = keyframes.size();
-        keyframes.add(new double[][] { lowApproachRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowApproach, holdPose));
         int lowEntryToHighFrame = keyframes.size();
-        keyframes.add(new double[][] { lowEntryRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowEntry, holdPose));
         int highEntryToHighFrame = keyframes.size();
-        keyframes.add(new double[][] { highEntryRight, leftClear });
-        keyframes.add(new double[][] { highHoverRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, highEntry, holdPose));
+        keyframes.add(makeChairDemoFrame(rightDemo, highHover, holdPose));
 
         // 4. Place the object on the high chair
         int preReleaseFrame1 = keyframes.size();
-        keyframes.add(new double[][] { highPlaceRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, highPlace, holdPose));
         int releaseFrame1 = keyframes.size();
-        keyframes.add(new double[][] { highPlaceRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, highPlace, holdPose));
         int postReleaseFrame1 = keyframes.size();
-        keyframes.add(new double[][] { highPlaceRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, highPlace, holdPose));
 
         // 5. Retract fully to the startup home pose before coming back
-        keyframes.add(new double[][] { highHoverRight, leftClear });
-        keyframes.add(new double[][] { highEntryRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, highHover, holdPose));
+        keyframes.add(makeChairDemoFrame(rightDemo, highEntry, holdPose));
         int homePauseFrame = keyframes.size();
         keyframes.add(new double[][] { homeRight, homeLeft });
 
         // 6. Return to the high chair to pick it up again
-        keyframes.add(new double[][] { highEntryRight, leftClear });
-        keyframes.add(new double[][] { highHoverRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, highEntry, holdPose));
+        keyframes.add(makeChairDemoFrame(rightDemo, highHover, holdPose));
         int preGripFrame2 = keyframes.size();
-        keyframes.add(new double[][] { highPlaceRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, highPlace, holdPose));
         int gripFrame2 = keyframes.size();
-        keyframes.add(new double[][] { highPlaceRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, highPlace, holdPose));
         int postGripFrame2 = keyframes.size();
-        keyframes.add(new double[][] { highPlaceRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, highPlace, holdPose));
 
         // 7. Travel it back from the far high chair through the same low, local corridor
-        keyframes.add(new double[][] { highHoverRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, highHover, holdPose));
         int highEntryToLowFrame = keyframes.size();
-        keyframes.add(new double[][] { highEntryRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, highEntry, holdPose));
         int lowEntryToLowFrame = keyframes.size();
-        keyframes.add(new double[][] { lowEntryRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowEntry, holdPose));
         int lowApproachToLowFrame = keyframes.size();
-        keyframes.add(new double[][] { lowApproachRight, leftClear });
-        keyframes.add(new double[][] { lowHoverRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowApproach, holdPose));
+        keyframes.add(makeChairDemoFrame(rightDemo, lowHover, holdPose));
 
         // 8. Place the object back on the low chair
         int preReleaseFrame2 = keyframes.size();
-        keyframes.add(new double[][] { lowPickRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowPick, holdPose));
         int releaseFrame2 = keyframes.size();
-        keyframes.add(new double[][] { lowPickRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowPick, holdPose));
         int postReleaseFrame2 = keyframes.size();
-        keyframes.add(new double[][] { lowPickRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowPick, holdPose));
 
         // 9. Retract and go home
-        keyframes.add(new double[][] { lowHoverRight, leftClear });
-        keyframes.add(new double[][] { lowApproachRight, leftClear });
-        keyframes.add(new double[][] { lowEntryRight, leftClear });
+        keyframes.add(makeChairDemoFrame(rightDemo, lowHover, holdPose));
+        keyframes.add(makeChairDemoFrame(rightDemo, lowApproach, holdPose));
+        keyframes.add(makeChairDemoFrame(rightDemo, lowEntry, holdPose));
         keyframes.add(new double[][] { homeRight, homeLeft });
 
-        double[] lowPickCoord = armPanel.computeFK(sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0, true);
-        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, -66.0, 35.0, -39.0, -90.0, 3.0, true);
+        double[] lowPickCoord = armPanel.computeFK(lowPick[0], lowPick[1], lowPick[2], lowPick[3], lowPick[4], lowPick[5], movingIsRight);
+        double[] highPlaceCoord = armPanel.computeFK(highPlace[0], highPlace[1], highPlace[2], highPlace[3], highPlace[4], highPlace[5], movingIsRight);
         double lowChairHeight = lowPickCoord[2] - 5.0;
         double highChairHeight = highPlaceCoord[2] - 5.0;
         ChairDemoScene scene = new ChairDemoScene(
@@ -2639,15 +2664,23 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 new double[] { highPlaceCoord[0], highPlaceCoord[1], 0.0 }, highChairHeight);
 
         java.util.List<double[][]> frames = cloneDualArmFrames(keyframes);
-        if (!validateDualDemoCollision("chairTransfer", frames, 8)
-                || !validateChairDemoClearance("chairTransfer", frames, scene, 8)) {
+        String validationLabel = rightDemo ? "chairTransferRight" : "chairTransferLeft";
+        if (!validateDualDemoCollision(validationLabel, frames, 8)
+                || !validateChairDemoClearance(validationLabel, frames, scene, 8)) {
             return null;
         }
 
-        DualDemoPlan plan = new DualDemoPlan(frames, gripFrame1, -1, releaseFrame1, -1,
-                0, 0, 0, 0, scene);
-        plan.rightGripIndices.add(gripFrame2);
-        plan.rightReleaseIndices.add(releaseFrame2);
+        DualDemoPlan plan = rightDemo
+                ? new DualDemoPlan(frames, gripFrame1, -1, releaseFrame1, -1, 0, 0, 0, 0, scene)
+                : new DualDemoPlan(frames, -1, gripFrame1, -1, releaseFrame1, 0, 0, 0, 0, scene);
+        if (rightDemo) {
+            plan.rightGripIndices.add(gripFrame2);
+            plan.rightReleaseIndices.add(releaseFrame2);
+        } else {
+            plan.leftGripIndices.add(gripFrame2);
+            plan.leftReleaseIndices.add(releaseFrame2);
+            plan.leftReleaseHighIndices.add(releaseFrame1);
+        }
         plan.passThroughIndices.add(lowApproachToHighFrame);
         plan.passThroughIndices.add(lowEntryToHighFrame);
         plan.passThroughIndices.add(highEntryToHighFrame);
@@ -3039,6 +3072,21 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         return copy;
     }
 
+    private double[] mirrorRightPoseToLeft(double[] rightPose) {
+        double[] leftPose = rightPose.clone();
+        leftPose[2] = -leftPose[2];
+        leftPose[3] = -leftPose[3];
+        leftPose[5] = -leftPose[5];
+        return leftPose;
+    }
+
+    private double[][] makeChairDemoFrame(boolean rightDemo, double[] movingArmPose, double[] holdPose) {
+        if (rightDemo) {
+            return new double[][] { movingArmPose, holdPose };
+        }
+        return new double[][] { holdPose, movingArmPose };
+    }
+
     private java.util.List<double[][]> cloneDualArmFrames(java.util.List<double[][]> frames) {
         java.util.List<double[][]> clones = new java.util.ArrayList<>(frames.size());
         for (double[][] frame : frames) {
@@ -3211,6 +3259,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                             System.out.printf("[DEMO_TRACE] event frame=%d | right release%n", reachedFrameIndex);
                         } else if (leftReleaseNow) {
                             setSingleDemoGripState(false, false, "Demo 2 Tay: tay trai nha");
+                            if (plan.chairScene != null) {
+                                boolean onHigh = plan.leftReleaseHighIndices.contains(reachedFrameIndex);
+                                armPanel.setChairDemoObjectOnHigh(onHigh);
+                            }
                             System.out.printf("[DEMO_TRACE] event frame=%d | left release%n", reachedFrameIndex);
                         }
                         currentIndex[0]++;

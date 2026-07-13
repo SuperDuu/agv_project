@@ -596,7 +596,7 @@ public class ArmPanel extends JPanel
         // Neck and Head
         drawables.add(new TubeSegment(new double[] { 0, 0, 130 }, new double[] { 0, 0, 138 }, 8, new Color(60, 60, 60)));
         drawables.add(new JointSphere(new double[] { 0, 0, 138 }, 12, new Color(75, 80, 85)));
-        addChairDemoDrawables(drawables, pts3dRight[NUM_JOINTS + 1]);
+        addChairDemoDrawables(drawables, pts3dRight[NUM_JOINTS + 1], pts3dLeft[NUM_JOINTS + 1]);
 
         int[] tubeWidths = { 9, 8, 7, 6, 5, 4, 4 };
         Color[] tubeColorsRight = {
@@ -702,7 +702,8 @@ public class ArmPanel extends JPanel
         }
     }
 
-    private void addChairDemoDrawables(java.util.List<Drawable> drawables, double[] rightEndEffector) {
+    private void addChairDemoDrawables(java.util.List<Drawable> drawables, double[] rightEndEffector,
+            double[] leftEndEffector) {
         ChairRenderScene scene = chairDemoScene;
         if (scene == null) {
             return;
@@ -720,6 +721,8 @@ public class ArmPanel extends JPanel
         double[] objectCenter;
         if (robot != null && robot.isGrippedRight) {
             objectCenter = rightEndEffector.clone();
+        } else if (robot != null && robot.isGrippedLeft) {
+            objectCenter = leftEndEffector.clone();
         } else if (chairDemoObjectOnHigh) {
             objectCenter = new double[] { scene.highChairCenter[0], scene.highChairCenter[1],
                     scene.highChairHeight + CHAIR_DEMO_OBJECT_HALF };
