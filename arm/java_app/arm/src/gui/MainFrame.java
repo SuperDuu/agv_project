@@ -2530,16 +2530,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
         
         // Define our safe lower configurations (Option B) with horizontal orientations!
-        double[] lowPickRight = { sharedQ1, 20.0, 48.0, -17.0, 40.0, 10.0 };
-        double[] lowHoverRight = { sharedQ1, 35.0, 48.0, -17.0, 40.0, 10.0 };
+        double[] lowPickRight = { sharedQ1, -78.0, 20.0, -26.0, 0.0, -44.0 };
+        double[] lowHoverRight = { sharedQ1, -82.0, 20.0, -26.0, 0.0, -44.0 };
         
-        double[] highPlaceRight = { sharedQ1, -64.0, 42.0, -19.0, -35.0, -45.0 };
-        double[] highHoverRight = { sharedQ1, -66.0, 42.0, -19.0, -35.0, -45.0 };
+        double[] highPlaceRight = { sharedQ1, -90.0, 152.0, -17.0, 0.0, -52.0 };
+        double[] highHoverRight = { sharedQ1, -86.0, 152.0, -17.0, 0.0, -52.0 };
         
-        double[] transferHighRight = { sharedQ1, -90.0, 120.0, -90.0, 40.0, 10.0 };
-        double[] readyRight = { sharedQ1, -90.0, 120.0, -90.0, 40.0, 10.0 };
-        double[] foldedHomeRight = { sharedQ1, 0.0, 120.0, -90.0, 40.0, 10.0 };
-        double[] retreatRight = transferHighRight.clone();
+        double[] transferHighRight = highHoverRight.clone();
+        double[] readyRight = highHoverRight.clone();
+        double[] foldedHomeRight = { sharedQ1, 0.0, 120.0, -90.0, 0.0, -52.0 };
+        double[] retreatRight = highHoverRight.clone();
 
         if (!logDemoPoseOk("chairHomeRight", homeRight, true) || !logDemoPoseOk("chairHomeLeft", homeLeft, false)
                 || !logDemoPoseOk("chairLeftClear", leftClear, false)
@@ -2606,8 +2606,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
-        double[] lowPickCoord = armPanel.computeFK(sharedQ1, 20.0, 48.0, -17.0, 40.0, 10.0, true);
-        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, -64.0, 42.0, -19.0, -35.0, -45.0, true);
+        double[] lowPickCoord = armPanel.computeFK(sharedQ1, -78.0, 20.0, -26.0, 0.0, -44.0, true);
+        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, -90.0, 152.0, -17.0, 0.0, -52.0, true);
         double lowChairHeight = lowPickCoord[2] - 5.0;
         double highChairHeight = highPlaceCoord[2] - 5.0;
         ChairDemoScene scene = new ChairDemoScene(
