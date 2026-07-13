@@ -2778,6 +2778,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] lowPick = makeRightFlatGripperPose(35.0, 30.0, flatA, 80.0);
         double[] lowHover = makeRightFlatGripperPose(35.0, 80.0, flatA, 80.0);
         double[] lowExit = makeRightFlatGripperPose(35.0, 80.0, flatA, -80.0);
+        double[] centerExit = makeRightFlatGripperPose(0.0, 80.0, flatA, -80.0);
         double[] highPlace = makeRightFlatGripperPose(-45.0, 80.0, flatA, -80.0);
         double[] highHover = highPlace.clone();
         double[] flatHome = makeRightFlatGripperPose(0.0, 80.0, flatA, 0.0);
@@ -2819,9 +2820,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postReleaseFrame1 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(highPlace));
 
-        appendFlatQ1ChairPath(keyframes, highPlace, lowExit, 32);
-        appendFlatQ1ChairPath(keyframes, lowExit, lowHover, 16);
-        appendFlatQ1ChairPath(keyframes, lowHover, flatHome, 12);
+        appendFlatQ1ChairPath(keyframes, highPlace, centerExit, 24);
+        appendFlatQ1ChairPath(keyframes, centerExit, flatHome, 12);
         int firstFlatEndFrame = keyframes.size();
         appendLinearDualArmPath(keyframes, flatHome, makeFlatQ1HoldPose(flatHome),
                 HOME_ANGLES_RIGHT, HOME_ANGLES_LEFT, 12);
@@ -2829,9 +2829,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         appendLinearDualArmPath(keyframes, HOME_ANGLES_RIGHT, HOME_ANGLES_LEFT,
                 flatHome, makeFlatQ1HoldPose(flatHome), 12);
         int secondFlatStartFrame = keyframes.size();
-        appendFlatQ1ChairPath(keyframes, flatHome, lowHover, 12);
-        appendFlatQ1ChairPath(keyframes, lowHover, lowExit, 16);
-        appendFlatQ1ChairPath(keyframes, lowExit, highHover, 32);
+        appendFlatQ1ChairPath(keyframes, flatHome, centerExit, 12);
+        appendFlatQ1ChairPath(keyframes, centerExit, highHover, 24);
 
         int preGripFrame2 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(highPlace));
@@ -2840,7 +2839,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postGripFrame2 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(highPlace));
 
-        appendFlatQ1ChairPath(keyframes, highPlace, lowExit, 32);
+        appendFlatQ1ChairPath(keyframes, highPlace, centerExit, 24);
+        appendFlatQ1ChairPath(keyframes, centerExit, lowExit, 16);
         appendFlatQ1ChairPath(keyframes, lowExit, lowHover, 16);
 
         int preReleaseFrame2 = keyframes.size();
@@ -3174,11 +3174,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             reportLines.add(String.format(java.util.Locale.US, "max_gripper_plane_tilt_deg_with_interpolation: `%.4f`", maxTilt));
             reportLines.add("home_start_end: `true`");
             reportLines.add("home_pause_after_first_release: `true`");
+            reportLines.add("high_chair_home_route: `highPlace -> centerExit -> flatHome -> HOME -> flatHome -> centerExit -> highPlace`");
             reportLines.add("event_delay_pattern: `pre=2000ms, post=3000ms`");
+            reportLines.add("motion_speed_source: `main angular speed slider`");
             reportLines.add("");
             reportLines.add("Self-check:");
             reportLines.add("- The demo starts at the app HOME pose, transitions to the flat parking pose, and ends back at HOME.");
             reportLines.add("- After releasing on chair 2, the arm returns to HOME and waits before going back to pick from chair 2.");
+            reportLines.add("- The chair-2 to HOME route no longer passes through the chair-1 hover/exit waypoint.");
+            reportLines.add("- Non-event movement frames are marked pass-through; grip/release/home-pause frames still stop and wait.");
+            reportLines.add("- The gripper is open while not carrying the object, including the initial approach and after each release.");
             reportLines.add("- The demo uses right-arm q1; q1 moves from +35 deg to -45 deg between the chairs.");
             reportLines.add("- All right-arm poses are generated on the same horizontal-gripper manifold with A=q3+q4=-15 deg.");
             reportLines.add("- The validator samples flat-motion frames and 7 interpolated points between frames; tolerance is +/-2 deg.");
