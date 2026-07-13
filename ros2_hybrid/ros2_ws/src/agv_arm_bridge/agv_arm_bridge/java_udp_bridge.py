@@ -103,6 +103,18 @@ class JavaUdpBridge(Node):
         reply_host = request.get("reply_host", self.default_reply_host)
         reply_port = int(request.get("reply_port", self.default_reply_port))
         
+        # Handle ping — immediate reply without going through ROS topic.
+        # Used by the Java app to check if the bridge is up.
+        if request.get("type") == "ping":
+            return {
+                "type": "pong",
+                "request_id": request_id,
+                "ok": True,
+                "stamp": time.time(),
+                "_reply_host": reply_host,
+                "_reply_port": reply_port,
+            }
+
         # Save pending request details to reply once the planner finishes
         self.pending_requests[request_id] = (address[0], reply_host, reply_port, time.time())
 
