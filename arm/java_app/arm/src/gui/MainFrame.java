@@ -2535,7 +2535,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] lowPickRight = { sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0 };
         double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
         double[] lowApproachRight = { sharedQ1, 40.0, 80.0, -75.0, -90.0, 16.0 };
-        double[] centerCarryRight = { sharedQ1, -1.0, 114.0, -67.0, -90.0, 0.0 };
 
         double[] highPlaceRight = { sharedQ1, -66.0, 35.0, -39.0, -90.0, 3.0 };
         double[] highHoverRight = { sharedQ1, -70.0, 45.0, -51.0, -90.0, 11.0 };
@@ -2547,7 +2546,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 || !logDemoPoseOk("chairLeftClear", leftClear, false)
                 || !logDemoPoseOk("chairFoldedHomeRight", foldedHomeRight, true)
                 || !logDemoPoseOk("chairLowApproachRight", lowApproachRight, true)
-                || !logDemoPoseOk("chairCenterCarryRight", centerCarryRight, true)
                 || !logDemoPoseOk("chairLowHoverRight", lowHoverRight, true)
                 || !logDemoPoseOk("chairLowPickRight", lowPickRight, true)
                 || !logDemoPoseOk("chairHighHoverRight", highHoverRight, true)
@@ -2572,12 +2570,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postGripFrame1 = keyframes.size();
         keyframes.add(new double[][] { lowPickRight, leftClear });
 
-        // 3. Travel to the far high chair via a high carry pose
+        // 3. Travel to the far high chair through a compact folded pose near the body
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         int lowApproachToHighFrame = keyframes.size();
         keyframes.add(new double[][] { lowApproachRight, leftClear });
-        int centerCarryToHighFrame = keyframes.size();
-        keyframes.add(new double[][] { centerCarryRight, leftClear });
+        int foldedCarryToHighFrame = keyframes.size();
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
 
         // 4. Place the object on the high chair
@@ -2603,10 +2601,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postGripFrame2 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
 
-        // 7. Travel it back from the far high chair via a high carry pose
+        // 7. Travel it back from the far high chair through the same compact folded pose
         keyframes.add(new double[][] { highHoverRight, leftClear });
-        int centerCarryToLowFrame = keyframes.size();
-        keyframes.add(new double[][] { centerCarryRight, leftClear });
+        int foldedCarryToLowFrame = keyframes.size();
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         int lowApproachToLowFrame = keyframes.size();
         keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
@@ -2644,8 +2642,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         plan.rightGripIndices.add(gripFrame2);
         plan.rightReleaseIndices.add(releaseFrame2);
         plan.passThroughIndices.add(lowApproachToHighFrame);
-        plan.passThroughIndices.add(centerCarryToHighFrame);
-        plan.passThroughIndices.add(centerCarryToLowFrame);
+        plan.passThroughIndices.add(foldedCarryToHighFrame);
+        plan.passThroughIndices.add(foldedCarryToLowFrame);
         plan.passThroughIndices.add(lowApproachToLowFrame);
         plan.customDelays.put(preGripFrame1, 3000);
         plan.customDelays.put(postGripFrame1, 2000);
