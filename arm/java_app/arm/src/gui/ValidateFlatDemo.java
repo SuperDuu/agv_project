@@ -20,7 +20,7 @@ public class ValidateFlatDemo {
             // Print the key poses
             double flatA = -15.0;
             double[][] poses = {
-                mf.HOME_ANGLES_RIGHT.clone(),
+                new double[] { 0, 0, 20, -35, 0, 0 }, // HOME
                 makeRightFlatGripperPose(35.0, 30.0, flatA, 80.0), // lowPick
                 makeRightFlatGripperPose(35.0, 80.0, flatA, 80.0), // lowHover
                 makeRightFlatGripperPose(35.0, 80.0, flatA, -80.0), // lowExit
