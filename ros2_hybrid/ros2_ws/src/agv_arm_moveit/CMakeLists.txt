@@ -21,8 +21,8 @@ target_include_directories(moveit_planner PRIVATE
 )
 target_link_libraries(moveit_planner
   rclcpp::rclcpp
-  moveit_ros_planning_interface::moveit_ros_planning_interface
-  moveit_core::moveit_core
+  moveit_ros_planning_interface
+  moveit_core
 )
 
 install(TARGETS moveit_planner
