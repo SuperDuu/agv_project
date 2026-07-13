@@ -206,6 +206,9 @@ int main(int argc, char** argv)
   };
 
   std::vector<std::vector<double>> full_trajectory;
+  // Start with the initial HOME state as the first frame (frame 0)
+  full_trajectory.push_back(HOME);
+  
   bool all_ok = true;
 
   for (const auto& seg : segments) {
