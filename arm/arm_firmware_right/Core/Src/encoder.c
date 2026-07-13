@@ -5,26 +5,26 @@ extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim4;
-extern TIM_HandleTypeDef htim5;
+// extern TIM_HandleTypeDef htim5;
 
 // Global array of encoder tracker instances
 Encoder_t encoders[NUM_ENCODERS];
 
 void Encoder_Init(void) {
-    // Configure the 5 encoders: TIM1, TIM2, TIM3, TIM4, TIM5
-    // TIM2 and TIM5 are 32-bit timers on STM32F446, the rest are 16-bit
+    // Configure the 4 encoders: TIM1, TIM2, TIM3, TIM4
+    // TIM2 is 32-bit timer on STM32F446, the rest are 16-bit
     encoders[0] = (Encoder_t){&htim1, 0, 0, 0}; // TIM1 (16-bit)
     encoders[1] = (Encoder_t){&htim2, 0, 0, 1}; // TIM2 (32-bit)
     encoders[2] = (Encoder_t){&htim3, 0, 0, 0}; // TIM3 (16-bit)
     encoders[3] = (Encoder_t){&htim4, 0, 0, 0}; // TIM4 (16-bit)
-    encoders[4] = (Encoder_t){&htim5, 0, 0, 1}; // TIM5 (32-bit)
+    // encoders[4] = (Encoder_t){&htim5, 0, 0, 1}; // TIM5 (32-bit)
 
     // Start all encoder interfaces
     HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
     HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
     HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
     HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
-    HAL_TIM_Encoder_Start(&htim5, TIM_CHANNEL_ALL);
+    // HAL_TIM_Encoder_Start(&htim5, TIM_CHANNEL_ALL);
 
     // Initialize last counter values and counts
     for (int i = 0; i < NUM_ENCODERS; i++) {

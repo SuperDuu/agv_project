@@ -28,7 +28,7 @@
  *         Tần số SPI ≈ 1/(2×500ns) = 1MHz, an toàn cho ADS8688 (max 17MHz).
  */
 static void ads8688_delay(void) {
-    for (volatile int i = 0; i < 125; i++) {
+    for (volatile int i = 0; i < 250; i++) {
         __asm("nop");
     }
 }
@@ -86,10 +86,10 @@ static inline uint8_t ads8688_sdo_read(void) {
 }
 
 /**
- * @brief  Truyền/nhận 1 byte qua software SPI (MSB first, Mode 0).
- *         - CLK idle LOW
- *         - Setup data trên cạnh xuống (falling edge)
- *         - Lấy mẫu data trên cạnh lên (rising edge)
+ * @brief  Truyền/nhận 1 byte qua software SPI (MSB first, Mode 1).
+ *         - CLK idle LOW (CPOL = 0)
+ *         - Setup data trên cạnh lên (rising edge)
+ *         - Lấy mẫu data trên cạnh xuống (falling edge) (CPHA = 1)
  * @param  tx_byte  Byte cần gửi (MOSI)
  * @return Byte nhận về (MISO)
  */
@@ -97,19 +97,16 @@ static uint8_t ads8688_spi_transfer_byte(uint8_t tx_byte) {
     uint8_t rx_byte = 0;
 
     for (int8_t bit = 7; bit >= 0; bit--) {
-        /* Setup MOSI data khi CLK LOW */
-        ads8688_clk_low();
+        /* Cạnh lên (Rising Edge) - Thay đổi dữ liệu MOSI */
+        ads8688_clk_high();
         ads8688_sdi_write((tx_byte >> bit) & 0x01);
         ads8688_delay();
 
-        /* Rising edge: ADS8688 lấy mẫu MOSI, ta đọc MISO */
-        ads8688_clk_high();
+        /* Cạnh xuống (Falling Edge) - Lấy mẫu dữ liệu MISO */
+        ads8688_clk_low();
         ads8688_delay();
         rx_byte |= (ads8688_sdo_read() << bit);
     }
-
-    /* Trả CLK về LOW (idle state cho SPI Mode 0) */
-    ads8688_clk_low();
 
     return rx_byte;
 }
@@ -219,13 +216,13 @@ void ADS8688_Init(ADS8688_HandleTypeDef *hadc, uint8_t range) {
 
     /* === Hardware Reset === */
     HAL_GPIO_WritePin(T_ADC_RST_GPIO_Port, T_ADC_RST_Pin, GPIO_PIN_RESET);
-    HAL_Delay(1);  /* Giữ RST LOW tối thiểu 50ns (datasheet), dùng 1ms cho an toàn */
+    HAL_Delay(5);  /* Giữ RST LOW tối thiểu 50ns (datasheet), dùng 1ms cho an toàn */
     HAL_GPIO_WritePin(T_ADC_RST_GPIO_Port, T_ADC_RST_Pin, GPIO_PIN_SET);
-    HAL_Delay(1);  /* Đợi chip khởi động sau reset */
+    HAL_Delay(5);  /* Đợi chip khởi động sau reset */
 
     /* === Software Reset để chắc chắn thanh ghi về giá trị mặc định === */
     ads8688_send_command(ADS8688_CMD_RST, NULL);
-    HAL_Delay(1);
+    HAL_Delay(5);
 
     /* === Cấu hình dải đo cho CH0 và CH1 === */
     ADS8688_WriteReg(ADS8688_REG_CH0_INPUT_RANGE, range);
@@ -329,25 +326,29 @@ void ADS8688_WriteReg(uint8_t reg_addr, uint8_t data) {
 
 uint8_t ADS8688_ReadReg(uint8_t reg_addr) {
     /*
-     * Giao thức đọc thanh ghi ADS8688 (Program Register Read):
+     * Giao thức đọc thanh ghi ADS8688 (Program Register Read - 2 cycles):
+     * 
+     * Chu kỳ 1: Gửi lệnh đọc thanh ghi (Register Read Command)
      * - MOSI[31:25] = (reg_addr << 1) | 0x00  → 7-bit address + R bit
-     * - MOSI[24:0]  = don't care
-     * - MISO[23:16] = register data            → 8-bit giá trị đọc về
-     *
-     * Byte 0 (MOSI): (reg_addr << 1) & 0xFE
-     * Byte 1 (MISO): register data
+     * - MOSI[24:0]  = don't care (gửi 0)
      */
     uint16_t cmd_word = (uint16_t)((reg_addr << 1) & 0xFE) << 8;
 
     ads8688_cs_low();
-    uint16_t rx_high = ads8688_spi_transfer_16(cmd_word);
-    ads8688_spi_transfer_16(0x0000); /* Hoàn thành frame 32-bit */
+    ads8688_spi_transfer_16(cmd_word);
+    ads8688_spi_transfer_16(0x0000); /* Hoàn thành frame 32-bit thứ nhất */
     ads8688_cs_high();
 
-    /* Data nằm ở byte thấp của nửa đầu (bit[7:0] của rx_high) */
-    (void)rx_high;
+    ads8688_delay(); // Khoảng nghỉ ngắn giữa 2 chu kỳ
 
-    /* Thực tế ADS8688 trả data ở vị trí byte 1 (MISO bit[23:16] trong frame).
-     * Với cách transfer 2×16-bit, data nằm ở byte thấp của rx_high. */
+    /*
+     * Chu kỳ 2: Gửi lệnh NO_OP (0x00000000) để đọc dữ liệu trả về
+     * - MISO[23:16] = register data (nằm ở byte thấp của nửa đầu rx_high)
+     */
+    ads8688_cs_low();
+    uint16_t rx_high = ads8688_spi_transfer_16(ADS8688_CMD_NO_OP);
+    ads8688_spi_transfer_16(0x0000); /* Hoàn thành frame 32-bit thứ hai */
+    ads8688_cs_high();
+
     return (uint8_t)(rx_high & 0xFF);
 }

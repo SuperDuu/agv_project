@@ -74,7 +74,7 @@ extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart3;
 /* USER CODE BEGIN EV */
-
+extern TIM_HandleTypeDef htim7;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -385,5 +385,10 @@ void UART5_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+
+void TIM7_IRQHandler(void)
+{
+  HAL_TIM_IRQHandler(&htim7);
+}
 
 /* USER CODE END 1 */

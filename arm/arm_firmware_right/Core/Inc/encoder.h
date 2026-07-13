@@ -7,7 +7,7 @@ extern "C" {
 
 #include "main.h"
 
-#define NUM_ENCODERS 5
+#define NUM_ENCODERS 4
 
 typedef struct {
     TIM_HandleTypeDef *htim;

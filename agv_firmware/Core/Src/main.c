@@ -40,6 +40,7 @@
 #include "ls7366r.h"
 #include "motor.h"
 #include "sensor.h"
+#include "ads8688.h"
 #include <agv_body_step.h>
 #include <stdlib.h> // Để sử dụng hàm atoi
 #include <string.h>
@@ -84,10 +85,17 @@ volatile uint8_t debug_rfid_rx_buf[64] = {0};
 volatile uint32_t debug_rfid_err_count = 0;
 volatile uint8_t debug_rx_byte = 0;      // Byte nhận tạm thời cho ngắt IT
 volatile uint32_t debug_qr_rx_count = 0; // Đếm số lần nhảy vào ngắt nhận QR50
-volatile uint32_t debug_qr_err_count =
-    0; // Đếm số lần bị lỗi khung truyền (Baudrate)
+volatile uint32_t debug_qr_err_count = 0; // Đếm số lần bị lỗi khung truyền (Baudrate)
 volatile uint32_t debug_hmi_rx_count = 0; // Đếm số lần nhận được ngắt từ HMI
-
+float adc_feedback_ch0 = 0.0f;
+volatile uint32_t dbg_tim7_count = 0;       // Đếm số lần TIM7 ISR chạy
+volatile uint16_t dbg_ads_raw0 = 0;         // Giá trị ADC thô CH0
+volatile uint16_t dbg_ads_raw1 = 0;         // Giá trị ADC thô CH1
+volatile uint8_t  dbg_ads_spi_test = 0xFF;  // Kết quả test SPI (0x06=OK, 0=SPI fail)
+volatile uint8_t  dbg_ads_pin_rst = 0;      // PG13 RST: kỳ vọng 1 (HIGH) sau init
+volatile uint8_t  dbg_ads_pin_cs  = 0;      // PG12 CS:  kỳ vọng 1 (HIGH, idle)
+volatile uint8_t  dbg_ads_pin_sdo = 1;      // PB14 SDO: trạng thái idle của MISO
+volatile uint8_t  dbg_ads_scan_results[16] = {0}; // Mảng kết quả tự động scan 16 combo (Kỳ vọng combo đúng trả về 0x06)
 // === BIẾN GLOBAL ĐỂ DEBUG TRÊN LIVE EXPRESSION ===
 AGV_HandleTypeDef h_agv;
 Motor_HandleTypeDef m_left, m_right;
@@ -124,6 +132,7 @@ uint32_t rfid_node_map[MAX_NODES] = {
     [6] = RFID_NODE_6, [7] = RFID_NODE_7, [8] = RFID_NODE_8,
 };
 volatile LS7366R_EncoderData_t encoder_data;
+ADS8688_HandleTypeDef h_ads8688;
 AGV_Map_t factory_map;
 AGV_Heading_t current_heading = HEAD_NORTH;
 extern AGV_State_t agv_state;
@@ -605,6 +614,133 @@ static void AGV_HandleIntersectionRouting(uint16_t *pending_qr_node,
   }
 }
 
+/* Hàm con hỗ trợ truyền SPI 16-bit tổng quát (hỗ trợ cấu hình động CPOL, CPHA) */
+static uint16_t ScanLogic_SPI_Transfer_16(uint16_t tx_word, int cpol, int cpha, uint16_t pin_sdi, uint16_t pin_sdo) {
+    uint16_t rx_word = 0;
+    
+    /* 1. Setup trạng thái Clock idle */
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, cpol ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    for (volatile int i = 0; i < 250; i++) __asm("nop");
+
+    for (int8_t bit = 15; bit >= 0; bit--) {
+        uint8_t mosi_bit = (tx_word >> bit) & 0x01;
+        
+        if (cpha == 0) {
+            /* SPI Mode CPHA=0: MOSI được cập nhật trước cạnh đầu tiên */
+            HAL_GPIO_WritePin(GPIOB, pin_sdi, mosi_bit ? GPIO_PIN_SET : GPIO_PIN_RESET);
+            for (volatile int i = 0; i < 250; i++) __asm("nop");
+            
+            /* Cạnh đầu tiên (CLK đảo ngược trạng thái idle) -> Slave lấy mẫu, ta đọc SDO */
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, cpol ? GPIO_PIN_RESET : GPIO_PIN_SET);
+            for (volatile int i = 0; i < 250; i++) __asm("nop");
+            
+            if (HAL_GPIO_ReadPin(GPIOB, pin_sdo) == GPIO_PIN_SET) {
+                rx_word |= (1 << bit);
+            }
+            
+            /* Cạnh thứ hai (CLK quay về trạng thái idle) */
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, cpol ? GPIO_PIN_SET : GPIO_PIN_RESET);
+            for (volatile int i = 0; i < 250; i++) __asm("nop");
+        } else {
+            /* SPI Mode CPHA=1: Cạnh đầu tiên là cạnh dịch dữ liệu (Setup MOSI) */
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, cpol ? GPIO_PIN_RESET : GPIO_PIN_SET);
+            HAL_GPIO_WritePin(GPIOB, pin_sdi, mosi_bit ? GPIO_PIN_SET : GPIO_PIN_RESET);
+            for (volatile int i = 0; i < 250; i++) __asm("nop");
+            
+            /* Cạnh thứ hai là cạnh chốt dữ liệu (CLK quay về idle) -> Đọc SDO */
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, cpol ? GPIO_PIN_SET : GPIO_PIN_RESET);
+            for (volatile int i = 0; i < 250; i++) __asm("nop");
+            
+            if (HAL_GPIO_ReadPin(GPIOB, pin_sdo) == GPIO_PIN_SET) {
+                rx_word |= (1 << bit);
+            }
+        }
+    }
+    return rx_word;
+}
+
+void ADS8688_ScanLogic(void) {
+    /* Quét tự động 16 combo (4 pinouts * 2 CPOL * 2 CPHA):
+     * Pinout layout:
+     * - layout = 0: Normal Pins (SDI=PB15, SDO=PB14, CS=PG12, RST=PG13)
+     * - layout = 1: Swapped SDI/SDO (SDI=PB14, SDO=PB15, CS=PG12, RST=PG13)
+     * - layout = 2: Swapped CS/RST (SDI=PB15, SDO=PB14, CS=PG13, RST=PG12)
+     * - layout = 3: Swapped Both (SDI=PB14, SDO=PB15, CS=PG13, RST=PG12)
+     *
+     * combo = (pin_layout * 4) + (cpol * 2) + cpha
+     */
+    for (int combo = 0; combo < 16; combo++) {
+        int pin_layout = combo / 4;
+        int cpol       = (combo % 4) / 2;
+        int cpha       = combo % 2;
+
+        uint16_t pin_sdi = (pin_layout == 1 || pin_layout == 3) ? GPIO_PIN_14 : GPIO_PIN_15;
+        uint16_t pin_sdo = (pin_layout == 1 || pin_layout == 3) ? GPIO_PIN_15 : GPIO_PIN_14;
+        uint16_t pin_cs  = (pin_layout == 2 || pin_layout == 3) ? GPIO_PIN_13 : GPIO_PIN_12;
+        uint16_t pin_rst = (pin_layout == 2 || pin_layout == 3) ? GPIO_PIN_12 : GPIO_PIN_13;
+
+        /* Cấu hình chân GPIOB */
+        GPIO_InitTypeDef gpio_b = {0};
+        gpio_b.Pin = pin_sdi | GPIO_PIN_13; /* SDI và CLK (PB13) */
+        gpio_b.Mode = GPIO_MODE_OUTPUT_PP;
+        gpio_b.Pull = GPIO_NOPULL;
+        gpio_b.Speed = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(GPIOB, &gpio_b);
+
+        gpio_b.Pin = pin_sdo;
+        gpio_b.Mode = GPIO_MODE_INPUT;
+        gpio_b.Pull = GPIO_NOPULL;
+        HAL_GPIO_Init(GPIOB, &gpio_b);
+
+        /* Cấu hình chân GPIOG */
+        GPIO_InitTypeDef gpio_g = {0};
+        gpio_g.Pin = pin_cs | pin_rst;
+        gpio_g.Mode = GPIO_MODE_OUTPUT_PP;
+        gpio_g.Pull = GPIO_NOPULL;
+        gpio_g.Speed = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(GPIOG, &gpio_g);
+
+        /* 1. Reset chip (RST Active LOW) */
+        HAL_GPIO_WritePin(GPIOG, pin_cs, GPIO_PIN_SET);  /* CS High */
+        HAL_GPIO_WritePin(GPIOG, pin_rst, GPIO_PIN_RESET); /* RST Low (Reset) */
+        HAL_Delay(5);
+        HAL_GPIO_WritePin(GPIOG, pin_rst, GPIO_PIN_SET);   /* RST High (Run) */
+        HAL_Delay(5);
+
+        /* 2. Ghi dải đo CH0 = RANGE_0_5V (0x06)
+         * Lệnh ghi: (0x05 << 1) | 0x01 = 0x0B (Byte cao), 0x06 (Byte thấp) */
+        uint16_t tx_write = 0x0B06;
+        HAL_GPIO_WritePin(GPIOG, pin_cs, GPIO_PIN_RESET); /* CS Low (Select) */
+        ScanLogic_SPI_Transfer_16(tx_write, cpol, cpha, pin_sdi, pin_sdo);
+        ScanLogic_SPI_Transfer_16(0x0000, cpol, cpha, pin_sdi, pin_sdo);
+        HAL_GPIO_WritePin(GPIOG, pin_cs, GPIO_PIN_SET);   /* CS High (Idle) */
+        HAL_Delay(5);
+
+        /* 3. Đọc lại thanh ghi CH0_INPUT_RANGE (0x05)
+         * Lệnh đọc: (0x05 << 1) & 0xFE = 0x0A (Byte cao), 0x00 (Byte thấp) */
+        uint16_t tx_read = 0x0A00;
+        
+        /* Chu kỳ 1: Gửi lệnh đọc */
+        HAL_GPIO_WritePin(GPIOG, pin_cs, GPIO_PIN_RESET);
+        ScanLogic_SPI_Transfer_16(tx_read, cpol, cpha, pin_sdi, pin_sdo);
+        ScanLogic_SPI_Transfer_16(0x0000, cpol, cpha, pin_sdi, pin_sdo);
+        HAL_GPIO_WritePin(GPIOG, pin_cs, GPIO_PIN_SET);
+        HAL_Delay(5);
+
+        /* Chu kỳ 2: Gửi NO_OP (0x0000) và đọc dữ liệu */
+        HAL_GPIO_WritePin(GPIOG, pin_cs, GPIO_PIN_RESET);
+        uint16_t rx_high = ScanLogic_SPI_Transfer_16(0x0000, cpol, cpha, pin_sdi, pin_sdo);
+        ScanLogic_SPI_Transfer_16(0x0000, cpol, cpha, pin_sdi, pin_sdo);
+        HAL_GPIO_WritePin(GPIOG, pin_cs, GPIO_PIN_SET);
+
+        dbg_ads_scan_results[combo] = (uint8_t)(rx_high & 0xFF);
+        HAL_Delay(5);
+    }
+
+    /* Trả về cấu hình chân mặc định ban đầu */
+    MX_GPIO_Init();
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -713,6 +849,25 @@ int main(void) {
   agv_state.last_qr_time = HAL_GetTick();
   uint32_t last_esp32_req_time = 0;
   uint32_t last_led_time = 0;
+
+  /* Khởi tạo ADS8688 External ADC (bit-bang SPI) + Timer quét riêng */
+  ADS8688_Init(&h_ads8688, ADS8688_RANGE_0_5V);
+
+  /* Test SPI: đọc lại thanh ghi CH0 Input Range, kỳ vọng = 0x06 (RANGE_0_5V) */
+  dbg_ads_spi_test = ADS8688_ReadReg(ADS8688_REG_CH0_INPUT_RANGE);
+
+  /* Đọc trạng thái GPIO để chẩn đoán phần cứng */
+  dbg_ads_pin_rst = HAL_GPIO_ReadPin(T_ADC_RST_GPIO_Port, T_ADC_RST_Pin);
+  dbg_ads_pin_cs  = HAL_GPIO_ReadPin(T_ADC_CS_GPIO_Port, T_ADC_CS_Pin);
+  dbg_ads_pin_sdo = HAL_GPIO_ReadPin(T_ADC_SDO_GPIO_Port, T_ADC_SDO_Pin);
+
+  /* Quét tự động chẩn đoán pinout phần cứng */
+  extern void ADS8688_ScanLogic(void);
+  ADS8688_ScanLogic();
+
+
+  MX_TIM7_Init();
+  HAL_TIM_Base_Start_IT(&htim7);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -721,6 +876,8 @@ int main(void) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    adc_feedback_ch0 = h_ads8688.voltage[0];
+
     AGV_UpdateGlobalYaw(); // Cập nhật góc Yaw toàn cục từ IMU
     HMI_Process();
 
@@ -1268,6 +1425,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     if (agv_state.follow_line_enable) {
       AGV_FollowLine(&h_agv);
     }
+  }
+  if (htim->Instance == TIM7) {
+    dbg_tim7_count++;
+    ADS8688_ReadAll(&h_ads8688);
+    dbg_ads_raw0 = h_ads8688.raw[0];
+    dbg_ads_raw1 = h_ads8688.raw[1];
   }
 }
 

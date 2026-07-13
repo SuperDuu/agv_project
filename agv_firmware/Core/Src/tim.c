@@ -21,7 +21,7 @@
 #include "tim.h"
 
 /* USER CODE BEGIN 0 */
-
+TIM_HandleTypeDef htim7;
 /* USER CODE END 0 */
 
 TIM_HandleTypeDef htim3;
@@ -338,5 +338,28 @@ void HAL_TIM_PWM_MspDeInit(TIM_HandleTypeDef* tim_pwmHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+/**
+ * @brief  TIM7 Init (manual — CubeMX không generate).
+ *         Chu kỳ 10ms (100Hz) để quét ADS8688.
+ */
+void MX_TIM7_Init(void)
+{
+  /* Bật clock trước vì HAL_TIM_Base_MspInit không xử lý TIM7 */
+  __HAL_RCC_TIM7_CLK_ENABLE();
+
+  htim7.Instance = TIM7;
+  htim7.Init.Prescaler = 249;
+  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim7.Init.Period = 9999;
+  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  HAL_NVIC_SetPriority(TIM7_IRQn, 3, 0);
+  HAL_NVIC_EnableIRQ(TIM7_IRQn);
+}
 
 /* USER CODE END 1 */
