@@ -83,4 +83,77 @@
     <disable_collisions link1="left_link_4" link2="left_link_6" reason="Never"/>
     <disable_collisions link1="left_link_4" link2="left_tool0" reason="Never"/>
     <disable_collisions link1="left_link_5" link2="left_tool0" reason="Never"/>
+
+    <!-- Left to Right arm collisions -->
+    <disable_collisions link1="left_shoulder_link" link2="right_shoulder_link" reason="Never"/>
+    <disable_collisions link1="left_shoulder_link" link2="right_link_1" reason="Never"/>
+    <disable_collisions link1="left_shoulder_link" link2="right_link_2" reason="Never"/>
+    <disable_collisions link1="left_shoulder_link" link2="right_link_3" reason="Never"/>
+    <disable_collisions link1="left_shoulder_link" link2="right_link_4" reason="Never"/>
+    <disable_collisions link1="left_shoulder_link" link2="right_link_5" reason="Never"/>
+    <disable_collisions link1="left_shoulder_link" link2="right_link_6" reason="Never"/>
+    <disable_collisions link1="left_shoulder_link" link2="right_tool0" reason="Never"/>
+
+    <disable_collisions link1="left_link_1" link2="right_shoulder_link" reason="Never"/>
+    <disable_collisions link1="left_link_1" link2="right_link_1" reason="Never"/>
+    <disable_collisions link1="left_link_1" link2="right_link_2" reason="Never"/>
+    <disable_collisions link1="left_link_1" link2="right_link_3" reason="Never"/>
+    <disable_collisions link1="left_link_1" link2="right_link_4" reason="Never"/>
+    <disable_collisions link1="left_link_1" link2="right_link_5" reason="Never"/>
+    <disable_collisions link1="left_link_1" link2="right_link_6" reason="Never"/>
+    <disable_collisions link1="left_link_1" link2="right_tool0" reason="Never"/>
+
+    <disable_collisions link1="left_link_2" link2="right_shoulder_link" reason="Never"/>
+    <disable_collisions link1="left_link_2" link2="right_link_1" reason="Never"/>
+    <disable_collisions link1="left_link_2" link2="right_link_2" reason="Never"/>
+    <disable_collisions link1="left_link_2" link2="right_link_3" reason="Never"/>
+    <disable_collisions link1="left_link_2" link2="right_link_4" reason="Never"/>
+    <disable_collisions link1="left_link_2" link2="right_link_5" reason="Never"/>
+    <disable_collisions link1="left_link_2" link2="right_link_6" reason="Never"/>
+    <disable_collisions link1="left_link_2" link2="right_tool0" reason="Never"/>
+
+    <disable_collisions link1="left_link_3" link2="right_shoulder_link" reason="Never"/>
+    <disable_collisions link1="left_link_3" link2="right_link_1" reason="Never"/>
+    <disable_collisions link1="left_link_3" link2="right_link_2" reason="Never"/>
+    <disable_collisions link1="left_link_3" link2="right_link_3" reason="Never"/>
+    <disable_collisions link1="left_link_3" link2="right_link_4" reason="Never"/>
+    <disable_collisions link1="left_link_3" link2="right_link_5" reason="Never"/>
+    <disable_collisions link1="left_link_3" link2="right_link_6" reason="Never"/>
+    <disable_collisions link1="left_link_3" link2="right_tool0" reason="Never"/>
+
+    <disable_collisions link1="left_link_4" link2="right_shoulder_link" reason="Never"/>
+    <disable_collisions link1="left_link_4" link2="right_link_1" reason="Never"/>
+    <disable_collisions link1="left_link_4" link2="right_link_2" reason="Never"/>
+    <disable_collisions link1="left_link_4" link2="right_link_3" reason="Never"/>
+    <disable_collisions link1="left_link_4" link2="right_link_4" reason="Never"/>
+    <disable_collisions link1="left_link_4" link2="right_link_5" reason="Never"/>
+    <disable_collisions link1="left_link_4" link2="right_link_6" reason="Never"/>
+    <disable_collisions link1="left_link_4" link2="right_tool0" reason="Never"/>
+
+    <disable_collisions link1="left_link_5" link2="right_shoulder_link" reason="Never"/>
+    <disable_collisions link1="left_link_5" link2="right_link_1" reason="Never"/>
+    <disable_collisions link1="left_link_5" link2="right_link_2" reason="Never"/>
+    <disable_collisions link1="left_link_5" link2="right_link_3" reason="Never"/>
+    <disable_collisions link1="left_link_5" link2="right_link_4" reason="Never"/>
+    <disable_collisions link1="left_link_5" link2="right_link_5" reason="Never"/>
+    <disable_collisions link1="left_link_5" link2="right_link_6" reason="Never"/>
+    <disable_collisions link1="left_link_5" link2="right_tool0" reason="Never"/>
+
+    <disable_collisions link1="left_link_6" link2="right_shoulder_link" reason="Never"/>
+    <disable_collisions link1="left_link_6" link2="right_link_1" reason="Never"/>
+    <disable_collisions link1="left_link_6" link2="right_link_2" reason="Never"/>
+    <disable_collisions link1="left_link_6" link2="right_link_3" reason="Never"/>
+    <disable_collisions link1="left_link_6" link2="right_link_4" reason="Never"/>
+    <disable_collisions link1="left_link_6" link2="right_link_5" reason="Never"/>
+    <disable_collisions link1="left_link_6" link2="right_link_6" reason="Never"/>
+    <disable_collisions link1="left_link_6" link2="right_tool0" reason="Never"/>
+
+    <disable_collisions link1="left_tool0" link2="right_shoulder_link" reason="Never"/>
+    <disable_collisions link1="left_tool0" link2="right_link_1" reason="Never"/>
+    <disable_collisions link1="left_tool0" link2="right_link_2" reason="Never"/>
+    <disable_collisions link1="left_tool0" link2="right_link_3" reason="Never"/>
+    <disable_collisions link1="left_tool0" link2="right_link_4" reason="Never"/>
+    <disable_collisions link1="left_tool0" link2="right_link_5" reason="Never"/>
+    <disable_collisions link1="left_tool0" link2="right_link_6" reason="Never"/>
+    <disable_collisions link1="left_tool0" link2="right_tool0" reason="Never"/>
 </robot>
