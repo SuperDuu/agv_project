@@ -105,14 +105,15 @@ class JavaUdpBridge(Node):
         
         # Handle ping — immediate reply without going through ROS topic.
         # Used by the Java app to check if the bridge is up.
+        # Always reply to the actual sender address/port so DatagramSocket.receive() picks it up.
         if request.get("type") == "ping":
             return {
                 "type": "pong",
                 "request_id": request_id,
                 "ok": True,
                 "stamp": time.time(),
-                "_reply_host": reply_host,
-                "_reply_port": reply_port,
+                "_reply_host": address[0],
+                "_reply_port": address[1],
             }
 
         # Save pending request details to reply once the planner finishes

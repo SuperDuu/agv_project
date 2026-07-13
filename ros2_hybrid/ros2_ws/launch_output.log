@@ -1,0 +1,217 @@
+[INFO] [launch]: All log files can be found below /root/.ros/log/2026-07-13-16-11-16-802088-57dbd2174670-2478
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [robot_state_publisher-1]: process started with pid [2485]
+[INFO] [joint_state_publisher-2]: process started with pid [2486]
+[INFO] [move_group-3]: process started with pid [2487]
+[INFO] [moveit_planner-4]: process started with pid [2488]
+[move_group-3] [WARN] [1783959077.874417579] [move_group]: Using default pipeline 'ompl'
+[moveit_planner-4] [INFO] [1783959077.881671764] [agv_arm_moveit_planner]: Initializing MoveGroupInterface for right_arm...
+[robot_state_publisher-1] [WARN] [1783959077.884848763] [kdl_parser]: The root link base_link has an inertia specified in the URDF, but KDL does not support a root link with an inertia.  As a workaround, you can add an extra dummy link to your URDF.
+[robot_state_publisher-1] [INFO] [1783959077.885030588] [robot_state_publisher]: Robot initialized
+[move_group-3] [INFO] [1783959077.910806288] [move_group.moveit.moveit.ros.rdf_loader]: Loaded robot model in 0.0361642 seconds
+[move_group-3] [INFO] [1783959077.910915099] [move_group.moveit.moveit.core.robot_model]: Loading robot model 'agv_dual_arm'...
+[move_group-3] [INFO] [1783959077.910929962] [move_group.moveit.moveit.core.robot_model]: No root/virtual joint specified in SRDF. Assuming fixed joint
+[moveit_planner-4] [INFO] [1783959077.922164326] [moveit_945272604.moveit.ros.rdf_loader]: Loaded robot model in 0.033064 seconds
+[moveit_planner-4] [INFO] [1783959077.922269476] [moveit_945272604.moveit.core.robot_model]: Loading robot model 'agv_dual_arm'...
+[moveit_planner-4] [INFO] [1783959077.922283977] [moveit_945272604.moveit.core.robot_model]: No root/virtual joint specified in SRDF. Assuming fixed joint
+[move_group-3] [WARN] [1783959078.002447787] [kdl_parser]: The root link base_link has an inertia specified in the URDF, but KDL does not support a root link with an inertia.  As a workaround, you can add an extra dummy link to your URDF.
+[move_group-3] [INFO] [1783959078.002606089] [move_group.moveit.moveit.kinematics.kdl_kinematics_plugin]: Joint weights for group 'right_arm': 1 1 1 1 1 1
+[move_group-3] [WARN] [1783959078.002839079] [kdl_parser]: The root link base_link has an inertia specified in the URDF, but KDL does not support a root link with an inertia.  As a workaround, you can add an extra dummy link to your URDF.
+[move_group-3] [INFO] [1783959078.002888569] [move_group.moveit.moveit.kinematics.kdl_kinematics_plugin]: Joint weights for group 'left_arm': 1 1 1 1 1 1
+[moveit_planner-4] [WARN] [1783959078.010540187] [kdl_parser]: The root link base_link has an inertia specified in the URDF, but KDL does not support a root link with an inertia.  As a workaround, you can add an extra dummy link to your URDF.
+[moveit_planner-4] [INFO] [1783959078.010686293] [moveit_945272604.moveit.kinematics.kdl_kinematics_plugin]: Joint weights for group 'right_arm': 1 1 1 1 1 1
+[moveit_planner-4] [WARN] [1783959078.011047131] [kdl_parser]: The root link base_link has an inertia specified in the URDF, but KDL does not support a root link with an inertia.  As a workaround, you can add an extra dummy link to your URDF.
+[moveit_planner-4] [INFO] [1783959078.011129071] [moveit_945272604.moveit.kinematics.kdl_kinematics_plugin]: Joint weights for group 'left_arm': 1 1 1 1 1 1
+[move_group-3] [INFO] [1783959078.080526027] [move_group.moveit.moveit.ros.planning_scene_monitor]: Publishing maintained planning scene on 'monitored_planning_scene'
+[move_group-3] [INFO] [1783959078.080843722] [move_group.moveit.moveit.ros.moveit_cpp]: Listening to 'joint_states' for joint states
+[move_group-3] [INFO] [1783959078.081751903] [move_group.moveit.moveit.ros.current_state_monitor]: Listening to joint states on topic 'joint_states'
+[move_group-3] [INFO] [1783959078.082660678] [move_group.moveit.moveit.ros.planning_scene_monitor]: Listening to '/attached_collision_object' for attached collision objects
+[move_group-3] [INFO] [1783959078.082683084] [move_group.moveit.moveit.ros.planning_scene_monitor]: Stopping existing planning scene publisher.
+[move_group-3] [INFO] [1783959078.082964405] [move_group.moveit.moveit.ros.planning_scene_monitor]: Stopped publishing maintained planning scene.
+[move_group-3] [INFO] [1783959078.083478858] [move_group.moveit.moveit.ros.planning_scene_monitor]: Publishing maintained planning scene on 'monitored_planning_scene'
+[move_group-3] [INFO] [1783959078.083613114] [move_group.moveit.moveit.ros.planning_scene_monitor]: Starting planning scene monitor
+[move_group-3] [INFO] [1783959078.084082741] [move_group.moveit.moveit.ros.planning_scene_monitor]: Listening to '/planning_scene'
+[move_group-3] [INFO] [1783959078.084102723] [move_group.moveit.moveit.ros.planning_scene_monitor]: Starting world geometry update monitor for collision objects, attached objects, octomap updates.
+[moveit_planner-4] [INFO] [1783959078.086068744] [moveit_945272604.moveit.ros.move_group_interface]: Ready to take commands for planning group right_arm.
+[move_group-3] [INFO] [1783959078.086712784] [move_group.moveit.moveit.ros.planning_scene_monitor]: Listening to 'collision_object'
+[move_group-3] [INFO] [1783959078.087458868] [move_group.moveit.moveit.ros.planning_scene_monitor]: Listening to 'planning_scene_world' for planning scene world geometry
+[move_group-3] [WARN] [1783959078.102534412] [move_group.moveit.moveit.ros.occupancy_map_monitor]: Resolution not specified for Octomap. Assuming resolution = 0.1 instead
+[move_group-3] [ERROR] [1783959078.102594550] [move_group.moveit.moveit.ros.occupancy_map_monitor]: No 3D sensor plugin(s) defined for octomap updates
+[moveit_planner-4] [INFO] [1783959078.114132973] [agv_arm_moveit_planner]: Adding collision objects to planning scene...
+[move_group-3] [INFO] [1783959078.187113924] [move_group.moveit.moveit.ros.planning_pipeline]: Successfully loaded planner 'OMPL'
+[move_group-3] [INFO] [1783959078.232241199] [move_group]: Try loading adapter 'default_planning_request_adapters/ResolveConstraintFrames'
+[move_group-3] [INFO] [1783959078.239874486] [move_group]: Loaded adapter 'default_planning_request_adapters/ResolveConstraintFrames'
+[move_group-3] [INFO] [1783959078.239926218] [move_group]: Try loading adapter 'default_planning_request_adapters/ValidateWorkspaceBounds'
+[move_group-3] [INFO] [1783959078.240186730] [move_group]: Loaded adapter 'default_planning_request_adapters/ValidateWorkspaceBounds'
+[move_group-3] [INFO] [1783959078.240204414] [move_group]: Try loading adapter 'default_planning_request_adapters/CheckStartStateBounds'
+[move_group-3] [INFO] [1783959078.240231764] [move_group]: Loaded adapter 'default_planning_request_adapters/CheckStartStateBounds'
+[move_group-3] [INFO] [1783959078.240235669] [move_group]: Try loading adapter 'default_planning_request_adapters/CheckStartStateCollision'
+[move_group-3] [INFO] [1783959078.240243234] [move_group]: Loaded adapter 'default_planning_request_adapters/CheckStartStateCollision'
+[move_group-3] [INFO] [1783959078.304617490] [move_group]: Try loading adapter 'default_planning_response_adapters/DisplayMotionPath'
+[move_group-3] [INFO] [1783959078.316146701] [move_group]: Loaded adapter 'default_planning_response_adapters/DisplayMotionPath'
+[move_group-3] [WARN] [1783959078.386027156] [move_group.moveit.moveit.ros.trajectory_execution_manager]: Parameter '~moveit_controller_manager' is not specified but only one matching plugin was found: 'moveit_simple_controller_manager/MoveItSimpleControllerManager'. Using that one.
+[move_group-3] [ERROR] [1783959078.439862054] [move_group.moveit.moveit.plugins.simple_controller_manager]: No controller_names specified.
+[move_group-3] [INFO] [1783959078.440539178] [move_group.moveit.moveit.plugins.simple_controller_manager]: Returned 0 controllers in list
+[move_group-3] [INFO] [1783959078.440828212] [move_group.moveit.moveit.plugins.simple_controller_manager]: Returned 0 controllers in list
+[move_group-3] [INFO] [1783959078.460661839] [move_group.moveit.moveit.ros.trajectory_execution_manager]: Trajectory execution is not managing controllers
+[move_group-3] [INFO] [1783959078.460747912] [move_group]: MoveGroup debug mode is ON
+[move_group-3] [INFO] [1783959078.992355450] [move_group.moveit.moveit.ros.move_group.executable]: 
+[move_group-3] 
+[move_group-3] ********************************************************
+[move_group-3] * MoveGroup using: 
+[move_group-3] *     - apply_planning_scene_service
+[move_group-3] *     - clear_octomap_service
+[move_group-3] *     - get_group_urdf
+[move_group-3] *     - load_geometry_from_file
+[move_group-3] *     - CartesianPathService
+[move_group-3] *     - execute_trajectory_action
+[move_group-3] *     - get_planning_scene_service
+[move_group-3] *     - kinematics_service
+[move_group-3] *     - move_action
+[move_group-3] *     - motion_plan_service
+[move_group-3] *     - query_planners_service
+[move_group-3] *     - state_validation_service
+[move_group-3] *     - save_geometry_to_file
+[move_group-3] ********************************************************
+[move_group-3] 
+[move_group-3] [INFO] [1783959078.992442009] [move_group.moveit.moveit.ros.move_group.context]: MoveGroup context using pipeline ompl
+[move_group-3] [INFO] [1783959078.992453899] [move_group.moveit.moveit.ros.move_group.context]: MoveGroup context initialization complete
+[move_group-3] [96mLoading 'move_group/ApplyPlanningSceneService'...[0m
+[move_group-3] [96mLoading 'move_group/ClearOctomapService'...[0m
+[move_group-3] [96mLoading 'move_group/GetUrdfService'...[0m
+[move_group-3] [96mLoading 'move_group/LoadGeometryFromFileService'...[0m
+[move_group-3] [96mLoading 'move_group/MoveGroupCartesianPathService'...[0m
+[move_group-3] [96mLoading 'move_group/MoveGroupExecuteTrajectoryAction'...[0m
+[move_group-3] [96mLoading 'move_group/MoveGroupGetPlanningSceneService'...[0m
+[move_group-3] [96mLoading 'move_group/MoveGroupKinematicsService'...[0m
+[move_group-3] [96mLoading 'move_group/MoveGroupMoveAction'...[0m
+[move_group-3] [96mLoading 'move_group/MoveGroupPlanService'...[0m
+[move_group-3] [96mLoading 'move_group/MoveGroupQueryPlannersService'...[0m
+[move_group-3] [96mLoading 'move_group/MoveGroupStateValidationService'...[0m
+[move_group-3] [96mLoading 'move_group/SaveGeometryToFileService'...[0m
+[move_group-3] 
+[move_group-3] [92mYou can start planning now![0m
+[move_group-3] 
+[joint_state_publisher-2] [INFO] [1783959079.297125449] [joint_state_publisher]: Waiting for robot_description to be published on the robot_description topic...
+[joint_state_publisher-2] [INFO] [1783959079.448889921] [joint_state_publisher]: Got description, configuring robot
+[joint_state_publisher-2] [INFO] [1783959079.507259118] [joint_state_publisher]: Got description, configuring robot
+[joint_state_publisher-2] [INFO] [1783959079.920575841] [joint_state_publisher]: Got description, configuring robot
+[joint_state_publisher-2] [INFO] [1783959080.347782854] [joint_state_publisher]: Got description, configuring robot
+[joint_state_publisher-2] [INFO] [1783959081.108926612] [joint_state_publisher]: Got description, configuring robot
+[joint_state_publisher-2] [INFO] [1783959081.378959229] [joint_state_publisher]: Got description, configuring robot
+[joint_state_publisher-2] [INFO] [1783959081.922505083] [joint_state_publisher]: Got description, configuring robot
+[joint_state_publisher-2] [INFO] [1783959082.012854313] [joint_state_publisher]: Got description, configuring robot
+[joint_state_publisher-2] [INFO] [1783959082.026307829] [joint_state_publisher]: Got description, configuring robot
+[moveit_planner-4] [INFO] [1783959089.016059370] [moveit_945272604.moveit.ros.current_state_monitor]: Listening to joint states on topic 'joint_states'
+[moveit_planner-4] [INFO] [1783959089.038746199] [agv_arm_moveit_planner]: R_ref matrix:
+[moveit_planner-4] [-0.000000, 0.000000, -1.000000
+[moveit_planner-4]  1.000000, 0.000000, -0.000000
+[moveit_planner-4]  0.000000, -1.000000, -0.000000]
+[moveit_planner-4] [INFO] [1783959089.038821416] [agv_arm_moveit_planner]: R_act matrix:
+[moveit_planner-4] [0.602319, -0.000000, -0.798256
+[moveit_planner-4]  0.798256, 0.000000, 0.602319
+[moveit_planner-4]  0.000000, -1.000000, 0.000000]
+[moveit_planner-4] [INFO] [1783959089.038849544] [agv_arm_moveit_planner]: URDF local error angles (XYZ deg): X=0.000022, Y=37.036140, Z=-0.000023
+[moveit_planner-4] [INFO] [1783959089.038880168] [agv_arm_moveit_planner]: Planning segment: HOME -> lowHover
+[moveit_planner-4] [INFO] [1783959089.041841260] [agv_arm_moveit_planner]: start_state right joints: 0.000000, 0.000000, 20.000000, -35.000000, 0.000000, 0.000000
+[moveit_planner-4] [INFO] [1783959089.041889014] [agv_arm_moveit_planner]: Clearing path constraints for segment: HOME -> lowHover
+[moveit_planner-4] [INFO] [1783959089.042524789] [moveit_945272604.moveit.ros.move_group_interface]: MoveGroup action client/server ready
+[move_group-3] [INFO] [1783959089.043347570] [move_group.moveit.moveit.ros.move_group.move_action]: MoveGroupMoveAction: Received request
+[move_group-3] [INFO] [1783959089.043840714] [move_group.moveit.moveit.ros.move_group.move_action]: executing..
+[moveit_planner-4] [INFO] [1783959089.044233835] [moveit_945272604.moveit.ros.move_group_interface]: Planning request accepted
+[moveit_planner-4] [ERROR] [1783959089.044552290] [agv_arm_moveit_planner.rclcpp_action]: unknown goal response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.044633163] [agv_arm_moveit_planner.rclcpp_action]: unknown goal response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.044654232] [agv_arm_moveit_planner.rclcpp_action]: unknown goal response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.044721543] [agv_arm_moveit_planner.rclcpp_action]: unknown goal response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.044741787] [agv_arm_moveit_planner.rclcpp_action]: unknown goal response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.044756615] [agv_arm_moveit_planner.rclcpp_action]: unknown goal response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.044910209] [agv_arm_moveit_planner.rclcpp_action]: unknown goal response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.044934481] [agv_arm_moveit_planner.rclcpp_action]: unknown goal response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.044945006] [agv_arm_moveit_planner.rclcpp_action]: unknown goal response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.044955132] [agv_arm_moveit_planner.rclcpp_action]: unknown goal response, ignoring...
+[moveit_planner-4] [INFO] [1783959089.047165925] [moveit_945272604.moveit.ros.move_group_interface]: Planning request aborted
+[moveit_planner-4] [ERROR] [1783959089.047367017] [agv_arm_moveit_planner.rclcpp_action]: unknown result response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.047995948] [agv_arm_moveit_planner.rclcpp_action]: unknown result response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.048072702] [moveit_945272604.moveit.ros.move_group_interface]: MoveGroupInterface::plan() failed or timeout reached
+[moveit_planner-4] [ERROR] [1783959089.048124482] [agv_arm_moveit_planner]: Planning failed for segment: HOME -> lowHover
+[moveit_planner-4] [ERROR] [1783959089.048154253] [agv_arm_moveit_planner]: MoveIt2 Planning Demo failed!
+[move_group-3] [INFO] [1783959089.047572677] [move_group.moveit.moveit.ros.move_group.move_action]: Planning request received for MoveGroup action. Forwarding to planning pipeline.
+[move_group-3] [INFO] [1783959089.047904854] [move_group]: Calling PlanningRequestAdapter 'ResolveConstraintFrames'
+[move_group-3] [INFO] [1783959089.047981793] [move_group]: Calling PlanningRequestAdapter 'ValidateWorkspaceBounds'
+[move_group-3] [WARN] [1783959089.047993877] [move_group.moveit.moveit.ros.validate_workspace_bounds]: It looks like the planning volume was not specified. Using default values.
+[move_group-3] [INFO] [1783959089.048017243] [move_group]: Calling PlanningRequestAdapter 'CheckStartStateBounds'
+[move_group-3] [INFO] [1783959089.048074847] [move_group]: Calling PlanningRequestAdapter 'CheckStartStateCollision'
+[move_group-3] [INFO] [1783959089.049834656] [move_group.moveit.moveit.planners.ompl.model_based_planning_context]: Planner configuration 'right_arm' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[move_group-3] [INFO] [1783959089.050384986] [move_group]: Calling Planner 'OMPL'
+[moveit_planner-4] [ERROR] [1783959089.064486227] [agv_arm_moveit_planner.rclcpp_action]: unknown result response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.067791187] [agv_arm_moveit_planner.rclcpp_action]: unknown result response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.068730329] [agv_arm_moveit_planner.rclcpp_action]: unknown result response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.069096913] [agv_arm_moveit_planner.rclcpp_action]: unknown result response, ignoring...
+[move_group-3] [INFO] [1783959089.068708123] [move_group]: Calling PlanningResponseAdapter 'DisplayMotionPath'
+[move_group-3] [WARN] [1783959089.068822335] [move_group.moveit.moveit.ros.planning_pipeline]: The planner plugin did not fill out the 'planner_id' field of the MotionPlanResponse. Setting it to the planner ID name of the MotionPlanRequest assuming that the planner plugin does warn you if it does not use the requested planner.
+[move_group-3] [INFO] [1783959089.068908214] [move_group.moveit.moveit.ros.move_group.move_action]: Motion plan was computed successfully.
+[moveit_planner-4] [ERROR] [1783959089.074108766] [agv_arm_moveit_planner.rclcpp_action]: unknown result response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.074489965] [agv_arm_moveit_planner.rclcpp_action]: unknown result response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.075790675] [agv_arm_moveit_planner.rclcpp_action]: unknown result response, ignoring...
+[moveit_planner-4] [ERROR] [1783959089.076628994] [agv_arm_moveit_planner.rclcpp_action]: unknown result response, ignoring...
+oup-3] [INFO] [1783959089.043144997] [move_group.moveit.moveit.ros.move_group.move_action]: MoveGroupMoveAction: Received request
+[move_group-3] [INFO] [1783959089.043961293] [move_group.moveit.moveit.ros.move_group.move_action]: executing..
+[move_group-3] [INFO] [1783959089.046285611] [move_group.moveit.moveit.ros.move_group.move_action]: Planning request received for MoveGroup action. Forwarding to planning pipeline.
+[move_group-3] [INFO] [1783959089.046449145] [move_group]: Calling PlanningRequestAdapter 'ResolveConstraintFrames'
+[move_group-3] [INFO] [1783959089.046597267] [move_group]: Calling PlanningRequestAdapter 'ValidateWorkspaceBounds'
+[move_group-3] [WARN] [1783959089.046606784] [move_group.moveit.moveit.ros.validate_workspace_bounds]: It looks like the planning volume was not specified. Using default values.
+[move_group-3] [INFO] [1783959089.046622294] [move_group]: Calling PlanningRequestAdapter 'CheckStartStateBounds'
+[move_group-3] [INFO] [1783959089.046658977] [move_group]: Calling PlanningRequestAdapter 'CheckStartStateCollision'
+[move_group-3] [INFO] [1783959089.047459025] [move_group.moveit.moveit.planners.ompl.model_based_planning_context]: Planner configuration 'right_arm' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[move_group-3] [INFO] [1783959089.047606680] [move_group]: Calling Planner 'OMPL'
+[move_group-3] [INFO] [1783959089.073824102] [move_group]: Calling PlanningResponseAdapter 'DisplayMotionPath'
+[move_group-3] [WARN] [1783959089.073954367] [move_group.moveit.moveit.ros.planning_pipeline]: The planner plugin did not fill out the 'planner_id' field of the MotionPlanResponse. Setting it to the planner ID name of the MotionPlanRequest assuming that the planner plugin does warn you if it does not use the requested planner.
+[move_group-3] [INFO] [1783959089.074028175] [move_group.moveit.moveit.ros.move_group.move_action]: Motion plan was computed successfully.
+r 'CheckStartStateBounds' failed, because 'Start state out of bounds.'. Aborting planning pipeline.
+[move_group-3] [ERROR] [1783959089.047657829] [move_group.moveit.moveit.ros.move_group.move_action]: Generating a plan with planning pipeline failed.
+[move_group-3] [INFO] [1783959089.047691554] [move_group.moveit.moveit.ros.move_group.move_action]: FAILURE
+ace_bounds]: It looks like the planning volume was not specified. Using default values.
+[move_group-3] [INFO] [1783959089.046620637] [move_group]: Calling PlanningRequestAdapter 'CheckStartStateBounds'
+[move_group-3] [ERROR] [1783959089.046657474] [move_group.moveit.moveit.ros.check_start_state_bounds]: Joint 'right_joint_3' from the starting state is outside bounds by: [0.349066 ] should be in the range [0.349066 ], [2.87979 ].
+[move_group-3] [ERROR] [1783959089.046784062] [move_group]: PlanningRequestAdapter 'CheckStartStateBounds' failed, because 'Start state out of bounds.'. Aborting planning pipeline.
+[move_group-3] [ERROR] [1783959089.046889384] [move_group.moveit.moveit.ros.move_group.move_action]: Generating a plan with planning pipeline failed.
+[move_group-3] [INFO] [1783959089.046940489] [move_group.moveit.moveit.ros.move_group.move_action]: FAILURE
+5721] [move_group.moveit.moveit.ros.move_group.move_action]: MoveGroupMoveAction: Received request
+[move_group-3] [INFO] [1783959089.043396214] [move_group.moveit.moveit.ros.move_group.move_action]: executing..
+[move_group-3] [INFO] [1783959089.046160555] [move_group.moveit.moveit.ros.move_group.move_action]: Planning request received for MoveGroup action. Forwarding to planning pipeline.
+[move_group-3] [INFO] [1783959089.046338888] [move_group]: Calling PlanningRequestAdapter 'ResolveConstraintFrames'
+[move_group-3] [INFO] [1783959089.046385233] [move_group]: Calling PlanningRequestAdapter 'ValidateWorkspaceBounds'
+[move_group-3] [WARN] [1783959089.046392837] [move_group.moveit.moveit.ros.validate_workspace_bounds]: It looks like the planning volume was not specified. Using default values.
+[move_group-3] [INFO] [1783959089.046408237] [move_group]: Calling PlanningRequestAdapter 'CheckStartStateBounds'
+[move_group-3] [ERROR] [1783959089.046446401] [move_group.moveit.moveit.ros.check_start_state_bounds]: Joint 'right_joint_3' from the starting state is outside bounds by: [0.349066 ] should be in the range [0.349066 ], [2.87979 ].
+[move_group-3] [ERROR] [1783959089.046513149] [move_group]: PlanningRequestAdapter 'CheckStartStateBounds' failed, because 'Start state out of bounds.'. Aborting planning pipeline.
+[move_group-3] [ERROR] [1783959089.046530289] [move_group.moveit.moveit.ros.move_group.move_action]: Generating a plan with planning pipeline failed.
+[move_group-3] [INFO] [1783959089.046571864] [move_group.moveit.moveit.ros.move_group.move_action]: FAILURE
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      [joint_state_publisher-2] [INFO] [1783959080.802263342] [joint_state_publisher]: Got description, configuring robot
+[move_group-3] [INFO] [1783959089.043065927] [move_group.moveit.moveit.ros.move_group.move_action]: MoveGroupMoveAction: Received request
+[move_group-3] [INFO] [1783959089.043422184] [move_group.moveit.moveit.ros.move_group.move_action]: executing..
+[move_group-3] [INFO] [1783959089.046861225] [move_group.moveit.moveit.ros.move_group.move_action]: Planning request received for MoveGroup action. Forwarding to planning pipeline.
+[move_group-3] [INFO] [1783959089.047046123] [move_group]: Calling PlanningRequestAdapter 'ResolveConstraintFrames'
+[move_group-3] [INFO] [1783959089.047093173] [move_group]: Calling PlanningRequestAdapter 'ValidateWorkspaceBounds'
+[move_group-3] [WARN] [1783959089.047099705] [move_group.moveit.moveit.ros.validate_workspace_bounds]: It looks like the planning volume was not specified. Using default values.
+[move_group-3] [INFO] [1783959089.047113012] [move_group]: Calling PlanningRequestAdapter 'CheckStartStateBounds'
+[move_group-3] [INFO] [1783959089.047147547] [move_group]: Calling PlanningRequestAdapter 'CheckStartStateCollision'
+[move_group-3] [INFO] [1783959089.047517843] [move_group.moveit.moveit.planners.ompl.model_based_planning_context]: Planner configuration 'right_arm' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[move_group-3] [INFO] [1783959089.047601244] [move_group]: Calling Planner 'OMPL'
+[move_group-3] [INFO] [1783959089.067062467] [move_group]: Calling PlanningResponseAdapter 'DisplayMotionPath'
+[move_group-3] [WARN] [1783959089.067177197] [move_group.moveit.moveit.ros.planning_pipeline]: The planner plugin did not fill out the 'planner_id' field of the MotionPlanResponse. Setting it to the planner ID name of the MotionPlanRequest assuming that the planner plugin does warn you if it does not use the requested planner.
+[move_group-3] [INFO] [1783959089.067244864] [move_group.moveit.moveit.ros.move_group.move_action]: Motion plan was computed successfully.
+                                                                                                                                                                                                                                                                                                                                                                                   [joint_state_publisher-2] [INFO] [1783959077.956329057] [joint_state_publisher]: Got description, configuring robot
+[move_group-3] [INFO] [1783959089.043430635] [move_group.moveit.moveit.ros.move_group.move_action]: MoveGroupMoveAction: Received request
+[move_group-3] [INFO] [1783959089.043712071] [move_group.moveit.moveit.ros.move_group.move_action]: executing..
+[move_group-3] [INFO] [1783959089.045943655] [move_group.moveit.moveit.ros.move_group.move_action]: Planning request received for MoveGroup action. Forwarding to planning pipeline.
+[move_group-3] [INFO] [1783959089.046143230] [move_group]: Calling PlanningRequestAdapter 'ResolveConstraintFrames'
+[move_group-3] [INFO] [1783959089.046187298] [move_group]: Calling PlanningRequestAdapter 'ValidateWorkspaceBounds'
+[move_group-3] [WARN] [1783959089.046193782] [move_group.moveit.moveit.ros.validate_workspace_bounds]: It looks like the planning volume was not specified. Using default values.
+[move_group-3] [INFO] [1783959089.046208001] [move_group]: Calling PlanningRequestAdapter 'CheckStartStateBounds'
+[move_group-3] [INFO] [1783959089.046239198] [move_group]: Calling PlanningRequestAdapter 'CheckStartStateCollision'
+[move_group-3] [INFO] [1783959089.046550032] [move_group.moveit.moveit.planners.ompl.model_based_planning_context]: Planner configuration 'right_arm' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[move_group-3] [INFO] [1783959089.046625241] [move_group]: Calling Planner 'OMPL'
+[move_group-3] [INFO] [1783959089.075620747] [move_group]: Calling PlanningResponseAdapter 'DisplayMotionPath'
+[move_group-3] [WARN] [1783959089.075881810] [move_group.moveit.moveit.ros.planning_pipeline]: The planner plugin did not fill out the 'planner_id' field of the MotionPlanResponse. Setting it to the planner ID name of the MotionPlanRequest assuming that the planner plugin does warn you if it does not use the requested planner.
+[move_group-3] [INFO] [1783959089.075968756] [move_group.moveit.moveit.ros.move_group.move_action]: Motion plan was computed successfully.
