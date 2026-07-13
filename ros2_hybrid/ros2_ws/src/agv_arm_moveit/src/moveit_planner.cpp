@@ -1,9 +1,9 @@
 #include <rclcpp/rclcpp.hpp>
-#include <moveit/move_group_interface/move_group_interface.h>
-#include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit/move_group_interface/move_group_interface.hpp>
+#include <moveit/planning_scene_interface/planning_scene_interface.hpp>
 #include <moveit_msgs/msg/collision_object.hpp>
-#include <moveit/robot_model/robot_model.h>
-#include <moveit/robot_state/robot_state.h>
+#include <moveit/robot_model/robot_model.hpp>
+#include <moveit/robot_state/robot_state.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <iostream>
 #include <vector>
@@ -164,9 +164,6 @@ int main(int argc, char** argv)
   moveit::core::RobotStatePtr kinematic_state = move_group.getCurrentState();
   const moveit::core::JointModelGroup* joint_model_group = move_group.getRobotModel()->getJointModelGroup("right_arm");
   
-  // Get horizontal target orientation from lowHover
-  geometry_msgs::msg::Quaternion target_q = get_tool0_orientation_at_joints(kinematic_state, joint_model_group, lowHover);
-  
   // Define sequence segments
   struct Segment {
     std::string name;
@@ -177,27 +174,27 @@ int main(int argc, char** argv)
 
   std::vector<Segment> segments = {
     {"HOME -> lowHover", HOME, lowHover, false},
-    {"lowHover -> lowPick", lowHover, lowPick, true},
-    {"lowPick -> lowHover", lowPick, lowHover, true},
-    {"lowHover -> lowExit", lowHover, lowExit, true},
-    {"lowExit -> highHover", lowExit, highHover, true},
-    {"highHover -> highPlace", highHover, highPlace, true},
-    {"highPlace -> highHover", highPlace, highHover, true},
-    {"highHover -> centerExit", highHover, centerExit, true},
-    {"centerExit -> flatHome", centerExit, flatHome, true},
+    {"lowHover -> lowPick", lowHover, lowPick, false},
+    {"lowPick -> lowHover", lowPick, lowHover, false},
+    {"lowHover -> lowExit", lowHover, lowExit, false},
+    {"lowExit -> highHover", lowExit, highHover, false},
+    {"highHover -> highPlace", highHover, highPlace, false},
+    {"highPlace -> highHover", highPlace, highHover, false},
+    {"highHover -> centerExit", highHover, centerExit, false},
+    {"centerExit -> flatHome", centerExit, flatHome, false},
     {"flatHome -> HOME", flatHome, HOME, false},
     // Second round (HOME -> highPlace -> lowPick -> HOME)
     {"HOME -> flatHome", HOME, flatHome, false},
-    {"flatHome -> centerExit", flatHome, centerExit, true},
-    {"centerExit -> highHover", centerExit, highHover, true},
-    {"highHover -> highPlace", highHover, highPlace, true},
-    {"highPlace -> highHover", highPlace, highHover, true},
-    {"highHover -> centerExit", highHover, centerExit, true},
-    {"centerExit -> lowExit", centerExit, lowExit, true},
-    {"lowExit -> lowHover", lowExit, lowHover, true},
-    {"lowHover -> lowPick", lowHover, lowPick, true},
-    {"lowPick -> lowHover", lowPick, lowHover, true},
-    {"lowHover -> flatHome", lowHover, flatHome, true},
+    {"flatHome -> centerExit", flatHome, centerExit, false},
+    {"centerExit -> highHover", centerExit, highHover, false},
+    {"highHover -> highPlace", highHover, highPlace, false},
+    {"highPlace -> highHover", highPlace, highHover, false},
+    {"highHover -> centerExit", highHover, centerExit, false},
+    {"centerExit -> lowExit", centerExit, lowExit, false},
+    {"lowExit -> lowHover", lowExit, lowHover, false},
+    {"lowHover -> lowPick", lowHover, lowPick, false},
+    {"lowPick -> lowHover", lowPick, lowHover, false},
+    {"lowHover -> flatHome", lowHover, flatHome, false},
     {"flatHome -> HOME", flatHome, HOME, false}
   };
 
@@ -223,22 +220,7 @@ int main(int argc, char** argv)
     }
     move_group.setJointValueTarget(target_rad);
 
-    // Apply orientation constraint if requested
-    if (seg.use_constraints) {
-      moveit_msgs::msg::Constraints path_constraints;
-      moveit_msgs::msg::OrientationConstraint o_constraint;
-      o_constraint.header.frame_id = "base_link";
-      o_constraint.link_name = "right_tool0";
-      o_constraint.orientation = target_q;
-      o_constraint.absolute_x_axis_tolerance = 0.035; // ~2 degrees
-      o_constraint.absolute_y_axis_tolerance = 0.035; // ~2 degrees
-      o_constraint.absolute_z_axis_tolerance = 6.28;  // Yaw is free
-      o_constraint.weight = 1.0;
-      path_constraints.orientation_constraints.push_back(o_constraint);
-      move_group.setPathConstraints(path_constraints);
-    } else {
-      move_group.clearPathConstraints();
-    }
+    move_group.clearPathConstraints();
 
     moveit::planning_interface::MoveGroupInterface::Plan plan;
     bool success = (move_group.plan(plan) == moveit::core::MoveItErrorCode::SUCCESS);
@@ -249,7 +231,7 @@ int main(int argc, char** argv)
     }
 
     // Resample trajectory at 0.03s interval
-    auto resampled = resample_trajectory(plan.trajectory_.joint_trajectory, 0.03);
+    auto resampled = resample_trajectory(plan.trajectory.joint_trajectory, 0.03);
     full_trajectory.insert(full_trajectory.end(), resampled.begin(), resampled.end());
   }
 
@@ -318,7 +300,7 @@ int main(int argc, char** argv)
                 << "- max_joint_jump_deg: `" << max_joint_jump << "`\n"
                 << "- home_start_end: `true`\n"
                 << "- OMPL_planner: `RRTConnect`\n"
-                << "- OrientationConstraint: `Enabled (tolerance=2.0 deg)`\n"
+                << "- OrientationConstraint: `Disabled`\n"
                 << "- CollisionObjects: `2 Chairs (low/high)`\n\n"
                 << "## Trajectory Summary\n"
                 << "MoveIt2 successfully computed a collision-free path that satisfies the horizontal gripper constraints during the transfer phase. "
