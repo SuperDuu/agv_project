@@ -13,8 +13,8 @@ public class TestChairDemoValidity {
         double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
         double[] lowApproachRight = { sharedQ1, 40.0, 80.0, -75.0, -90.0, 16.0 };
 
-        double[] highPlaceRight = { sharedQ1, 58.0, 45.0, -41.0, -90.0, 20.0 };
-        double[] highHoverRight = { sharedQ1, 62.0, 51.0, -51.0, -90.0, 20.0 };
+        double[] highPlaceRight = { sharedQ1, -66.0, 35.0, -39.0, -90.0, 3.0 };
+        double[] highHoverRight = { sharedQ1, -70.0, 45.0, -51.0, -90.0, 11.0 };
         // Left arm keyframes
         double[] leftClear = { sharedQ1, -10, -45, 58, 18, 18 };
         double[] foldedHomeRight = { sharedQ1, 0, 120, -90, 0, -52 };
@@ -37,9 +37,10 @@ public class TestChairDemoValidity {
         keyframes.add(new double[][] { lowPickRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         
-        // 4. Sweep directly to the high chair
+        // 4. Travel to the far high chair via the folded center pose
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
         
         // 5. Place low chair on high chair
@@ -52,6 +53,7 @@ public class TestChairDemoValidity {
         
         // 7. Retract right arm, left arm returns
         keyframes.add(new double[][] { highHoverRight, leftClear });
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
@@ -63,7 +65,7 @@ public class TestChairDemoValidity {
         // Test clearance
         ArmPanel panel = new ArmPanel(null); // Instantiate panel
         double[] lowPickCoord = panel.computeFK(sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0, true);
-        double[] highPlaceCoord = panel.computeFK(sharedQ1, 58.0, 45.0, -41.0, -90.0, 20.0, true);
+        double[] highPlaceCoord = panel.computeFK(sharedQ1, -66.0, 35.0, -39.0, -90.0, 3.0, true);
         double lowChairHeight = lowPickCoord[2] - 5.0;
         double highChairHeight = highPlaceCoord[2] - 5.0;
         double[] lowChairCenter = { lowPickCoord[0], lowPickCoord[1], 0.0 };

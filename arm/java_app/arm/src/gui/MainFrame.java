@@ -2535,8 +2535,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
         double[] lowApproachRight = { sharedQ1, 40.0, 80.0, -75.0, -90.0, 16.0 };
 
-        double[] highPlaceRight = { sharedQ1, 58.0, 45.0, -41.0, -90.0, 20.0 };
-        double[] highHoverRight = { sharedQ1, 62.0, 51.0, -51.0, -90.0, 20.0 };
+        double[] highPlaceRight = { sharedQ1, -66.0, 35.0, -39.0, -90.0, 3.0 };
+        double[] highHoverRight = { sharedQ1, -70.0, 45.0, -51.0, -90.0, 11.0 };
 
         double[] foldedHomeRight = { sharedQ1, 0.0, 120.0, -90.0, 0.0, -52.0 };
         double[] retreatRight = highHoverRight.clone();
@@ -2565,9 +2565,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int gripFrame1 = keyframes.size();
         keyframes.add(new double[][] { lowPickRight, leftClear });
 
-        // 3. Sweep directly to the high chair
+        // 3. Travel to the far high chair via the folded center pose
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
 
         // 4. Place the object on the high chair
@@ -2582,8 +2583,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int gripFrame2 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
 
-        // 7. Sweep it back to the low chair
+        // 7. Travel it back from the far high chair via the folded center pose
         keyframes.add(new double[][] { highHoverRight, leftClear });
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
 
@@ -2598,7 +2600,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { homeRight, homeLeft });
 
         double[] lowPickCoord = armPanel.computeFK(sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0, true);
-        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, 58.0, 45.0, -41.0, -90.0, 20.0, true);
+        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, -66.0, 35.0, -39.0, -90.0, 3.0, true);
         double lowChairHeight = lowPickCoord[2] - 5.0;
         double highChairHeight = highPlaceCoord[2] - 5.0;
         ChairDemoScene scene = new ChairDemoScene(
