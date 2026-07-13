@@ -225,6 +225,35 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         updateArm();
         syncGuiCoordsFromFK();
+
+        // Auto-start ROS2 Docker container in background (non-blocking).
+        // The UI remains fully responsive while the container starts up.
+        startRos2ContainerAsync();
+    }
+
+    /**
+     * Starts the ROS2 Docker container in a background daemon thread.
+     * Updates the title bar with live status messages so the user knows
+     * what is happening without any blocking dialog.
+     */
+    private void startRos2ContainerAsync() {
+        Thread ros2Thread = new Thread(() -> {
+            javax.swing.SwingUtilities.invokeLater(() ->
+                setTitle(getTitle() + "  |  ⏳ Đang khởi động ROS2..."));
+
+            comm.Ros2DockerManager mgr = comm.Ros2DockerManager.getInstance();
+            boolean ready = mgr.ensureRunning();
+
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                if (ready) {
+                    setTitle(getTitle().replaceAll("  \\|  .*", "") + "  |  ✅ ROS2 sẵn sàng");
+                } else {
+                    setTitle(getTitle().replaceAll("  \\|  .*", "") + "  |  ⚠ ROS2 không kết nối được");
+                }
+            });
+        }, "ros2-docker-start");
+        ros2Thread.setDaemon(true);
+        ros2Thread.start();
     }
 
     /**
