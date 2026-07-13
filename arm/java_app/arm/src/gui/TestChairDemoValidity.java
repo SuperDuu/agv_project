@@ -12,18 +12,19 @@ public class TestChairDemoValidity {
         double[] lowPickRight = { sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0 };
         double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
         double[] lowApproachRight = { sharedQ1, 40.0, 80.0, -75.0, -90.0, 16.0 };
+        double[] lowEntryRight = { sharedQ1, 0.0, 90.0, -80.0, -90.0, -10.0 };
+        double[] highEntryRight = { sharedQ1, -55.0, 85.0, -70.0, -90.0, 5.0 };
 
         double[] highPlaceRight = { sharedQ1, -66.0, 35.0, -39.0, -90.0, 3.0 };
         double[] highHoverRight = { sharedQ1, -70.0, 45.0, -51.0, -90.0, 11.0 };
         // Left arm keyframes
         double[] leftClear = { sharedQ1, -10, -45, 58, 18, 18 };
-        double[] foldedHomeRight = { sharedQ1, 0, 120, -90, 0, -52 };
         
         List<double[][]> keyframes = new ArrayList<>();
         
         // 0. Initial folding of right arm, left arm moves to clear
         keyframes.add(new double[][] { homeRight, homeLeft });
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { lowEntryRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
         
         // 1. Move to the low chair in one smooth approach
@@ -39,10 +40,11 @@ public class TestChairDemoValidity {
         keyframes.add(new double[][] { lowPickRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         
-        // 4. Travel to the far high chair through a compact folded pose near the body
+        // 4. Travel to the far high chair through a low, local corridor
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { lowEntryRight, leftClear });
+        keyframes.add(new double[][] { highEntryRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
         
         // 5. Place low chair on high chair
@@ -53,9 +55,9 @@ public class TestChairDemoValidity {
         
         // 6. Release high chair
         keyframes.add(new double[][] { highHoverRight, leftClear });
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { highEntryRight, leftClear });
         keyframes.add(new double[][] { homeRight, homeLeft });
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { highEntryRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
         keyframes.add(new double[][] { highPlaceRight, leftClear });
         keyframes.add(new double[][] { highPlaceRight, leftClear });
@@ -63,16 +65,16 @@ public class TestChairDemoValidity {
 
         // 7. Retract right arm, left arm returns
         keyframes.add(new double[][] { highHoverRight, leftClear });
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { highEntryRight, leftClear });
+        keyframes.add(new double[][] { lowEntryRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         keyframes.add(new double[][] { lowPickRight, leftClear });
         keyframes.add(new double[][] { lowPickRight, leftClear });
         keyframes.add(new double[][] { lowPickRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { lowEntryRight, leftClear });
         
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
         // Test clearance

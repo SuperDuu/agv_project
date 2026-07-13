@@ -2535,16 +2535,18 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] lowPickRight = { sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0 };
         double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
         double[] lowApproachRight = { sharedQ1, 40.0, 80.0, -75.0, -90.0, 16.0 };
+        double[] lowEntryRight = { sharedQ1, 0.0, 90.0, -80.0, -90.0, -10.0 };
+        double[] highEntryRight = { sharedQ1, -55.0, 85.0, -70.0, -90.0, 5.0 };
 
         double[] highPlaceRight = { sharedQ1, -66.0, 35.0, -39.0, -90.0, 3.0 };
         double[] highHoverRight = { sharedQ1, -70.0, 45.0, -51.0, -90.0, 11.0 };
 
-        double[] foldedHomeRight = { sharedQ1, 0.0, 120.0, -90.0, 0.0, -52.0 };
         double[] retreatRight = highHoverRight.clone();
 
         if (!logDemoPoseOk("chairHomeRight", homeRight, true) || !logDemoPoseOk("chairHomeLeft", homeLeft, false)
                 || !logDemoPoseOk("chairLeftClear", leftClear, false)
-                || !logDemoPoseOk("chairFoldedHomeRight", foldedHomeRight, true)
+                || !logDemoPoseOk("chairLowEntryRight", lowEntryRight, true)
+                || !logDemoPoseOk("chairHighEntryRight", highEntryRight, true)
                 || !logDemoPoseOk("chairLowApproachRight", lowApproachRight, true)
                 || !logDemoPoseOk("chairLowHoverRight", lowHoverRight, true)
                 || !logDemoPoseOk("chairLowPickRight", lowPickRight, true)
@@ -2556,7 +2558,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(new double[][] { homeRight, homeLeft });
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { lowEntryRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
 
         // 1. Move to the low chair in one smooth approach
@@ -2570,12 +2572,14 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postGripFrame1 = keyframes.size();
         keyframes.add(new double[][] { lowPickRight, leftClear });
 
-        // 3. Travel to the far high chair through a compact folded pose near the body
+        // 3. Travel to the far high chair through a low, local corridor instead of the front spike pose
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         int lowApproachToHighFrame = keyframes.size();
         keyframes.add(new double[][] { lowApproachRight, leftClear });
-        int foldedCarryToHighFrame = keyframes.size();
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        int lowEntryToHighFrame = keyframes.size();
+        keyframes.add(new double[][] { lowEntryRight, leftClear });
+        int highEntryToHighFrame = keyframes.size();
+        keyframes.add(new double[][] { highEntryRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
 
         // 4. Place the object on the high chair
@@ -2588,11 +2592,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // 5. Retract fully to the startup home pose before coming back
         keyframes.add(new double[][] { highHoverRight, leftClear });
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { highEntryRight, leftClear });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
         // 6. Return to the high chair to pick it up again
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { highEntryRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
         int preGripFrame2 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
@@ -2601,10 +2605,12 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postGripFrame2 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
 
-        // 7. Travel it back from the far high chair through the same compact folded pose
+        // 7. Travel it back from the far high chair through the same low, local corridor
         keyframes.add(new double[][] { highHoverRight, leftClear });
-        int foldedCarryToLowFrame = keyframes.size();
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        int highEntryToLowFrame = keyframes.size();
+        keyframes.add(new double[][] { highEntryRight, leftClear });
+        int lowEntryToLowFrame = keyframes.size();
+        keyframes.add(new double[][] { lowEntryRight, leftClear });
         int lowApproachToLowFrame = keyframes.size();
         keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
@@ -2620,7 +2626,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // 9. Retract and go home
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
-        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { lowEntryRight, leftClear });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
         double[] lowPickCoord = armPanel.computeFK(sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0, true);
@@ -2642,8 +2648,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         plan.rightGripIndices.add(gripFrame2);
         plan.rightReleaseIndices.add(releaseFrame2);
         plan.passThroughIndices.add(lowApproachToHighFrame);
-        plan.passThroughIndices.add(foldedCarryToHighFrame);
-        plan.passThroughIndices.add(foldedCarryToLowFrame);
+        plan.passThroughIndices.add(lowEntryToHighFrame);
+        plan.passThroughIndices.add(highEntryToHighFrame);
+        plan.passThroughIndices.add(highEntryToLowFrame);
+        plan.passThroughIndices.add(lowEntryToLowFrame);
         plan.passThroughIndices.add(lowApproachToLowFrame);
         plan.customDelays.put(preGripFrame1, 3000);
         plan.customDelays.put(postGripFrame1, 2000);
