@@ -13,8 +13,8 @@ public class TestChairDemoValidity {
         double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
         double[] lowApproachRight = { sharedQ1, 40.0, 80.0, -75.0, -90.0, 16.0 };
 
-        double[] highPlaceRight = { sharedQ1, 40.0, 68.0, -27.0, -90.0, 24.0 };
-        double[] highHoverRight = { sharedQ1, 44.0, 76.0, -33.0, -90.0, 24.0 };
+        double[] highPlaceRight = { sharedQ1, 58.0, 45.0, -41.0, -90.0, 20.0 };
+        double[] highHoverRight = { sharedQ1, 62.0, 51.0, -51.0, -90.0, 20.0 };
         // Left arm keyframes
         double[] leftClear = { sharedQ1, -10, -45, 58, 18, 18 };
         double[] foldedHomeRight = { sharedQ1, 0, 120, -90, 0, -52 };
@@ -63,7 +63,7 @@ public class TestChairDemoValidity {
         // Test clearance
         ArmPanel panel = new ArmPanel(null); // Instantiate panel
         double[] lowPickCoord = panel.computeFK(sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0, true);
-        double[] highPlaceCoord = panel.computeFK(sharedQ1, 40.0, 68.0, -27.0, -90.0, 24.0, true);
+        double[] highPlaceCoord = panel.computeFK(sharedQ1, 58.0, 45.0, -41.0, -90.0, 20.0, true);
         double lowChairHeight = lowPickCoord[2] - 5.0;
         double highChairHeight = highPlaceCoord[2] - 5.0;
         double[] lowChairCenter = { lowPickCoord[0], lowPickCoord[1], 0.0 };
