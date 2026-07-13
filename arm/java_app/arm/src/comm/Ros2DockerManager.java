@@ -28,7 +28,7 @@ public class Ros2DockerManager {
 
     private static final String CONTAINER_NAME = "agv_ros2_hybrid";
     private static final int PING_TIMEOUT_MS = 1000;
-    private static final int PING_MAX_RETRIES = 60; // wait up to 60 seconds
+    private static final int PING_MAX_RETRIES = 120; // wait up to 120s (includes colcon build time)
     private static final int PING_INTERVAL_MS = 1000;
 
     private final String composeDir;
