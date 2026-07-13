@@ -38,7 +38,7 @@ void Servo_Init(void) {
         } else if (i == 3) {
             init_angle = 90.0f;
         } else if (i == 4) {
-            init_angle = 0.0f;
+            init_angle = 90.0f;
         } else if (i == 5) {
             init_angle = 0.0f;    // Default to 0 degrees as requested
         } else {
