@@ -2777,6 +2777,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         final double flatA = -15.0;
         double[] lowPick = makeRightFlatGripperPose(35.0, 30.0, flatA, 80.0);
         double[] lowHover = makeRightFlatGripperPose(35.0, 80.0, flatA, 80.0);
+        double[] lowExit = makeRightFlatGripperPose(35.0, 80.0, flatA, -80.0);
         double[] highPlace = makeRightFlatGripperPose(-45.0, 80.0, flatA, -80.0);
         double[] highHover = highPlace.clone();
         double[] flatHome = makeRightFlatGripperPose(0.0, 80.0, flatA, 0.0);
@@ -2788,8 +2789,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double chairDistance = distanceXY(lowPickCoord, highPlaceCoord);
 
         ChairDemoScene scene = new ChairDemoScene(
-                new double[] { lowPickCoord[0], lowPickCoord[1], 0.0 }, lowPickCoord[2] - 12.0,
-                new double[] { highPlaceCoord[0], highPlaceCoord[1], 0.0 }, highPlaceCoord[2] - 12.0);
+                new double[] { lowPickCoord[0], lowPickCoord[1], 0.0 },
+                lowPickCoord[2] - ArmPanel.CHAIR_DEMO_OBJECT_HALF,
+                new double[] { highPlaceCoord[0], highPlaceCoord[1], 0.0 },
+                highPlaceCoord[2] - ArmPanel.CHAIR_DEMO_OBJECT_HALF);
 
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(makeFlatQ1ChairFrame(flatHome));
@@ -2803,7 +2806,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(makeFlatQ1ChairFrame(lowPick));
 
         appendFlatQ1ChairPath(keyframes, lowPick, lowHover, 12);
-        appendFlatQ1ChairPath(keyframes, lowHover, highHover, 64);
+        appendFlatQ1ChairPath(keyframes, lowHover, lowExit, 32);
+        appendFlatQ1ChairPath(keyframes, lowExit, highHover, 64);
 
         int preReleaseFrame1 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(highPlace));
@@ -2812,11 +2816,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postReleaseFrame1 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(highPlace));
 
-        appendFlatQ1ChairPath(keyframes, highPlace, lowHover, 64);
+        appendFlatQ1ChairPath(keyframes, highPlace, lowExit, 64);
+        appendFlatQ1ChairPath(keyframes, lowExit, lowHover, 32);
         appendFlatQ1ChairPath(keyframes, lowHover, flatHome, 24);
         int homePauseFrame = keyframes.size() - 1;
         appendFlatQ1ChairPath(keyframes, flatHome, lowHover, 24);
-        appendFlatQ1ChairPath(keyframes, lowHover, highHover, 64);
+        appendFlatQ1ChairPath(keyframes, lowHover, lowExit, 32);
+        appendFlatQ1ChairPath(keyframes, lowExit, highHover, 64);
 
         int preGripFrame2 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(highPlace));
@@ -2825,7 +2831,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int postGripFrame2 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(highPlace));
 
-        appendFlatQ1ChairPath(keyframes, highPlace, lowHover, 64);
+        appendFlatQ1ChairPath(keyframes, highPlace, lowExit, 64);
+        appendFlatQ1ChairPath(keyframes, lowExit, lowHover, 32);
 
         int preReleaseFrame2 = keyframes.size();
         keyframes.add(makeFlatQ1ChairFrame(lowPick));
@@ -2903,7 +2910,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         boolean ok = true;
         ok &= validateFlatGripperPlane(label, frames, samplesPerSegment, 2.0);
         ok &= validateDualDemoCollision(label, frames, samplesPerSegment);
-        ok &= validateChairDemoClearance(label, frames, scene, samplesPerSegment);
+        ok &= validateFlatQ1ChairClearance(label, frames, scene, samplesPerSegment);
         for (int i = 0; i < frames.size(); i++) {
             double[] right = frames.get(i)[0];
             double[] left = frames.get(i)[1];
@@ -2917,6 +2924,61 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
         }
         return ok;
+    }
+
+    private boolean validateFlatQ1ChairClearance(String label, java.util.List<double[][]> frames,
+            ChairDemoScene scene, int samplesPerSegment) {
+        for (int i = 0; i < frames.size(); i++) {
+            if (!isFlatQ1ChairFrameClear(frames.get(i), scene)) {
+                System.out.printf("[DEMO_COLLISION] %s flat-chair frame=%d%n", label, i);
+                return false;
+            }
+        }
+        for (int i = 0; i < frames.size() - 1; i++) {
+            for (int step = 1; step < samplesPerSegment; step++) {
+                double t = step / (double) samplesPerSegment;
+                double[][] interp = interpolateDualArmFrame(frames.get(i), frames.get(i + 1), t);
+                if (!isFlatQ1ChairFrameClear(interp, scene)) {
+                    System.out.printf("[DEMO_COLLISION] %s flat-chair segment=%d step=%d%n", label, i, step);
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean isFlatQ1ChairFrameClear(double[][] frame, ChairDemoScene scene) {
+        double xyMargin = 3.0;
+        return isArmClearOfFlatQ1ChairBox(frame[0], true, scene.lowChairCenter, scene.lowChairHeight, xyMargin)
+                && isArmClearOfFlatQ1ChairBox(frame[1], false, scene.lowChairCenter, scene.lowChairHeight, xyMargin)
+                && isArmClearOfFlatQ1ChairBox(frame[0], true, scene.highChairCenter, scene.highChairHeight, xyMargin)
+                && isArmClearOfFlatQ1ChairBox(frame[1], false, scene.highChairCenter, scene.highChairHeight, xyMargin);
+    }
+
+    private boolean isArmClearOfFlatQ1ChairBox(double[] q, boolean isRight, double[] chairCenter,
+            double chairHeight, double xyMargin) {
+        double[][] pts = ArmPanel.computeAllJoints3DForAngles(q, isRight);
+        double minX = chairCenter[0] - ArmPanel.CHAIR_DEMO_HALF_X - xyMargin;
+        double maxX = chairCenter[0] + ArmPanel.CHAIR_DEMO_HALF_X + xyMargin;
+        double minY = chairCenter[1] - ArmPanel.CHAIR_DEMO_HALF_Y - xyMargin;
+        double maxY = chairCenter[1] + ArmPanel.CHAIR_DEMO_HALF_Y + xyMargin;
+        double minZ = -xyMargin;
+        double maxZ = chairHeight;
+
+        double[] pt6 = pts[6];
+        double[] pt7 = pts[7];
+        double[] ptMid = { (pt6[0] + pt7[0]) / 2.0, (pt6[1] + pt7[1]) / 2.0,
+                (pt6[2] + pt7[2]) / 2.0 };
+
+        double[][] checkPts = { pt6, pt7, ptMid };
+        for (double[] pt : checkPts) {
+            if (pt[0] >= minX && pt[0] <= maxX
+                    && pt[1] >= minY && pt[1] <= maxY
+                    && pt[2] >= minZ && pt[2] <= maxZ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean validateFlatGripperPlane(String label, java.util.List<double[][]> frames,
