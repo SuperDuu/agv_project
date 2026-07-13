@@ -2359,16 +2359,16 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
         double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
-        double[] openRight = { sharedQ1, -18, 64, -82, 8, -24 };
+        double[] openRight = { sharedQ1, -18, 64, -82, 8, 24 };
         double[] openLeft = { sharedQ1, -18, -64, 82, 8, 24 };
-        double[] frontRight = { sharedQ1, 34, 118, -95, 20, -42 };
+        double[] frontRight = { sharedQ1, 34, 118, -95, 20, 42 };
         double[] backLeft = { sharedQ1, -34, -24, 30, -22, 26 };
-        double[] highRight = { sharedQ1, -24, 78, -88, 28, -12 };
+        double[] highRight = { sharedQ1, -24, 78, -88, 28, 12 };
         double[] highLeft = { sharedQ1, -24, -78, 88, 28, 12 };
-        double[] backRight = { sharedQ1, -34, 24, -30, -22, -26 };
+        double[] backRight = { sharedQ1, -34, 24, -30, -22, 26 };
         double[] frontLeft = { sharedQ1, 34, -118, 95, 20, 42 };
         double[] foldRight = { sharedQ1, -20, 44, -58, -10, 18 };
-        double[] foldLeft = { sharedQ1, -20, -44, 58, -10, -18 };
+        double[] foldLeft = { sharedQ1, -20, -44, 58, -10, 18 };
 
         if (!logDemoPoseOk("openRight", openRight, true) || !logDemoPoseOk("frontRight", frontRight, true)
                 || !logDemoPoseOk("highRight", highRight, true) || !logDemoPoseOk("backRight", backRight, true)
@@ -2399,8 +2399,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
 
         // ===== POSE LIBRARY =====
-        // Joint limits: R q1[-45,45] q2[-90,90] q3[20,165] q4[-95,-15] q5[-90,90] q6[-60,60]
-        //               L q1[-45,45] q2[-90,90] q3[-165,-20] q4[15,95] q5[-90,90] q6[-60,60]
+        // Joint limits: R q1[-45,45] q2[-90,90] q3[20,165] q4[-95,-15] q5[-90,90] q6[0,90]
+        //               L q1[-45,45] q2[-90,90] q3[-165,-20] q4[15,95] q5[-90,90] q6[0,90]
         // Poses designed using workspace CSV analysis for high manipulability
 
         // --- Home / Neutral ---
@@ -2408,43 +2408,43 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] homeL  = { sharedQ1,   0, -20,   35,    0,    0 };
 
         // --- Phase 1: Intro - gentle open ---
-        double[] readyR      = { sharedQ1,  18,  36,  -74,    6,  -12 };
+        double[] readyR      = { sharedQ1,  18,  36,  -74,    6,   12 };
         double[] readyL      = { sharedQ1,  18, -36,   74,    6,   12 };
-        double[] openWideR   = { sharedQ1, -18,  64,  -82,    8,  -24 };
+        double[] openWideR   = { sharedQ1, -18,  64,  -82,    8,   24 };
         double[] openWideL   = { sharedQ1, -18, -64,   82,    8,   24 };
 
         // --- Phase 2: Alternate wave (asymmetric!) ---
-        double[] highR       = { sharedQ1, -24,  78,  -88,   28,  -12 };
-        double[] lowFrontR   = { sharedQ1,  42,  46,  -82,  -10,   -8 };
+        double[] highR       = { sharedQ1, -24,  78,  -88,   28,   12 };
+        double[] lowFrontR   = { sharedQ1,  42,  46,  -82,  -10,    8 };
         double[] highL       = { sharedQ1, -24, -78,   88,   28,   12 };
         double[] lowFrontL   = { sharedQ1,  42, -46,   82,  -10,    8 };
 
         // --- Phase 3: Present / display ---
-        double[] presentR    = { sharedQ1,  58,  46,  -88,   18,  -34 };
+        double[] presentR    = { sharedQ1,  58,  46,  -88,   18,   34 };
         double[] presentL    = { sharedQ1,  58, -46,   88,   18,   34 };
-        double[] sweepLowR   = { sharedQ1,  72,  42,  -82,   30,  -24 };
+        double[] sweepLowR   = { sharedQ1,  72,  42,  -82,   30,   24 };
         double[] sweepLowL   = { sharedQ1,  72, -42,   82,   30,   24 };
 
         // --- Phase 4: Cross-body (elbow exchange, wrist twist) ---
-        double[] crossFrontR = { sharedQ1,  34, 118,  -95,   20,  -42 };
+        double[] crossFrontR = { sharedQ1,  34, 118,  -95,   20,   42 };
         double[] crossBackL  = { sharedQ1, -34, -40,   38,  -22,   26 };
-        double[] crossBackR  = { sharedQ1, -34,  40,  -38,  -22,  -26 };
+        double[] crossBackR  = { sharedQ1, -34,  40,  -38,  -22,   26 };
         double[] crossFrontL = { sharedQ1,  34,-118,   95,   20,   42 };
 
         // --- Phase 5: Elbow fold / wrist roll ---
         double[] foldR       = { sharedQ1, -20,  44,  -58,  -10,   18 };
-        double[] foldL       = { sharedQ1, -20, -44,   58,  -10,  -18 };
-        double[] tiltWristR  = { sharedQ1,   6,  92,  -95,   60,  -40 };
+        double[] foldL       = { sharedQ1, -20, -44,   58,  -10,   18 };
+        double[] tiltWristR  = { sharedQ1,   6,  92,  -95,   60,   40 };
         double[] tiltWristL  = { sharedQ1,   6, -92,   95,   60,   40 };
 
         // --- Phase 6: Sweep / grand gesture ---
-        double[] highFoldR   = { sharedQ1,  24,  84,  -82,   36,  -12 };
+        double[] highFoldR   = { sharedQ1,  24,  84,  -82,   36,   12 };
         double[] highFoldL   = { sharedQ1,  24, -84,   82,   36,   12 };
-        double[] pulseCenterR= { sharedQ1,  34,  60,  -80,   24,  -20 };
+        double[] pulseCenterR= { sharedQ1,  34,  60,  -80,   24,   20 };
         double[] pulseCenterL= { sharedQ1,  34, -60,   80,   24,   20 };
         double[] reachUpR    = { sharedQ1, -10, 100,  -55,   45,    0 };
         double[] reachUpL    = { sharedQ1, -10,-100,   55,   45,    0 };
-        double[] bowR        = { sharedQ1,  56,  48,  -55,    4,  -18 };
+        double[] bowR        = { sharedQ1,  56,  48,  -55,    4,   18 };
         double[] bowL        = { sharedQ1,  56, -48,   55,    4,   18 };
 
         // --- Validate all poses against joint limits ---
@@ -2543,7 +2543,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] lowPickRight = { sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0 };
         double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
         double[] lowApproachRight = { sharedQ1, 40.0, 80.0, -75.0, -90.0, 16.0 };
-        double[] lowEntryRight = { sharedQ1, 0.0, 90.0, -80.0, -90.0, -10.0 };
+        double[] lowEntryRight = { sharedQ1, 0.0, 90.0, -80.0, -90.0, 10.0 };
         double[] highEntryRight = { sharedQ1, -55.0, 85.0, -70.0, -90.0, 5.0 };
 
         double[] highPlaceRight = { sharedQ1, -66.0, 35.0, -39.0, -90.0, 3.0 };
@@ -2806,7 +2806,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] leftPlace = solveDemoPoint(false, -placeX, placeY, placeZ, prefCfgLeft);
         isRightArmSelected = savedArmSelection;
 
-        double[] rightShow = new double[] { 0, -10, 45, -58, 18, -18 };
+        double[] rightShow = new double[] { 0, -10, 45, -58, 18, 18 };
         double[] leftShow = new double[] { 0, -10, -45, 58, 18, 18 };
 
         if (rightPickHover == null || rightPick == null || rightPlaceHover == null || rightPlace == null
@@ -2913,7 +2913,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(makeDemoFrame(rightDemo, placeQ));
         keyframes.add(makeDemoFrame(rightDemo, placeQ));
         keyframes.add(makeDemoFrame(rightDemo, placeHover));
-        keyframes.add(makeDemoFrame(rightDemo, withWrist(placeHover, 45, -45)));
+        keyframes.add(makeDemoFrame(rightDemo, withWrist(placeHover, 45, 45)));
         keyframes.add(makeDemoFrame(rightDemo, withWrist(placeHover, -45, 45)));
         keyframes.add(new double[][] {
                 { 0, 0, 20, -35, 0, 0 },
@@ -3070,7 +3070,6 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] leftPose = rightPose.clone();
         leftPose[2] = -leftPose[2];
         leftPose[3] = -leftPose[3];
-        leftPose[5] = -leftPose[5];
         return leftPose;
     }
 

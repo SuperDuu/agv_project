@@ -17,9 +17,9 @@ const double L6 = 0.0;
 const double L7 = 15.0;
 
 // θ-space limits (must match Kinematics.java JOINT_MIN/MAX)
-const double JOINT_MIN_RIGHT[6] = { -45, -90, 20, -95, -90, -90 };
+const double JOINT_MIN_RIGHT[6] = { -45, -90, 20, -95, -90, 0 };
 const double JOINT_MAX_RIGHT[6] = { 45, 90, 165, -15, 90, 90 };
-const double JOINT_MIN_LEFT[6]  = { -45, -90, -165, 15, -90, -90 };
+const double JOINT_MIN_LEFT[6]  = { -45, -90, -165, 15, -90, 0 };
 const double JOINT_MAX_LEFT[6]  = { 45, 90, -20, 95, 90, 90 };
 
 // Check θ-space limits

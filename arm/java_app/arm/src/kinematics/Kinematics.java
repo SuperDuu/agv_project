@@ -17,11 +17,11 @@ public class Kinematics {
     public static final double L7 = 15.0;
 
     public static final String[] JOINT_NAMES = { "Khớp 1", "Khớp 2", "Khớp 3", "Khớp 4", "Khớp 5", "Khớp 6" };
-    public static final double[] JOINT_MIN_RIGHT = { -45, -90, 20, -95, -90, -60 };
-    public static final double[] JOINT_MAX_RIGHT = { 45, 90, 165, -15, 90, 60 };
+    public static final double[] JOINT_MIN_RIGHT = { -45, -90, 20, -95, -90, 0 };
+    public static final double[] JOINT_MAX_RIGHT = { 45, 90, 165, -15, 90, 90 };
 
-    public static final double[] JOINT_MIN_LEFT = { -45, -90, -165, 15, -90, -60 };
-    public static final double[] JOINT_MAX_LEFT = { 45, 90, -20, 95, 90, 60 };
+    public static final double[] JOINT_MIN_LEFT = { -45, -90, -165, 15, -90, 0 };
+    public static final double[] JOINT_MAX_LEFT = { 45, 90, -20, 95, 90, 90 };
 
     public static final double[] JOINT_MIN = JOINT_MIN_RIGHT;
     public static final double[] JOINT_MAX = JOINT_MAX_RIGHT;
