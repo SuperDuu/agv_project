@@ -2562,7 +2562,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { lowHoverRight, leftClear });
 
         // 2. Pick the object from the low chair
+        int preGripFrame1 = keyframes.size();
+        keyframes.add(new double[][] { lowPickRight, leftClear });
         int gripFrame1 = keyframes.size();
+        keyframes.add(new double[][] { lowPickRight, leftClear });
+        int postGripFrame1 = keyframes.size();
         keyframes.add(new double[][] { lowPickRight, leftClear });
 
         // 3. Travel to the far high chair via the folded center pose
@@ -2572,17 +2576,26 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { highHoverRight, leftClear });
 
         // 4. Place the object on the high chair
+        int preReleaseFrame1 = keyframes.size();
+        keyframes.add(new double[][] { highPlaceRight, leftClear });
         int releaseFrame1 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
+        int postReleaseFrame1 = keyframes.size();
+        keyframes.add(new double[][] { highPlaceRight, leftClear });
 
-        // 5. Retract fully before coming back to pick from the high chair
+        // 5. Retract fully to the startup home pose before coming back
         keyframes.add(new double[][] { highHoverRight, leftClear });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
-        int waitFrame = keyframes.size() - 1;
+        keyframes.add(new double[][] { homeRight, homeLeft });
 
         // 6. Return to the high chair to pick it up again
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
+        int preGripFrame2 = keyframes.size();
+        keyframes.add(new double[][] { highPlaceRight, leftClear });
         int gripFrame2 = keyframes.size();
+        keyframes.add(new double[][] { highPlaceRight, leftClear });
+        int postGripFrame2 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
 
         // 7. Travel it back from the far high chair via the folded center pose
@@ -2592,7 +2605,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         keyframes.add(new double[][] { lowHoverRight, leftClear });
 
         // 8. Place the object back on the low chair
+        int preReleaseFrame2 = keyframes.size();
+        keyframes.add(new double[][] { lowPickRight, leftClear });
         int releaseFrame2 = keyframes.size();
+        keyframes.add(new double[][] { lowPickRight, leftClear });
+        int postReleaseFrame2 = keyframes.size();
         keyframes.add(new double[][] { lowPickRight, leftClear });
 
         // 9. Retract and go home
@@ -2616,12 +2633,17 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
 
         DualDemoPlan plan = new DualDemoPlan(frames, gripFrame1, -1, releaseFrame1, -1,
-                5000, 0, 5000, 0, scene);
+                0, 0, 0, 0, scene);
         plan.rightGripIndices.add(gripFrame2);
         plan.rightReleaseIndices.add(releaseFrame2);
-        plan.customDelays.put(waitFrame, 5000);
-        plan.customDelays.put(gripFrame2, 5000);
-        plan.customDelays.put(releaseFrame2, 5000);
+        plan.customDelays.put(preGripFrame1, 3000);
+        plan.customDelays.put(postGripFrame1, 2000);
+        plan.customDelays.put(preReleaseFrame1, 3000);
+        plan.customDelays.put(postReleaseFrame1, 2000);
+        plan.customDelays.put(preGripFrame2, 3000);
+        plan.customDelays.put(postGripFrame2, 2000);
+        plan.customDelays.put(preReleaseFrame2, 3000);
+        plan.customDelays.put(postReleaseFrame2, 2000);
 
         return plan;
     }

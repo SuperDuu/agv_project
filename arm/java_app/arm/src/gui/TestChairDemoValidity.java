@@ -32,6 +32,8 @@ public class TestChairDemoValidity {
         // 2. Pick low chair
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         keyframes.add(new double[][] { lowPickRight, leftClear });
+        keyframes.add(new double[][] { lowPickRight, leftClear });
+        keyframes.add(new double[][] { lowPickRight, leftClear });
         
         // 3. Lift low chair
         keyframes.add(new double[][] { lowPickRight, leftClear });
@@ -46,18 +48,27 @@ public class TestChairDemoValidity {
         // 5. Place low chair on high chair
         keyframes.add(new double[][] { highHoverRight, leftClear });
         keyframes.add(new double[][] { highPlaceRight, leftClear });
+        keyframes.add(new double[][] { highPlaceRight, leftClear });
+        keyframes.add(new double[][] { highPlaceRight, leftClear });
         
         // 6. Release high chair
-        keyframes.add(new double[][] { highPlaceRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { homeRight, homeLeft });
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
+        keyframes.add(new double[][] { highPlaceRight, leftClear });
+        keyframes.add(new double[][] { highPlaceRight, leftClear });
+        keyframes.add(new double[][] { highPlaceRight, leftClear });
 
         // 7. Retract right arm, left arm returns
         keyframes.add(new double[][] { highHoverRight, leftClear });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
+        keyframes.add(new double[][] { lowPickRight, leftClear });
+        keyframes.add(new double[][] { lowPickRight, leftClear });
+        keyframes.add(new double[][] { lowPickRight, leftClear });
         keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
         
