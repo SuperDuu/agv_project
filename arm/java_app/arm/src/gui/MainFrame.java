@@ -2575,11 +2575,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         int releaseFrame1 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
 
-        // 5. Wait at the high-chair hover pose
+        // 5. Retract fully before coming back to pick from the high chair
         keyframes.add(new double[][] { highHoverRight, leftClear });
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
         int waitFrame = keyframes.size() - 1;
 
         // 6. Return to the high chair to pick it up again
+        keyframes.add(new double[][] { highHoverRight, leftClear });
         int gripFrame2 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
 

@@ -50,7 +50,9 @@ public class TestChairDemoValidity {
         // 6. Release high chair
         keyframes.add(new double[][] { highPlaceRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
-        
+        keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { highHoverRight, leftClear });
+
         // 7. Retract right arm, left arm returns
         keyframes.add(new double[][] { highHoverRight, leftClear });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
