@@ -88,7 +88,22 @@ def generate_launch_description():
         parameters=[robot_description],
     )
 
+    # Start moveit_planner node
+    moveit_planner_node = Node(
+        package="agv_arm_moveit",
+        executable="moveit_planner",
+        output="screen",
+        parameters=[
+            robot_description,
+            robot_description_semantic,
+            robot_description_kinematics,
+            joint_limits,
+            {"use_sim_time": False}
+        ],
+    )
+
     return LaunchDescription([
         robot_state_publisher_node,
-        move_group_node
+        move_group_node,
+        moveit_planner_node
     ])
