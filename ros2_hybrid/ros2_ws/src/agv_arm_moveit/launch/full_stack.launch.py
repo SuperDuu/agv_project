@@ -3,7 +3,8 @@ full_stack.launch.py
 ====================
 Launches the complete AGV arm ROS2 stack:
   1. agv_arm_bridge   — Java UDP bridge (port 5010) + AGV arm planner
-  2. agv_arm_moveit   — MoveIt2 move_group + moveit_planner + state publishers
+  2. agv_arm_moveit   — MoveIt2 move_group + state publishers
+  NOTE: moveit_planner (one-shot demo) is NOT included here.
 """
 import os
 import yaml
@@ -106,12 +107,6 @@ def generate_launch_description():
         ],
     )
 
-    moveit_planner_node = Node(
-        package="agv_arm_moveit",
-        executable="moveit_planner",
-        output="screen",
-        parameters=common_moveit_params,
-    )
 
     # ------------------------------------------------------------------ #
     # Bridge nodes (Java UDP ↔ ROS2)                                      #
@@ -141,7 +136,6 @@ def generate_launch_description():
         robot_state_publisher_node,
         joint_state_publisher_node,
         move_group_node,
-        moveit_planner_node,
         java_udp_bridge_node,
         agv_arm_planner_node,
     ])
