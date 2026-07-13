@@ -20,7 +20,8 @@ services:
     working_dir: /workspaces/agv_ros2
     stdin_open: true
     tty: true
-    # Auto-launch full stack (bridge + MoveIt2) when container starts
+    # Build any changed packages, then launch the full stack
     command: >
-      bash -c "source install/setup.bash &&
+      bash -c "colcon build --symlink-install --packages-select agv_arm_moveit agv_arm_bridge agv_arm_description 2>&1 | tail -3 &&
+               source install/setup.bash &&
                ros2 launch agv_arm_moveit full_stack.launch.py"
