@@ -9,16 +9,11 @@ public class TestChairDemoValidity {
         double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
         double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
         
-        double[] lowPickRight = { sharedQ1, -44.0, 76.0, -53.0, -90.0, -54.0 };
-        double[] lowHoverRight = { sharedQ1, -50.0, 84.0, -59.0, -90.0, -58.0 };
-        
-        double[] highPlaceRight = { sharedQ1, 58.0, 80.0, -47.0, -90.0, 58.0 };
-        double[] highHoverRight = { sharedQ1, 66.0, 86.0, -51.0, -90.0, 60.0 };
-        
-        double[] transferHighRight = highHoverRight.clone();
-        double[] transferMidRight = { sharedQ1, 7.0, 115.0, -85.0, -90.0, 0.0 };
-        double[] readyRight = transferMidRight.clone();
-        
+        double[] lowPickRight = { sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0 };
+        double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
+
+        double[] highPlaceRight = { sharedQ1, 34.0, 70.0, -43.0, -90.0, 28.0 };
+        double[] highHoverRight = { sharedQ1, 38.0, 78.0, -49.0, -90.0, 32.0 };
         // Left arm keyframes
         double[] leftClear = { sharedQ1, -10, -45, 58, 18, 18 };
         double[] foldedHomeRight = { sharedQ1, 0, 120, -90, 0, -52 };
@@ -29,8 +24,7 @@ public class TestChairDemoValidity {
         keyframes.add(new double[][] { homeRight, homeLeft });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
         
-        // 1. Move to low chair without detouring toward the high-chair side
-        keyframes.add(new double[][] { readyRight, leftClear });
+        // 1. Move to the low chair in one smooth approach
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         
         // 2. Pick low chair
@@ -41,13 +35,12 @@ public class TestChairDemoValidity {
         keyframes.add(new double[][] { lowPickRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
         
-        // 4. Move low chair to transfer position
+        // 4. Sweep directly to the high chair
         keyframes.add(new double[][] { lowHoverRight, leftClear });
-        keyframes.add(new double[][] { transferMidRight, leftClear });
-        keyframes.add(new double[][] { transferHighRight, leftClear });
+        keyframes.add(new double[][] { highHoverRight, leftClear });
         
         // 5. Place low chair on high chair
-        keyframes.add(new double[][] { transferHighRight, leftClear });
+        keyframes.add(new double[][] { highHoverRight, leftClear });
         keyframes.add(new double[][] { highPlaceRight, leftClear });
         
         // 6. Release high chair
@@ -63,8 +56,8 @@ public class TestChairDemoValidity {
 
         // Test clearance
         ArmPanel panel = new ArmPanel(null); // Instantiate panel
-        double[] lowPickCoord = panel.computeFK(sharedQ1, -44.0, 76.0, -53.0, -90.0, -54.0, true);
-        double[] highPlaceCoord = panel.computeFK(sharedQ1, 58.0, 80.0, -47.0, -90.0, 58.0, true);
+        double[] lowPickCoord = panel.computeFK(sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0, true);
+        double[] highPlaceCoord = panel.computeFK(sharedQ1, 34.0, 70.0, -43.0, -90.0, 28.0, true);
         double lowChairHeight = lowPickCoord[2] - 5.0;
         double highChairHeight = highPlaceCoord[2] - 5.0;
         double[] lowChairCenter = { lowPickCoord[0], lowPickCoord[1], 0.0 };

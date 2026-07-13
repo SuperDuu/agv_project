@@ -2529,27 +2529,22 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         double[] homeRight = { sharedQ1, 0, 20, -35, 0, 0 };
         double[] homeLeft = { sharedQ1, 0, -20, 35, 0, 0 };
         
-        // Define our safe lower configurations (Option B) with horizontal orientations!
-        double[] lowPickRight = { sharedQ1, -44.0, 76.0, -53.0, -90.0, -54.0 };
-        double[] lowHoverRight = { sharedQ1, -50.0, 84.0, -59.0, -90.0, -58.0 };
-        
-        double[] highPlaceRight = { sharedQ1, 58.0, 80.0, -47.0, -90.0, 58.0 };
-        double[] highHoverRight = { sharedQ1, 66.0, 86.0, -51.0, -90.0, 60.0 };
-        
-        double[] transferHighRight = highHoverRight.clone();
-        double[] transferMidRight = { sharedQ1, 7.0, 115.0, -85.0, -90.0, 0.0 };
-        double[] readyRight = transferMidRight.clone();
+        // Put both chairs on the right-hand side and separate them mostly along X
+        // so the arm can carry in one continuous sweep without flipping across the body.
+        double[] lowPickRight = { sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0 };
+        double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
+
+        double[] highPlaceRight = { sharedQ1, 34.0, 70.0, -43.0, -90.0, 28.0 };
+        double[] highHoverRight = { sharedQ1, 38.0, 78.0, -49.0, -90.0, 32.0 };
+
         double[] foldedHomeRight = { sharedQ1, 0.0, 120.0, -90.0, 0.0, -52.0 };
         double[] retreatRight = highHoverRight.clone();
 
         if (!logDemoPoseOk("chairHomeRight", homeRight, true) || !logDemoPoseOk("chairHomeLeft", homeLeft, false)
                 || !logDemoPoseOk("chairLeftClear", leftClear, false)
                 || !logDemoPoseOk("chairFoldedHomeRight", foldedHomeRight, true)
-                || !logDemoPoseOk("chairReadyRight", readyRight, true)
                 || !logDemoPoseOk("chairLowHoverRight", lowHoverRight, true)
                 || !logDemoPoseOk("chairLowPickRight", lowPickRight, true)
-                || !logDemoPoseOk("chairTransferHighRight", transferHighRight, true)
-                || !logDemoPoseOk("chairTransferMidRight", transferMidRight, true)
                 || !logDemoPoseOk("chairHighHoverRight", highHoverRight, true)
                 || !logDemoPoseOk("chairHighPlaceRight", highPlaceRight, true)
                 || !logDemoPoseOk("chairRetreatRight", retreatRight, true)) {
@@ -2559,59 +2554,45 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(new double[][] { homeRight, homeLeft });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
-        keyframes.add(new double[][] { readyRight, leftClear });
 
-        // 1. Move to low chair without swinging through the high-chair side first
+        // 1. Move to the low chair in one smooth approach
         keyframes.add(new double[][] { lowHoverRight, leftClear });
-        
-        // 2. Pick the object from low chair
+
+        // 2. Pick the object from the low chair
         int gripFrame1 = keyframes.size();
         keyframes.add(new double[][] { lowPickRight, leftClear });
-        
-        // 3. Move to high chair
+
+        // 3. Sweep directly to the high chair
         keyframes.add(new double[][] { lowHoverRight, leftClear });
-        keyframes.add(new double[][] { transferMidRight, leftClear });
-        keyframes.add(new double[][] { transferHighRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
-        
-        // 4. Place the object on high chair
+
+        // 4. Place the object on the high chair
         int releaseFrame1 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
-        
-        // 5. Retract to ready position and wait
+
+        // 5. Wait at the high-chair hover pose
         keyframes.add(new double[][] { highHoverRight, leftClear });
-        keyframes.add(new double[][] { retreatRight, leftClear });
-        int waitFrame = keyframes.size();
-        keyframes.add(new double[][] { readyRight, leftClear });
-        
-        // 6. Return to high chair to pick it up again
-        keyframes.add(new double[][] { transferHighRight, leftClear });
-        keyframes.add(new double[][] { highHoverRight, leftClear });
-        
-        // 7. Pick the object from high chair
+        int waitFrame = keyframes.size() - 1;
+
+        // 6. Return to the high chair to pick it up again
         int gripFrame2 = keyframes.size();
         keyframes.add(new double[][] { highPlaceRight, leftClear });
-        
-        // 8. Move back to low chair
+
+        // 7. Sweep it back to the low chair
         keyframes.add(new double[][] { highHoverRight, leftClear });
-        keyframes.add(new double[][] { transferHighRight, leftClear });
-        keyframes.add(new double[][] { transferMidRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
-        
-        // 9. Place the object back on low chair
+
+        // 8. Place the object back on the low chair
         int releaseFrame2 = keyframes.size();
         keyframes.add(new double[][] { lowPickRight, leftClear });
-        
-        // 10. Retract and go home
+
+        // 9. Retract and go home
         keyframes.add(new double[][] { lowHoverRight, leftClear });
-        keyframes.add(new double[][] { transferMidRight, leftClear });
-        keyframes.add(new double[][] { transferHighRight, leftClear });
-        keyframes.add(new double[][] { readyRight, leftClear });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
-        double[] lowPickCoord = armPanel.computeFK(sharedQ1, -44.0, 76.0, -53.0, -90.0, -54.0, true);
-        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, 58.0, 80.0, -47.0, -90.0, 58.0, true);
+        double[] lowPickCoord = armPanel.computeFK(sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0, true);
+        double[] highPlaceCoord = armPanel.computeFK(sharedQ1, 34.0, 70.0, -43.0, -90.0, 28.0, true);
         double lowChairHeight = lowPickCoord[2] - 5.0;
         double highChairHeight = highPlaceCoord[2] - 5.0;
         ChairDemoScene scene = new ChairDemoScene(
