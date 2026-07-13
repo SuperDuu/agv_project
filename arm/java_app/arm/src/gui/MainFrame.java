@@ -467,17 +467,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             if (isRightArmSelected) {
                 isGrippedRight = !isGrippedRight;
                 setGotoStatusRight(isGrippedRight ? "Đã ĐÓNG kẹp (R)" : "Đã MỞ kẹp (R)", Color.BLUE);
-                if (uartManager != null && uartManager.isConnected()) {
-                    String cmd = isGrippedRight ? "R:GRIP\n" : "R:RELEASE\n";
-                    uartManager.sendData(cmd);
-                }
+                sendGripperToUart(true, isGrippedRight);
             } else {
                 isGrippedLeft = !isGrippedLeft;
                 setGotoStatusLeft(isGrippedLeft ? "Đã ĐÓNG kẹp (L)" : "Đã MỞ kẹp (L)", Color.BLUE);
-                if (uartManager != null && uartManager.isConnected()) {
-                    String cmd = isGrippedLeft ? "L:GRIP\n" : "L:RELEASE\n";
-                    uartManager.sendData(cmd);
-                }
+                sendGripperToUart(false, isGrippedLeft);
             }
             armPanel.repaint();
         });
@@ -2687,13 +2681,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         plan.passThroughIndices.add(highEntryToLowFrame);
         plan.passThroughIndices.add(lowEntryToLowFrame);
         plan.passThroughIndices.add(lowApproachToLowFrame);
-        plan.customDelays.put(preGripFrame1, 3000);
-        plan.customDelays.put(postGripFrame1, 2000);
+        plan.customDelays.put(postGripFrame1, 5000);
         plan.customDelays.put(preReleaseFrame1, 3000);
         plan.customDelays.put(postReleaseFrame1, 2000);
         plan.customDelays.put(homePauseFrame, 2000);
-        plan.customDelays.put(preGripFrame2, 3000);
-        plan.customDelays.put(postGripFrame2, 2000);
+        plan.customDelays.put(postGripFrame2, 5000);
         plan.customDelays.put(preReleaseFrame2, 3000);
         plan.customDelays.put(postReleaseFrame2, 2000);
 
@@ -3296,19 +3288,36 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private void setDemoGripperState(boolean rightGripped, boolean leftGripped, String statusText) {
+        boolean rightChanged = isGrippedRight != rightGripped;
+        boolean leftChanged = isGrippedLeft != leftGripped;
         isGrippedRight = rightGripped;
         isGrippedLeft = leftGripped;
         setGotoStatusRight(statusText, Color.BLUE);
         setGotoStatusLeft(statusText, Color.BLUE);
-        if (uartManager != null && uartManager.isConnected()) {
-            uartManager.sendData(rightGripped ? "R:GRIP\n" : "R:RELEASE\n");
-            uartManager.sendData(leftGripped ? "L:GRIP\n" : "L:RELEASE\n");
+        if (rightChanged) {
+            sendGripperToUart(true, rightGripped);
+        }
+        if (leftChanged) {
+            sendGripperToUart(false, leftGripped);
         }
         armPanel.repaint();
     }
 
     private void setSingleDemoGripState(boolean rightArm, boolean gripped, String statusText) {
         setDemoGripperState(rightArm ? gripped : isGrippedRight, rightArm ? isGrippedLeft : gripped, statusText);
+    }
+
+    private void sendGripperToUart(boolean rightArm, boolean gripped) {
+        if (uartManager == null || !uartManager.isConnected()) {
+            return;
+        }
+        int dest = rightArm ? comm.UartManager.ADDR_ARM_RIGHT : comm.UartManager.ADDR_ARM_LEFT;
+        int action = gripped ? 1 : 0;
+        uartManager.sendBytes(uartManager.buildArmGripperFrame(dest, action));
+        uartManager.sendData((rightArm ? "R:" : "L:") + (gripped ? "GRIP\n" : "RELEASE\n"));
+        if (DEBUG) {
+            System.out.printf("[GRIPPER_UART] %s %s%n", rightArm ? "R" : "L", gripped ? "GRIP" : "RELEASE");
+        }
     }
 
     private void logDualDemoFrame(String tag, int frameIndex, int totalFrames, double[] rightFrame, double[] leftFrame) {
@@ -5404,9 +5413,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     }
                     armPanel.repaint();
                 });
-                if (uartManager != null && uartManager.isConnected()) {
-                    uartManager.sendData(isRight ? "R:RELEASE\n" : "L:RELEASE\n");
-                }
+                sendGripperToUart(isRight, false);
                 Thread.sleep(800);
                 
                 // Step 2: Move to hover
@@ -5439,9 +5446,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                     }
                     armPanel.repaint();
                 });
-                if (uartManager != null && uartManager.isConnected()) {
-                    uartManager.sendData(isRight ? "R:GRIP\n" : "L:GRIP\n");
-                }
+                sendGripperToUart(isRight, true);
                 Thread.sleep(1000);
                 
                 // Step 5: Ascend back to hover
@@ -5479,9 +5484,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                         }
                         armPanel.repaint();
                     });
-                    if (uartManager != null && uartManager.isConnected()) {
-                        uartManager.sendData(isRight ? "R:RELEASE\n" : "L:RELEASE\n");
-                    }
+                    sendGripperToUart(isRight, false);
                     Thread.sleep(800);
                 }
                 
