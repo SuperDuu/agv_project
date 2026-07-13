@@ -11,6 +11,7 @@ public class TestChairDemoValidity {
         
         double[] lowPickRight = { sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0 };
         double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
+        double[] lowApproachRight = { sharedQ1, 40.0, 80.0, -75.0, -90.0, 16.0 };
 
         double[] highPlaceRight = { sharedQ1, 34.0, 70.0, -43.0, -90.0, 28.0 };
         double[] highHoverRight = { sharedQ1, 38.0, 78.0, -49.0, -90.0, 32.0 };
@@ -23,6 +24,7 @@ public class TestChairDemoValidity {
         // 0. Initial folding of right arm, left arm moves to clear
         keyframes.add(new double[][] { homeRight, homeLeft });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { lowApproachRight, leftClear });
         
         // 1. Move to the low chair in one smooth approach
         keyframes.add(new double[][] { lowHoverRight, leftClear });
@@ -37,6 +39,7 @@ public class TestChairDemoValidity {
         
         // 4. Sweep directly to the high chair
         keyframes.add(new double[][] { lowHoverRight, leftClear });
+        keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
         
         // 5. Place low chair on high chair
@@ -49,6 +52,9 @@ public class TestChairDemoValidity {
         
         // 7. Retract right arm, left arm returns
         keyframes.add(new double[][] { highHoverRight, leftClear });
+        keyframes.add(new double[][] { lowApproachRight, leftClear });
+        keyframes.add(new double[][] { lowHoverRight, leftClear });
+        keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
         
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
@@ -71,7 +77,7 @@ public class TestChairDemoValidity {
 
         System.out.println("\nChecking chair clearance:");
         boolean clear = true;
-        for (int i = 0; i < keyframes.size() - 1; i += 2) {
+        for (int i = 0; i < keyframes.size() - 1; i++) {
             double[][] kfStart = keyframes.get(i);
             double[][] kfEnd = keyframes.get(i + 1);
             int steps = 8;

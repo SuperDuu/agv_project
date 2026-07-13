@@ -2533,6 +2533,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         // so the arm can carry in one continuous sweep without flipping across the body.
         double[] lowPickRight = { sharedQ1, 34.0, 50.0, -43.0, -90.0, 28.0 };
         double[] lowHoverRight = { sharedQ1, 36.0, 62.0, -57.0, -90.0, 28.0 };
+        double[] lowApproachRight = { sharedQ1, 40.0, 80.0, -75.0, -90.0, 16.0 };
 
         double[] highPlaceRight = { sharedQ1, 34.0, 70.0, -43.0, -90.0, 28.0 };
         double[] highHoverRight = { sharedQ1, 38.0, 78.0, -49.0, -90.0, 32.0 };
@@ -2543,6 +2544,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         if (!logDemoPoseOk("chairHomeRight", homeRight, true) || !logDemoPoseOk("chairHomeLeft", homeLeft, false)
                 || !logDemoPoseOk("chairLeftClear", leftClear, false)
                 || !logDemoPoseOk("chairFoldedHomeRight", foldedHomeRight, true)
+                || !logDemoPoseOk("chairLowApproachRight", lowApproachRight, true)
                 || !logDemoPoseOk("chairLowHoverRight", lowHoverRight, true)
                 || !logDemoPoseOk("chairLowPickRight", lowPickRight, true)
                 || !logDemoPoseOk("chairHighHoverRight", highHoverRight, true)
@@ -2554,6 +2556,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         java.util.List<double[][]> keyframes = new java.util.ArrayList<>();
         keyframes.add(new double[][] { homeRight, homeLeft });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
+        keyframes.add(new double[][] { lowApproachRight, leftClear });
 
         // 1. Move to the low chair in one smooth approach
         keyframes.add(new double[][] { lowHoverRight, leftClear });
@@ -2564,6 +2567,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // 3. Sweep directly to the high chair
         keyframes.add(new double[][] { lowHoverRight, leftClear });
+        keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { highHoverRight, leftClear });
 
         // 4. Place the object on the high chair
@@ -2580,6 +2584,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // 7. Sweep it back to the low chair
         keyframes.add(new double[][] { highHoverRight, leftClear });
+        keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { lowHoverRight, leftClear });
 
         // 8. Place the object back on the low chair
@@ -2588,6 +2593,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
 
         // 9. Retract and go home
         keyframes.add(new double[][] { lowHoverRight, leftClear });
+        keyframes.add(new double[][] { lowApproachRight, leftClear });
         keyframes.add(new double[][] { foldedHomeRight, leftClear });
         keyframes.add(new double[][] { homeRight, homeLeft });
 
