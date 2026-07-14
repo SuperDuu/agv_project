@@ -1363,6 +1363,28 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         startMotionTimer();
     }
 
+    public void setGotoStatusRight(String text, Color color) {
+        boolean uartConnected = uartManager != null && uartManager.isConnected();
+        if (!uartConnected && text != null && !text.contains("CHƯA KẾT NỐI")) {
+            gotoStatusRight.setForeground(new Color(220, 100, 0));
+            gotoStatusRight.setText("[MÔ PHỎNG - CHƯA KẾT NỐI UART] " + text);
+        } else {
+            gotoStatusRight.setForeground(color);
+            gotoStatusRight.setText(text);
+        }
+    }
+
+    public void setGotoStatusLeft(String text, Color color) {
+        boolean uartConnected = uartManager != null && uartManager.isConnected();
+        if (!uartConnected && text != null && !text.contains("CHƯA KẾT NỐI")) {
+            gotoStatusLeft.setForeground(new Color(220, 100, 0));
+            gotoStatusLeft.setText("[MÔ PHỎNG - CHƯA KẾT NỐI UART] " + text);
+        } else {
+            gotoStatusLeft.setForeground(color);
+            gotoStatusLeft.setText(text);
+        }
+    }
+
     public void setGotoStatus(String text, Color color) {
         if (isRightArmSelected) {
             setGotoStatusRight(text, color);
@@ -1371,15 +1393,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         }
     }
 
-    public void setGotoStatusRight(String text, Color color) {
-        gotoStatusRight.setForeground(color);
-        gotoStatusRight.setText(text);
-    }
 
-    public void setGotoStatusLeft(String text, Color color) {
-        gotoStatusLeft.setForeground(color);
-        gotoStatusLeft.setText(text);
-    }
 
     public boolean isArmInterpolating() {
         boolean isRight = isRightArmSelected;
@@ -2324,7 +2338,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         runDualArmPlayback(plan, "Kep Song Song");
     }
 
-    private void runFlatQ1ChairTransferShowcase() {
+    void runFlatQ1ChairTransferShowcase() {
         DualDemoPlan plan = buildFlatQ1ChairTransferDemo();
         if (plan == null || plan.frames.isEmpty()) {
             setGotoStatusRight("Ghe Flat Q1: loi pose", Color.RED);
