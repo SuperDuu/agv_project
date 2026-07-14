@@ -195,7 +195,7 @@ class AgvArmPlanner(Node):
         T_target[1, 3] = py
         T_target[2, 3] = pz
 
-        max_iter = 200
+        max_iter = 100
         tol = 1e-4
         alpha = 0.8
         best_q = q.copy()

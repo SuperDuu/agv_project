@@ -16,7 +16,7 @@ public class Ros2BridgeClient {
         this(
                 System.getenv().getOrDefault("AGV_ROS2_HOST", "127.0.0.1"),
                 parseInt(System.getenv().getOrDefault("AGV_ROS2_PORT", "5010"), 5010),
-                parseInt(System.getenv().getOrDefault("AGV_ROS2_TIMEOUT_MS", "8000"), 8000));
+                parseInt(System.getenv().getOrDefault("AGV_ROS2_TIMEOUT_MS", "15000"), 15000));
     }
 
     public Ros2BridgeClient(String host, int port, int timeoutMs) {
