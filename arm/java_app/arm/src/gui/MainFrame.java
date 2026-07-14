@@ -565,7 +565,7 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
         btnDualArmDemo.addActionListener(e -> runDualArmShowcase());
         JComboBox<String> demoModeCombo = new JComboBox<>(new String[] {
                 "Demo 2 Tay", "Mua 2 Tay", "Mua 2 Tay+", "Ghe Demo R", "Ghe Demo L", "Kep Song Song",
-                "Ghe Flat Q1"
+                "Ghe Flat Q1", "Ghe Flat Q1 (MoveIt2)"
         });
         demoModeCombo.setPreferredSize(new Dimension(162, 25));
         JButton btnRunDemo = new JButton("Demo");
@@ -582,8 +582,10 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 runLeftChairTransferShowcase();
             } else if (demoModeCombo.getSelectedIndex() == 5) {
                 runParallelGripperPlaneShowcase();
-            } else {
+            } else if (demoModeCombo.getSelectedIndex() == 6) {
                 runFlatQ1ChairTransferShowcase();
+            } else {
+                runMoveItFlatQ1ChairTransferShowcase();
             }
         });
         topPanel.add(demoModeCombo);
@@ -2334,6 +2336,105 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             return;
         }
         runDualArmPlayback(plan, "Ghe Flat Q1");
+    }
+
+    void runMoveItFlatQ1ChairTransferShowcase() {
+        DualDemoPlan plan = buildMoveItFlatQ1ChairTransferDemo();
+        if (plan == null || plan.frames.isEmpty()) {
+            setGotoStatusRight("Ghe Flat Q1 (MoveIt2): loi pose/file", Color.RED);
+            setGotoStatusLeft("Ghe Flat Q1 (MoveIt2): loi pose/file", Color.RED);
+            return;
+        }
+        runDualArmPlayback(plan, "Ghe Flat Q1 (MoveIt2)");
+    }
+
+    private DualDemoPlan buildMoveItFlatQ1ChairTransferDemo() {
+        java.io.File csvFile = new java.io.File("../../ros2_hybrid/ros2_ws/moveit_flat_chair_demo_frames.csv");
+        if (!csvFile.exists()) {
+            csvFile = new java.io.File("ros2_hybrid/ros2_ws/moveit_flat_chair_demo_frames.csv");
+        }
+        if (!csvFile.exists()) {
+            System.err.println("[MOVEIT_DEMO] moveit_flat_chair_demo_frames.csv not found.");
+            return null;
+        }
+
+        java.util.List<double[][]> frames = new java.util.ArrayList<>();
+        try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(csvFile))) {
+            String header = br.readLine();
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                String[] parts = line.split(",");
+                if (parts.length < 7) continue;
+                double[] right = new double[NUM_JOINTS];
+                for (int i = 0; i < NUM_JOINTS; i++) {
+                    right[i] = Double.parseDouble(parts[i + 1]);
+                }
+                double[] left = makeFlatQ1HoldPose(right);
+                frames.add(new double[][] { right, left });
+            }
+        } catch (Exception ex) {
+            System.err.println("[MOVEIT_DEMO] Error reading CSV file: " + ex.getMessage());
+            return null;
+        }
+
+        if (frames.size() < 270) {
+            System.err.println("[MOVEIT_DEMO] CSV file has insufficient frames: " + frames.size());
+            return null;
+        }
+
+        final double flatA = -15.0;
+        double[] lowPick = makeRightFlatGripperPose(35.0, 30.0, flatA, 80.0);
+        double[] highPlace = makeRightFlatGripperPose(-45.0, 80.0, flatA, -80.0);
+
+        double[] lowPickCoord = armPanel.computeFK(lowPick[0], lowPick[1], lowPick[2], lowPick[3],
+                lowPick[4], lowPick[5], true);
+        double[] highPlaceCoord = armPanel.computeFK(highPlace[0], highPlace[1], highPlace[2], highPlace[3],
+                highPlace[4], highPlace[5], true);
+
+        ChairDemoScene scene = new ChairDemoScene(
+                new double[] { lowPickCoord[0], lowPickCoord[1], 0.0 },
+                lowPickCoord[2] - ArmPanel.CHAIR_DEMO_OBJECT_HALF,
+                new double[] { highPlaceCoord[0], highPlaceCoord[1], 0.0 },
+                highPlaceCoord[2] - ArmPanel.CHAIR_DEMO_OBJECT_HALF);
+
+        int gripFrame1 = 18;
+        int releaseFrame1 = 75;
+        int gripFrame2 = 177;
+        int releaseFrame2 = 242;
+
+        int preGripFrame1 = 17;
+        int postGripFrame1 = 19;
+        int preReleaseFrame1 = 74;
+        int postReleaseFrame1 = 76;
+        int homePauseFrame = 126;
+        int preGripFrame2 = 176;
+        int postGripFrame2 = 178;
+        int preReleaseFrame2 = 241;
+        int postReleaseFrame2 = 243;
+
+        DualDemoPlan plan = new DualDemoPlan(frames, gripFrame1, -1, releaseFrame1, -1, 0, 0, 0, 0, scene);
+        plan.rightGripIndices.add(gripFrame2);
+        plan.rightReleaseIndices.add(releaseFrame2);
+
+        plan.customDelays.put(preGripFrame1, 2000);
+        plan.customDelays.put(postGripFrame1, 3000);
+        plan.customDelays.put(preReleaseFrame1, 2000);
+        plan.customDelays.put(postReleaseFrame1, 3000);
+        plan.customDelays.put(homePauseFrame, 2000);
+        plan.customDelays.put(preGripFrame2, 2000);
+        plan.customDelays.put(postGripFrame2, 3000);
+        plan.customDelays.put(preReleaseFrame2, 2000);
+        plan.customDelays.put(postReleaseFrame2, 3000);
+
+        markPassThroughFrames(plan, frames.size(),
+                preGripFrame1, gripFrame1, postGripFrame1,
+                preReleaseFrame1, releaseFrame1, postReleaseFrame1,
+                homePauseFrame,
+                preGripFrame2, gripFrame2, postGripFrame2,
+                preReleaseFrame2, releaseFrame2, postReleaseFrame2);
+
+        return plan;
     }
 
     private static class DualDemoPlan {
