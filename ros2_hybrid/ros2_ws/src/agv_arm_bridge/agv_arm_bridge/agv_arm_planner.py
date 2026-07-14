@@ -281,7 +281,7 @@ class AgvArmPlanner(Node):
         return True
 
     def solve_ik_smart(self, px, py, pz, current_joints, is_right, preferred_config="+", preferred_alpha=None, preferred_offset=None):
-        alpha_scan = [0.0, -15.0, 15.0, -30.0, 30.0, -45.0, -60.0, -75.0, -90.0]
+        alpha_scan = [0.0, -15.0, 15.0, -30.0, 30.0, -45.0, -60.0]
         if preferred_alpha is not None and preferred_alpha in alpha_scan:
             alpha_scan.remove(preferred_alpha)
             alpha_scan.insert(0, preferred_alpha)
@@ -292,7 +292,7 @@ class AgvArmPlanner(Node):
         q1_base = math.atan2(py, px) if is_right else -math.atan2(py, -px)
         q1_base = max(math.radians(q1_min), min(math.radians(q1_max), q1_base))
         
-        yaw_offsets = [0.0, -15.0, 15.0, -30.0, 30.0, -45.0, 45.0, -60.0, 60.0, -75.0, 75.0, -90.0, 90.0]
+        yaw_offsets = [0.0, -15.0, 15.0, -30.0, 30.0, -45.0, 45.0]
         if preferred_offset is not None and preferred_offset in yaw_offsets:
             yaw_offsets.remove(preferred_offset)
             yaw_offsets.insert(0, preferred_offset)
