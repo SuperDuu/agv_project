@@ -55,7 +55,8 @@ class JavaUdpBridge(Node):
         now = time.time()
         stale_ids = [rid for rid, (_, _, _, t) in self.pending_requests.items() if now - t > 10.0]
         for rid in stale_ids:
-            _, reply_host, reply_port, _ = self.pending_requests.pop(rid)
+            sender_host, reply_host, reply_port, _ = self.pending_requests.pop(rid)
+            target_host = sender_host if sender_host else reply_host
             timeout_response = {
                 "type": "plan_response",
                 "request_id": rid,
@@ -64,7 +65,7 @@ class JavaUdpBridge(Node):
                 "stamp": now,
             }
             try:
-                self.socket.sendto(json.dumps(timeout_response).encode("utf-8"), (reply_host, reply_port))
+                self.socket.sendto(json.dumps(timeout_response).encode("utf-8"), (target_host, reply_port))
             except Exception:
                 pass
 
@@ -131,9 +132,10 @@ class JavaUdpBridge(Node):
             if not request_id or request_id not in self.pending_requests:
                 return
 
-            _, reply_host, reply_port, _ = self.pending_requests.pop(request_id)
-            self.socket.sendto(json.dumps(response).encode("utf-8"), (reply_host, reply_port))
-            self.get_logger().info(f"Replied to request {request_id} over UDP")
+            sender_host, reply_host, reply_port, _ = self.pending_requests.pop(request_id)
+            target_host = sender_host if sender_host else reply_host
+            self.socket.sendto(json.dumps(response).encode("utf-8"), (target_host, reply_port))
+            self.get_logger().info(f"Replied to request {request_id} over UDP to {target_host}:{reply_port}")
         except Exception as exc:
             self.get_logger().error(f"Error handling planner response: {exc}")
 
