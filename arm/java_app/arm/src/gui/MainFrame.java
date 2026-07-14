@@ -180,6 +180,8 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     private final comm.Ros2BridgeClient ros2BridgeClient = new comm.Ros2BridgeClient();
     private ControllerReceiver controllerReceiver;
     private Timer controllerTimer;
+    /** True once the ROS2 UDP bridge has confirmed it is ready (ping/pong). */
+    private volatile boolean ros2Ready = false;
 
     private void trajDebug(String phase, String msg) {
         if (DEBUG) System.out.println("[TRAJ][" + phase + "] " + msg);
@@ -252,6 +254,9 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
             }
 
             boolean ready = mgr.ensureRunning();
+            if (ready) {
+                ros2Ready = true;
+            }
 
             javax.swing.SwingUtilities.invokeLater(() -> {
                 if (ready) {
@@ -696,6 +701,11 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     private void requestRos2Plan() {
+        // Gate: reject requests until the bridge is confirmed ready
+        if (!ros2Ready) {
+            setGotoStatus("ROS2: bridge chua san sang, vui long cho...", Color.ORANGE);
+            return;
+        }
         final boolean isRight = isRightArmSelected;
         final String armName = isRight ? "right" : "left";
         
