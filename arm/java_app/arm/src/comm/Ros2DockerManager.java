@@ -89,6 +89,12 @@ public class Ros2DockerManager {
 
         System.out.println("[ROS2Docker] Compose dir: " + composeDir);
 
+        // 0. Check Docker daemon is reachable
+        if (!isDockerAvailable()) {
+            System.err.println("[ROS2Docker] Docker daemon is not running. Please start Docker Desktop.");
+            return false;
+        }
+
         // 1. Check if container already running
         if (isContainerRunning()) {
             System.out.println("[ROS2Docker] Container '" + CONTAINER_NAME + "' already running.");
@@ -112,6 +118,22 @@ public class Ros2DockerManager {
             System.err.println("[ROS2Docker] ROS2 bridge did NOT respond after " + PING_MAX_RETRIES + "s.");
         }
         return ready;
+    }
+
+    /**
+     * Returns true if the Docker daemon is reachable (Docker Desktop is running).
+     */
+    public boolean isDockerAvailable() {
+        try {
+            Process p = new ProcessBuilder("docker", "info", "--format", "{{.ServerVersion}}")
+                    .redirectErrorStream(true)
+                    .start();
+            String output = readAll(p);
+            int exit = p.waitFor();
+            return exit == 0 && !output.isBlank();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**

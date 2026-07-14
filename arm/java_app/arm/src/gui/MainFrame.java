@@ -242,13 +242,22 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
                 setTitle(getTitle() + "  |  ⏳ Đang khởi động ROS2..."));
 
             comm.Ros2DockerManager mgr = comm.Ros2DockerManager.getInstance();
+
+            // Quick check: Docker daemon must be running first
+            if (!mgr.isDockerAvailable()) {
+                System.err.println("[ROS2Docker] Docker Desktop is not running — ROS2 features disabled.");
+                javax.swing.SwingUtilities.invokeLater(() ->
+                    setTitle(getTitle().replaceAll("  \\|  .*", "") + "  |  Docker chua bat"));
+                return;
+            }
+
             boolean ready = mgr.ensureRunning();
 
             javax.swing.SwingUtilities.invokeLater(() -> {
                 if (ready) {
-                    setTitle(getTitle().replaceAll("  \\|  .*", "") + "  |  ✅ ROS2 sẵn sàng");
+                    setTitle(getTitle().replaceAll("  \\|  .*", "") + "  |  ROS2 san sang");
                 } else {
-                    setTitle(getTitle().replaceAll("  \\|  .*", "") + "  |  ⚠ ROS2 không kết nối được");
+                    setTitle(getTitle().replaceAll("  \\|  .*", "") + "  |  ROS2 khong ket noi duoc");
                 }
             });
         }, "ros2-docker-start");
