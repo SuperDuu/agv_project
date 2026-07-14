@@ -53,10 +53,11 @@ class JavaUdpBridge(Node):
     def poll_socket(self):
         # Clean up stale requests (timeout > 10.0 seconds)
         now = time.time()
-        stale_ids = [rid for rid, (_, _, _, t) in self.pending_requests.items() if now - t > 10.0]
+        stale_ids = [rid for rid, (_, _, _, _, t) in self.pending_requests.items() if now - t > 10.0]
         for rid in stale_ids:
-            sender_host, reply_host, reply_port, _ = self.pending_requests.pop(rid)
+            sender_host, sender_port, reply_host, reply_port, _ = self.pending_requests.pop(rid)
             target_host = sender_host if sender_host else reply_host
+            target_port = sender_port if sender_port else reply_port
             timeout_response = {
                 "type": "plan_response",
                 "request_id": rid,
@@ -65,13 +66,14 @@ class JavaUdpBridge(Node):
                 "stamp": now,
             }
             try:
-                self.socket.sendto(json.dumps(timeout_response).encode("utf-8"), (target_host, reply_port))
+                self.socket.sendto(json.dumps(timeout_response).encode("utf-8"), (target_host, target_port))
             except Exception:
                 pass
 
         while True:
             try:
                 data, address = self.socket.recvfrom(65535)
+                self.get_logger().info(f"Received UDP packet from {address}")
             except BlockingIOError:
                 return
             except OSError as exc:
@@ -80,6 +82,7 @@ class JavaUdpBridge(Node):
 
             try:
                 request = json.loads(data.decode("utf-8"))
+                self.get_logger().info(f"Parsed request: {request}")
                 response = self.handle_request(request, address)
                 if response is None:
                     continue
@@ -118,7 +121,7 @@ class JavaUdpBridge(Node):
             }
 
         # Save pending request details to reply once the planner finishes
-        self.pending_requests[request_id] = (address[0], reply_host, reply_port, time.time())
+        self.pending_requests[request_id] = (address[0], address[1], reply_host, reply_port, time.time())
 
         msg = String()
         msg.data = json.dumps(request)
@@ -132,10 +135,11 @@ class JavaUdpBridge(Node):
             if not request_id or request_id not in self.pending_requests:
                 return
 
-            sender_host, reply_host, reply_port, _ = self.pending_requests.pop(request_id)
+            sender_host, sender_port, reply_host, reply_port, _ = self.pending_requests.pop(request_id)
             target_host = sender_host if sender_host else reply_host
-            self.socket.sendto(json.dumps(response).encode("utf-8"), (target_host, reply_port))
-            self.get_logger().info(f"Replied to request {request_id} over UDP to {target_host}:{reply_port}")
+            target_port = sender_port if sender_port else reply_port
+            self.socket.sendto(json.dumps(response).encode("utf-8"), (target_host, target_port))
+            self.get_logger().info(f"Replied to request {request_id} over UDP to {target_host}:{target_port}")
         except Exception as exc:
             self.get_logger().error(f"Error handling planner response: {exc}")
 
