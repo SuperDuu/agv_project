@@ -1364,25 +1364,13 @@ public final class MainFrame extends JFrame implements ActionListener, ChangeLis
     }
 
     public void setGotoStatusRight(String text, Color color) {
-        boolean uartConnected = uartManager != null && uartManager.isConnected();
-        if (!uartConnected && text != null && !text.contains("CHƯA KẾT NỐI")) {
-            gotoStatusRight.setForeground(new Color(220, 100, 0));
-            gotoStatusRight.setText("[MÔ PHỎNG - CHƯA KẾT NỐI UART] " + text);
-        } else {
-            gotoStatusRight.setForeground(color);
-            gotoStatusRight.setText(text);
-        }
+        gotoStatusRight.setForeground(color);
+        gotoStatusRight.setText(text);
     }
 
     public void setGotoStatusLeft(String text, Color color) {
-        boolean uartConnected = uartManager != null && uartManager.isConnected();
-        if (!uartConnected && text != null && !text.contains("CHƯA KẾT NỐI")) {
-            gotoStatusLeft.setForeground(new Color(220, 100, 0));
-            gotoStatusLeft.setText("[MÔ PHỎNG - CHƯA KẾT NỐI UART] " + text);
-        } else {
-            gotoStatusLeft.setForeground(color);
-            gotoStatusLeft.setText(text);
-        }
+        gotoStatusLeft.setForeground(color);
+        gotoStatusLeft.setText(text);
     }
 
     public void setGotoStatus(String text, Color color) {
