@@ -195,7 +195,7 @@ class AgvArmPlanner(Node):
         T_target[1, 3] = py
         T_target[2, 3] = pz
 
-        max_iter = 100
+        max_iter = 40
         tol = 1e-4
         alpha = 0.8
         best_q = q.copy()
@@ -249,6 +249,9 @@ class AgvArmPlanner(Node):
             else:
                 alpha = min(0.95, alpha * 1.05)
             prev_err_norm = err_norm
+
+            if alpha < 1e-4:
+                break
 
             Je = self.compute_jacobian(q, is_right)
             lam = 0.05
