@@ -64,59 +64,385 @@ Mạch điều khiển cánh tay Arm Slave là bo mạch 2 lớp được thiế
 ## 3. KIẾN TRÚC PHẦN MỀM & FIRMWARE (SOFTWARE & FIRMWARE)
 
 ### 3.1. Firmware Cánh Tay Robot (STM32F4 Arm Slave)
-* **Ngắt Nhận UART (HAL_UART_RxCpltCallback)**:
-  Vi xử lý USART2 nhận dữ liệu byte-by-byte từ bus RS485 và tích lũy vào bộ đệm `rx_buffer` cho đến khi gặp ký tự ngắt dòng `\n` hoặc `\r`.
-* **Cơ chế xử lý gói tin Text & Checksum**:
-  1. Parser tìm ký tự `*` trong chuỗi để chia làm 2 phần: chuỗi dữ liệu lệnh và chuỗi ký tự checksum (ví dụ: `5A`).
-  2. Thực hiện tính toán XOR Checksum của toàn bộ ký tự trong chuỗi dữ liệu trước dấu `*`.
-  3. Đối chiếu mã checksum vừa tính với mã checksum nhận được (quét qua hàm `sscanf(checksum_str, "%2X", &rx_sum)`). Nếu khớp mới xử lý tiếp, ngược lại tăng biến đếm lỗi `dbg_rx_crc++` và hủy gói tin.
-  4. Bộ lọc tiền tố: Mạch tay Trái chỉ nhận chuỗi bắt đầu bằng `L:`, mạch tay Phải chỉ nhận chuỗi bắt đầu bằng `R:`. Gói tin không đúng tiền tố sẽ bị bỏ qua (`dbg_rx_bad_prefix++`).
-* **Hàm chuyển đổi góc vật lý**:
-  Các góc khớp logic được dịch thành góc quay servo thực tế bằng các công thức tuyến tính đã được hiệu chỉnh cơ khí:
-  * Khớp 1: $Servo_0 = -q_1 + 96.43^\circ$
-  * Khớp 2: $Servo_1 = -q_2 + 90.00^\circ$
-  * Khớp 3: $Servo_2 = q_3 + 35.00^\circ$
-  * Khớp 4: $Servo_3 = 65.00^\circ - q_4$
-  * Khớp 5: $Servo_4 = -q_5 + 90.00^\circ$
-  * Khớp 6 (Kẹp): $Servo_5 = gripper\_angle$ (Điều khiển kẹp dừng kẹp tự động khi ADC feedback đạt giới hạn lực)
+Trình điều khiển cánh tay Arm Slave xử lý ngắt nhận kí tự UART từ bus truyền thông RS485 và thực hiện bóc tách gói tin Text. Dưới đây là mã nguồn C triển khai trong ngắt nhận `HAL_UART_RxCpltCallback` của tệp `main.c` (STM32F4):
+
+```c
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+  if (huart->Instance == USART2) {
+    dbg_rx_raw_count++;
+    uint8_t b = arm_rx_byte;
+    dbg_rx_last_byte = b;
+
+    // Tích lũy kí tự đến khi gặp ngắt dòng '\n' hoặc '\r'
+    if (b == '\n' || b == '\r') {
+      if (rx_index > 0) {
+        rx_buffer[rx_index] = '\0';
+
+        // Sao chép gói tin phục vụ gỡ lỗi
+        strncpy((char *)dbg_rx_last_line, (char *)rx_buffer, sizeof(dbg_rx_last_line) - 1);
+        dbg_rx_last_line[sizeof(dbg_rx_last_line) - 1] = '\0';
+        dbg_rx_line_count++;
+
+        // Xử lý trực tiếp lệnh điều khiển bộ kẹp (không cần checksum)
+        if (strcmp((char *)rx_buffer, "R:GRIP") == 0 || strcmp((char *)rx_buffer, "L:GRIP") == 0) {
+          gripper_state = GRIPPER_CLOSING;
+          dbg_rx_ok++;
+          rx_index = 0;
+        } else if (strcmp((char *)rx_buffer, "R:RELEASE") == 0 || strcmp((char *)rx_buffer, "L:RELEASE") == 0) {
+          gripper_state = GRIPPER_OPENING;
+          dbg_rx_ok++;
+          rx_index = 0;
+        } else {
+          // Kiểm tra và bóc tách XOR Checksum ký tự '*'
+          char *star = strchr((char *)rx_buffer, '*');
+          if (star != NULL) {
+            *star = '\0';
+            char *checksum_str = star + 1;
+
+            // Tính XOR checksum của chuỗi trước ký tự '*'
+            uint8_t calc_sum = 0;
+            for (char *c_ptr = (char *)rx_buffer; c_ptr < star; c_ptr++) {
+              calc_sum ^= (uint8_t)(*c_ptr);
+            }
+
+            unsigned int rx_sum = 0;
+            if (sscanf(checksum_str, "%2X", &rx_sum) == 1) {
+              if (calc_sum == (uint8_t)rx_sum) {
+                // Hỗ trợ kiểm tra lệnh bộ kẹp đi kèm checksum
+                if (strcmp((char *)rx_buffer, "R:GRIP") == 0 || strcmp((char *)rx_buffer, "L:GRIP") == 0) {
+                  gripper_state = GRIPPER_CLOSING;
+                  dbg_rx_ok++;
+                } else if (strcmp((char *)rx_buffer, "R:RELEASE") == 0 || strcmp((char *)rx_buffer, "L:RELEASE") == 0) {
+                  gripper_state = GRIPPER_OPENING;
+                  dbg_rx_ok++;
+                } else {
+                  // Lọc tiền tố theo cài đặt biên dịch của cánh tay robot
+#if defined(ARM_LEFT) || (ARM_PROTO_MY_ADDR == 0x02u)
+                  const char *prefix = "L:";
+#else
+                  const char *prefix = "R:";
+#endif
+                  if (strncmp((char *)rx_buffer, prefix, 2) == 0) {
+                    int q[6];
+                    // Phân tích 6 góc khớp mục tiêu
+                    if (sscanf((char *)rx_buffer + 2, "%d,%d,%d,%d,%d,%d", &q[0],
+                               &q[1], &q[2], &q[3], &q[4], &q[5]) == 6) {
+                      dbg_rx_ok++;
+                      // Chuyển đổi và ánh xạ sang góc quay Servo vật lý
+                      servo_deg[0] = -(float)q[0] / 100.0f + 96.43f;
+                      servo_deg[1] = -(float)q[1] / 100.0f + 90.00f;
+                      servo_deg[2] = (float)q[2] / 100.0f + 35.00f;
+                      servo_deg[3] = 65.0f - (float)q[3] / 100.0f;
+                      servo_deg[4] = -(float)q[4] / 100.0f + 90.00f;
+                      servo_deg[5] = (float)q[5] / 100.0f;
+                    } else {
+                      dbg_rx_len++;
+                    }
+                  } else {
+                    dbg_rx_bad_prefix++;
+                  }
+                }
+              } else {
+                dbg_rx_crc++; // Lỗi checksum
+              }
+            } else {
+              dbg_rx_bad_hex++;
+            }
+          } else {
+            dbg_rx_no_star++;
+          }
+          rx_index = 0;
+        }
+      }
+    } else {
+      if (rx_index < sizeof(rx_buffer) - 1) {
+        rx_buffer[rx_index++] = b;
+      } else {
+        rx_index = 0;
+      }
+    }
+
+    // Tiếp tục kích hoạt nhận ngắt UART 1 byte tiếp theo
+    if (HAL_UART_Receive_IT(&huart2, &arm_rx_byte, 1) != HAL_OK) {
+      HAL_UART_AbortReceive(&huart2);
+      HAL_UART_Receive_IT(&huart2, &arm_rx_byte, 1);
+    }
+  }
+}
+```
 
 > [!NOTE]
-> **Lưu ý về Protocol V2.1 nhị phân trên Arm Slave:**
-> Trong mã nguồn của STM32F4, mặc dù tiêu đề `arm_protocol.h` định nghĩa cấu trúc frame nhị phân Protocol V2.1 và hàm xử lý `ARM_Proto_ProcessFrame` (cùng cơ chế Δθ guard tương ứng) đã được viết sẵn làm mã tham chiếu dự phòng, nhưng **không được kích hoạt** trong ngắt nhận thực tế. Hệ thống hiện tại vận hành hoàn toàn bằng trình xử lý Text Parser nêu trên để đảm bảo tính trực tiếp và đơn giản của đường truyền.
+> **Bộ bảo vệ nhị phân V2.1 không kích hoạt:**
+> Trong tệp `arm_protocol.c`, mặc dù có sẵn hàm `ARM_Proto_ProcessFrame()` thực hiện kiểm lỗi CRC-16 và bộ lọc giới hạn góc $\Delta\theta$ guard tối đa $3.00^\circ$ cho mỗi khung truyền ở tần số 50Hz, nhưng nó **không được sử dụng** trong hàm callback ngắt nhận thực tế của cánh tay robot. Hệ thống hiện tại nhận lệnh chuyển động trực tiếp thông qua cơ chế phân tích chuỗi Text (ASCII) trong hàm `HAL_UART_RxCpltCallback` ở trên.
 
 ### 3.2. Firmware AGV Main (STM32H5)
-* **7 chế độ vận hành (AGV Run Modes)**:
-  1. `MODE_1_LINE_ONLY`: Chỉ bám vạch từ PID, bỏ qua ngã tư và QR. Dùng để cấu hình Kp, Ki, Kd.
-  2. `MODE_2_LINE_INTERSECTION`: Bám vạch và dừng phanh cứng khi chạm mắt rìa ngã tư để đo cơ khí.
-  3. `MODE_3_TEST_SENSORS_NO_MOTOR`: Ngắt động cơ, chạy thuật toán định tuyến để đẩy xe bằng tay test cảm biến.
-  4. `MODE_4_FULL_RUN`: Tự động hoàn toàn (Dijkstra + Đọc QR + Rẽ ngã tư + Truyền thông).
-  5. `MODE_5_CALIBRATE_MOTORS`: Chạy tiến/lùi/rẽ theo chu kỳ thời gian để căn chỉnh phần cứng bánh xe.
-  6. `MODE_6_TEST_TURN_RIGHT`: Chạy bám vạch, cứ gặp ngã tư bất kỳ là tự động rẽ phải.
-  7. `MODE_7_DYNAMIC_TRAJECTORY` (**Quỹ đạo động từ Firebase**): Khi nhận tọa độ đích mới từ Firebase qua ESP32, xe tính lại lộ trình bằng thuật toán Dijkstra và "nối" lệnh bẻ lái trực tiếp tại ngã tư tiếp theo mà không cần dừng xe lại.
-* **Thuật toán bám vạch & bẻ lái**: Thuật toán PID kiểm soát góc lệch vạch từ kết hợp định vị hướng rẽ bằng la bàn số IMU qua bộ đọc kiểm tra `AGV_ValidateHeading()`.
+Mạch điều khiển chính STM32H5 quản lý các chế độ chạy của xe tự hành bằng một máy trạng thái (State machine) được định nghĩa qua kiểu liệt kê `AGV_RunMode_t` trong tệp `agv_control.h`:
+
+```c
+typedef enum {
+    MODE_1_LINE_ONLY = 1,             // Chỉ bám vạch từ PID, bỏ qua ngã tư
+    MODE_2_LINE_INTERSECTION = 2,     // Bám vạch và dừng phanh cứng tại ngã tư
+    MODE_3_TEST_SENSORS_NO_MOTOR = 3, // Chạy định lý nhưng ngắt động cơ để test cảm biến
+    MODE_4_FULL_RUN = 4,              // Vận hành tự động hoàn toàn (Dijkstra + Đọc QR + Rẽ ngã tư)
+    MODE_5_CALIBRATE_MOTORS = 5,      // Căn chỉnh động cơ trái/phải theo chu kỳ
+    MODE_6_TEST_TURN_RIGHT = 6,       // Gặp ngã tư tự động rẽ phải để kiểm tra cơ cấu
+    MODE_7_DEBUG_NO_QR = 7,           // Chạy bám vạch và rẽ ngã tư không cần quét mã QR
+    MODE_8_TEST_ENCODER = 8           // Chế độ kiểm tra phản hồi xung Encoder động cơ
+} AGV_RunMode_t;
+```
+
+Thuật toán bám vạch từ PID và phân phối tốc độ động cơ điều khiển di chuyển được triển khai trong tệp `agv_control.c`:
+
+```c
+void AGV_FollowLine(AGV_HandleTypeDef *hagv) {
+  if (hagv == NULL) return;
+
+  static uint32_t lost_line_time = 0;
+  uint16_t line_val = LineSensor_Read(hagv->line_sensor);
+
+  // Xử lý khi xe lệch hoàn toàn khỏi vạch từ (mất line)
+  if (line_val == 0xFFFF || line_val == 0x0000) {
+    if (lost_line_time == 0) lost_line_time = HAL_GetTick();
+    if (HAL_GetTick() - lost_line_time > 10000) {
+      if (agv_state.run_mode == MODE_4_FULL_RUN) {
+        agv_state.follow_line_enable = false;
+        agv_state.indicator_state = 3; // Chuyển trạng thái sang báo lỗi (State 3)
+      }
+      AGV_Stop(hagv);
+    }
+    return;
+  } else {
+    lost_line_time = 0;
+  }
+
+  // Nhận diện ngã tư (Intersection): Mắt biên trái/phải đè vạch đồng thời mắt giữa bám vạch
+  if (agv_state.run_mode != MODE_1_LINE_ONLY && agv_state.run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
+    if (((line_val & 0x8001) != 0x8001) && ((line_val & CENTER_MASK) != CENTER_MASK) &&
+        (HAL_GetTick() - agv_state.last_leave_intersection_time > AGV_LINE_RECOVERY_TIME)) {
+      AGV_Stop(hagv);
+      agv_state.follow_line_enable = false;
+      agv_state.is_at_intersection = true;
+      agv_state.intersection_time = HAL_GetTick();
+      return;
+    }
+  }
+
+  // Đọc góc lệch và tính toán điều khiển PID
+  hagv->current_error = AGV_GetLineError(line_val, hagv->current_error);
+  hagv->pid_controller->current_val = hagv->current_error;
+  float output = AGV_ComputePID(hagv->pid_controller, 0.0f);
+
+  // Ramping tăng giảm tốc mềm mại tránh giật xe
+  float accel_step = 2.5f; 
+  if (hagv->current_speed < hagv->base_speed) {
+    hagv->current_speed += accel_step;
+    if (hagv->current_speed > hagv->base_speed) hagv->current_speed = hagv->base_speed;
+  } else if (hagv->current_speed > hagv->base_speed) {
+    hagv->current_speed -= accel_step;
+    if (hagv->current_speed < hagv->base_speed) hagv->current_speed = hagv->base_speed;
+  }
+
+  // Điều khiển bánh xe theo chiều di chuyển
+  if (hagv->direction == 1) { // Tiến
+    int16_t speed_l = (int16_t)(hagv->current_speed - output);
+    int16_t speed_r = (int16_t)(hagv->current_speed + output);
+
+    if (speed_l > 999) speed_l = 999;
+    if (speed_r > 999) speed_r = 999;
+    if (speed_l < -300) speed_l = -300;
+    if (speed_r < -300) speed_r = -300;
+
+    if (agv_state.run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
+      Motor_SetSpeed(hagv->motor_left, speed_l);
+      Motor_SetSpeed(hagv->motor_right, speed_r);
+    }
+  } else if (hagv->direction == -1) { // Lùi
+    // Đảo dấu logic PID khi đi lùi vì cảm biến nằm ở đầu xe
+    int16_t speed_l = (int16_t)(-hagv->current_speed + output);
+    int16_t speed_r = (int16_t)(-hagv->current_speed - output);
+
+    if (speed_l < -999) speed_l = -999;
+    if (speed_r < -999) speed_r = -999;
+    if (speed_l > 300) speed_l = 300;
+    if (speed_r > 300) speed_r = 300;
+
+    if (agv_state.run_mode != MODE_3_TEST_SENSORS_NO_MOTOR) {
+      Motor_SetSpeed(hagv->motor_left, speed_l);
+      Motor_SetSpeed(hagv->motor_right, speed_r);
+    }
+  }
+}
+```
 
 ### 3.3. Ứng Dụng Java PC App (Swing GUI)
-* **Gửi dữ liệu tay robot trực tiếp**:
-  Ứng dụng quản lý kết nối COM thông qua `UartManager` bằng thư viện `jSerialComm`. Khi góc khớp của tay robot thay đổi (từ thanh trượt FK hoặc bộ giải động học ngược IK), hàm `sendJointsToUart(boolean forceSend)` trong class `MainFrame` sẽ chuyển đổi các góc sang không gian cơ cấu chấp hành tương đối so với vị trí Home (`toHomeRelativeActuatorSpace`), định dạng thành chuỗi ký tự Text, tính toán XOR checksum và truyền thẳng xuống cổng COM:
-  ```java
-  // Trích đoạn logic tạo khung truyền Text của tay phải
-  String textFrame = String.format(java.util.Locale.US, "R:%d,%d,%d,%d,%d,%d",
-      (int) Math.round(qActuator[0] * 100.0),
-      (int) Math.round(qActuator[1] * 100.0),
-      (int) Math.round(qActuator[2] * 100.0),
-      (int) Math.round(qActuator[3] * 100.0),
-      (int) Math.round(qActuator[4] * 100.0),
-      (int) Math.round(qActuator[5] * 100.0));
-  String frameWithChecksum = addChecksum(textFrame);
-  uartManager.sendData(frameWithChecksum);
-  ```
-* **Bộ giải Động học Ngược JNI (C++ Solver via JNI)**:
-  Để giải phương trình động học ngược (IK) cho cánh tay 6 bậc tự do trong thời gian thực tại tần số 50Hz, ứng dụng sử dụng thư viện động liên kết C++ (`kinematics_jni.dll` trên Windows hoặc `libkinematics_jni.so` trên Ubuntu) qua giao tiếp Java Native Interface (JNI). Bộ giải số học C++ này cho tốc độ tính toán nhanh gấp hàng trăm lần so với viết bằng Java thuần, đảm bảo quỹ đạo TCP (Tool Center Point) chuyển động trơn tru.
-* **Hỗ trợ tay cầm điều khiển PS5**: Tích hợp mã nguồn Python phụ trợ sử dụng thư viện `pygame` để ánh xạ các nút nhấn và cần gạt trên tay cầm PS5 thành lệnh di chuyển XYZ và góc quay của gripper.
+Ứng dụng PC đóng vai trò gửi trực tiếp góc khớp robot dạng Text xuống bus RS485. Trong class `MainFrame.java`, hàm `sendJointsToUart` thực hiện dịch chuyển đổi góc sang hệ tọa độ cơ cấu chấp hành tương đối so với Home và định dạng khung truyền:
+
+```java
+    private void sendJointsToUart(boolean forceSend) {
+        if (!armStreamingEnabled) {
+            return;
+        }
+
+        boolean uartConnected = uartManager != null && uartManager.isConnected();
+        if (!uartConnected) {
+            return;
+        }
+
+        boolean rightChanged = forceSend;
+        boolean leftChanged = forceSend;
+
+        // So sánh góc hiện tại với góc gửi gần nhất để phát hiện thay đổi
+        if (!forceSend) {
+            for (int i = 0; i < NUM_JOINTS; i++) {
+                if (Math.abs(anglesRight[i] - lastSentAnglesRight[i]) > 0.01) {
+                    rightChanged = true;
+                }
+                if (Math.abs(anglesLeft[i] - lastSentAnglesLeft[i]) > 0.01) {
+                    leftChanged = true;
+                }
+            }
+        }
+
+        // --- Gửi dữ liệu tay Phải ---
+        if (rightChanged) {
+            double[] qActuator = toHomeRelativeActuatorSpace(anglesRight, true);
+
+            // Format dạng chuỗi: R:dq0,dq1,dq2,dq3,dq4,dq5 (góc thực * 100)
+            String textFrame = String.format(java.util.Locale.US, "R:%d,%d,%d,%d,%d,%d",
+                (int) Math.round(qActuator[0] * 100.0),
+                (int) Math.round(qActuator[1] * 100.0),
+                (int) Math.round(qActuator[2] * 100.0),
+                (int) Math.round(qActuator[3] * 100.0),
+                (int) Math.round(qActuator[4] * 100.0),
+                (int) Math.round(qActuator[5] * 100.0));
+
+            String frameWithChecksum = addChecksum(textFrame);
+
+            if (txUartRight != null) {
+                txUartRight.setText(frameWithChecksum.trim());
+            }
+            uartManager.sendData(frameWithChecksum);
+            System.arraycopy(anglesRight, 0, lastSentAnglesRight, 0, NUM_JOINTS);
+        }
+
+        // --- Gửi dữ liệu tay Trái ---
+        if (leftChanged) {
+            double[] qActuator = toHomeRelativeActuatorSpace(anglesLeft, false);
+
+            String textFrame = String.format(java.util.Locale.US, "L:%d,%d,%d,%d,%d,%d",
+                (int) Math.round(qActuator[0] * 100.0),
+                (int) Math.round(qActuator[1] * 100.0),
+                (int) Math.round(qActuator[2] * 100.0),
+                (int) Math.round(qActuator[3] * 100.0),
+                (int) Math.round(qActuator[4] * 100.0),
+                (int) Math.round(qActuator[5] * 100.0));
+
+            String frameWithChecksum = addChecksum(textFrame);
+
+            if (txUartLeft != null) {
+                txUartLeft.setText(frameWithChecksum.trim());
+            }
+            uartManager.sendData(frameWithChecksum);
+            System.arraycopy(anglesLeft, 0, lastSentAnglesLeft, 0, NUM_JOINTS);
+        }
+    }
+```
+
+Hàm `addChecksum` thực hiện phép XOR từng kí tự trong chuỗi góc và trả về định dạng kèm mã hex 2 kí tự viết hoa:
+
+```java
+    private String addChecksum(String str) {
+        String content = str.trim();
+        int sum = 0;
+        for (int i = 0; i < content.length(); i++) {
+            sum ^= content.charAt(i);
+        }
+        return content + "*" + String.format("%02X", sum & 0xFF) + "\n";
+    }
+```
 
 ### 3.4. Hệ Thống ROS2 & MoveIt 2 (Docker Container)
-* **Ràng buộc hướng kẹp (Orientation Constraints)**: Trong file hoạch định `moveit_planner.cpp`, thuật toán lập quỹ đạo tích hợp ràng buộc hướng (Orientation Constraint) cho gripper của tay phải và tay trái để khóa chặt góc Pitch và Roll (sai số cho phép $< 2.8^\circ$), đảm bảo vật phẩm kẹp luôn thẳng đứng khi di chuyển.
-* **Cầu nối Java-UDP Bridge (`java_udp_bridge.py`)**: Lắng nghe các gói tin JSON chứa tọa độ đích XYZ từ Java App gửi qua cổng UDP `5010`, chuyển tiếp vào topic `/agv_arm/plan_requests` của ROS2, nhận quỹ đạo MoveIt đã tính toán và gửi phản hồi ngược lại Java App qua cổng UDP `5011`.
+Bộ cầu nối UDP-ROS2 trong tệp `java_udp_bridge.py` đóng vai trò đồng bộ hóa yêu cầu hoạch định quỹ đạo từ Java App sang ROS2. Dưới đây là các hàm cốt lõi quản lý kết nối và điều phối thông điệp:
+
+```python
+    def poll_socket(self):
+        # Dọn dẹp các yêu cầu cũ bị timeout (> 10.0 giây)
+        now = time.time()
+        stale_ids = [rid for rid, (_, _, _, _, t) in self.pending_requests.items() if now - t > 10.0]
+        for rid in stale_ids:
+            sender_host, sender_port, reply_host, reply_port, _ = self.pending_requests.pop(rid)
+            target_host = sender_host if sender_host else reply_host
+            target_port = sender_port if sender_port else reply_port
+            timeout_response = {
+                "type": "plan_response",
+                "request_id": rid,
+                "ok": False,
+                "error": "Planning timeout from ROS 2 backend",
+                "stamp": now,
+            }
+            try:
+                self.socket.sendto(json.dumps(timeout_response).encode("utf-8"), (target_host, target_port))
+            except Exception:
+                pass
+
+        # Đọc dữ liệu từ Socket không chặn (non-blocking)
+        while True:
+            try:
+                data, address = self.socket.recvfrom(65535)
+                self.get_logger().info(f"Received UDP packet from {address}")
+            except BlockingIOError:
+                return
+            except OSError as exc:
+                self.get_logger().error(f"UDP receive failed: {exc}")
+                return
+
+            try:
+                request = json.loads(data.decode("utf-8"))
+                self.get_logger().info(f"Parsed request: {request}")
+                response = self.handle_request(request, address)
+                if response is None:
+                    continue
+            except Exception as exc:
+                response = {
+                    "type": "plan_response",
+                    "ok": False,
+                    "error": str(exc),
+                    "stamp": time.time(),
+                }
+
+            reply_host = response.pop("_reply_host", address[0])
+            reply_port = int(response.pop("_reply_port", self.default_reply_port))
+            self.socket.sendto(json.dumps(response).encode("utf-8"), (reply_host, reply_port))
+
+    def handle_request(self, request, address):
+        request_id = request.get("request_id") or str(uuid.uuid4())
+        request["request_id"] = request_id
+        request.setdefault("received_from", {"host": address[0], "port": address[1]})
+        request.setdefault("stamp", time.time())
+
+        reply_host = request.get("reply_host", self.default_reply_host)
+        reply_port = int(request.get("reply_port", self.default_reply_port))
+        
+        # Xử lý nhanh tin nhắn kiểm tra kết nối ping
+        if request.get("type") == "ping":
+            return {
+                "type": "pong",
+                "request_id": request_id,
+                "ok": True,
+                "stamp": time.time(),
+                "_reply_host": address[0],
+                "_reply_port": address[1],
+            }
+
+        # Lưu lại thông tin socket để phản hồi sau khi MoveIt lập xong quỹ đạo
+        self.pending_requests[request_id] = (address[0], address[1], reply_host, reply_port, time.time())
+
+        # Xuất bản yêu cầu sang topic ROS2
+        msg = String()
+        msg.data = json.dumps(request)
+        self.publisher.publish(msg)
+        return None
+```
 
 ---
 
