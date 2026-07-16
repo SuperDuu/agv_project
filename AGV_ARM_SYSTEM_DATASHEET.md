@@ -38,13 +38,11 @@ flowchart TD
 * **Bộ kẹp vật thể (Gripper)**: Sử dụng cảm biến dòng điện kết hợp bộ chuyển đổi ADC 12-bit trên STM32F4. Khi kẹp vật thể, dòng điện động cơ tăng làm điện áp ADC thay đổi, giúp điều khiển vòng kín lực kẹp (Force Control) và tự động dừng kẹp khi đạt ngưỡng an toàn để tránh quá tải hoặc làm hỏng vật thể.
 
 ### 2.3. Thiết Kế Cơ Khí (CAD Mechanical Design)
-Cấu trúc cơ khí của cánh tay robot và xe tự hành được mô hình hóa chính xác trong SolidWorks:
-* **Chi tiết lắp ráp tổng thể (Assembly)**: Các cụm khớp vai robot chịu lực quay lớn và tải trọng cơ khí cao được thiết kế trong `vai_rb.SLDASM`, `vai3.SLDASM` và `vai.SLDASM`.
-* **Cơ cấu truyền động cơ khí**: 
-  * Cánh tay chính (`tay_400.SLDPRT` dài 400mm) sử dụng bộ truyền động trực tiếp và bánh răng ăn khớp truyền mô-men từ Servo góc rộng thông qua các hệ bánh răng hành tinh và bánh răng thẳng ăn khớp trong/ngoài thiết kế chuyên dụng (`spur gear_iso_20.STEP`, `internal spur gear_iso_mamxoay.SLDPRT`, `internal spur gear_iso_mx.STEP`).
-  * Khớp chuyển động liên kết khuỷu dùng chốt định vị lực (`chot.SLDPRT`, `kn12.SLDPRT`, `kn8.SLDPRT`).
-* **Kẹp & Servo**: Sử dụng cơ cấu kẹp song song tích hợp Servo tiêu chuẩn (`MG996R_circle.stp`).
-* **Đồng bộ hóa CAD-PCB**: File xuất biên dạng hình học phẳng `board_pcb.DXF` được sử dụng làm Outline mạch in trong Altium Designer nhằm đảm bảo bo mạch lắp ráp khớp khít 100% với hộp bảo vệ cơ khí và các lỗ bắt vít định vị trên thân robot.
+Toàn bộ cấu trúc cơ khí của xe tự hành AGV và hệ thống hai cánh tay robot 6 trục được mô hình hóa, lắp ráp và mô phỏng động học trên phần mềm thiết kế 3D SolidWorks:
+* **Cánh tay Robot 6 bậc tự do (6-DOF Arm)**: Thiết kế tối ưu hóa trọng lượng, phân bổ vật liệu hợp lý để tăng cường khả năng chịu tải cơ học. Chuyển động quay tại các khớp liên kết được thực hiện thông qua hệ thống bánh răng ăn khớp (bánh răng hành tinh, bánh răng thẳng trong/ngoài) truyền lực từ động cơ servo đầu vào để nhân mô-men xoắn.
+* **Bộ kẹp cơ khí (Gripper Assembly)**: Sử dụng các chi tiết kẹp chuyển động đồng bộ để gắp, giữ và nhả vật phẩm một cách chính xác.
+* **Xe tự hành AGV**: Khung gầm chịu lực chắc chắn, tích hợp các giá đỡ cảm biến từ, la bàn số IMU, camera quét mã QR và bệ đỡ chịu tải vững chắc cho hai cánh tay robot hoạt động đối xứng mà không làm lệch trọng tâm của xe.
+* **Đồng bộ cơ - điện (CAD-PCB Co-design)**: Biên dạng hình học phẳng của bo mạch được xuất trực tiếp dưới dạng tệp vector DXF để làm khung viền (Outline) bo mạch trong Altium Designer, đảm bảo sự ăn khớp hoàn hảo giữa bo mạch điện tử với các lỗ vít định vị cơ khí và vỏ hộp bảo vệ.
 
 ### 2.4. Thiết Kế Mạch Điện Tử (PCB Schematic & Layout Design)
 Mạch điều khiển cánh tay Arm Slave là bo mạch 2 lớp được thiết kế trên Altium Designer (tệp nguyên lý `arm.SchDoc` và bố trí linh kiện `arm.PcbDoc`):
