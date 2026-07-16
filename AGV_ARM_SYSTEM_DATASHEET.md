@@ -37,6 +37,30 @@ flowchart TD
 * **Kết nối vật lý**: Cả hai cánh tay cùng kết nối chung vào bus truyền thông RS485 nối trực tiếp về PC. Máy tính PC sử dụng 1 cổng COM vật lý duy nhất (qua đầu chuyển USB-to-RS485) để gửi dữ liệu dạng Text cho cả hai tay. Hai tay robot phân biệt lệnh dành cho mình dựa vào tiền tố `R:` (Right) hoặc `L:` (Left).
 * **Bộ kẹp vật thể (Gripper)**: Sử dụng cảm biến dòng điện kết hợp bộ chuyển đổi ADC 12-bit trên STM32F4. Khi kẹp vật thể, dòng điện động cơ tăng làm điện áp ADC thay đổi, giúp điều khiển vòng kín lực kẹp (Force Control) và tự động dừng kẹp khi đạt ngưỡng an toàn để tránh quá tải hoặc làm hỏng vật thể.
 
+### 2.3. Thiết Kế Cơ Khí (CAD Mechanical Design)
+Cấu trúc cơ khí của cánh tay robot và xe tự hành được mô hình hóa chính xác trong SolidWorks:
+* **Chi tiết lắp ráp tổng thể (Assembly)**: Các cụm khớp vai robot chịu lực quay lớn và tải trọng cơ khí cao được thiết kế trong `vai_rb.SLDASM`, `vai3.SLDASM` và `vai.SLDASM`.
+* **Cơ cấu truyền động cơ khí**: 
+  * Cánh tay chính (`tay_400.SLDPRT` dài 400mm) sử dụng bộ truyền động trực tiếp và bánh răng ăn khớp truyền mô-men từ Servo góc rộng thông qua các hệ bánh răng hành tinh và bánh răng thẳng ăn khớp trong/ngoài thiết kế chuyên dụng (`spur gear_iso_20.STEP`, `internal spur gear_iso_mamxoay.SLDPRT`, `internal spur gear_iso_mx.STEP`).
+  * Khớp chuyển động liên kết khuỷu dùng chốt định vị lực (`chot.SLDPRT`, `kn12.SLDPRT`, `kn8.SLDPRT`).
+* **Kẹp & Servo**: Sử dụng cơ cấu kẹp song song tích hợp Servo tiêu chuẩn (`MG996R_circle.stp`).
+* **Đồng bộ hóa CAD-PCB**: File xuất biên dạng hình học phẳng `board_pcb.DXF` được sử dụng làm Outline mạch in trong Altium Designer nhằm đảm bảo bo mạch lắp ráp khớp khít 100% với hộp bảo vệ cơ khí và các lỗ bắt vít định vị trên thân robot.
+
+### 2.4. Thiết Kế Mạch Điện Tử (PCB Schematic & Layout Design)
+Mạch điều khiển cánh tay Arm Slave là bo mạch 2 lớp được thiết kế trên Altium Designer (tệp nguyên lý `arm.SchDoc` và bố trí linh kiện `arm.PcbDoc`):
+* **Khối Vi điều khiển (MCU Block)**: Sử dụng chip **STM32F446VET6** gói chân LQFP100 (U2) với thạch anh ngoại 8 MHz (Y1), hỗ trợ giao tiếp nạp/gỡ lỗi qua cổng SWD.
+* **Khối Cách ly Tín hiệu & Bảo vệ (Signal Isolation & Conditioning)**:
+  * Cách ly tín hiệu xung xuất từ MCU đến Driver Servo và tín hiệu Encoder phản hồi bằng hệ thống Optocoupler tốc độ cao **6N137S** (U4, U5, U9, U10, U13, U14, U15, U16, U17, U18) để bảo vệ vi xử lý khỏi hiện tượng quá dòng ngược hoặc nhiễu điện áp cao từ động cơ.
+  * IC đệm kích và lọc nhiễu hex Schmitt-trigger **74HC14D** (U6, U7, U8, U11, U12) giúp làm sạch răng cưa, ổn định dạng sóng vuông xung Encoder và khử nhiễu tín hiệu truyền dẫn khoảng cách xa.
+* **Khối Quản lý Nguồn (Power Management)**:
+  * Nguồn tổng DC 12V-24V đi qua mạch hạ áp Buck hiệu suất cao dùng IC ổn áp xung chịu dòng tải lớn **LM2576HVS-5.0V** (U3, gói chân TO263-5) để tạo nguồn logic 5V/3A.
+  * Nguồn logic 3.3V cấp cho MCU được hạ áp từ nguồn 5V thông qua chip ổn áp tuyến tính LDO **AMS1117-3.3V** (AMS1, gói chân SOT223).
+  * Khối RS485 và cổng cách ly opto sử dụng nguồn 5V cách ly độc lập tạo ra từ mô-đun nguồn DC-DC **B1205S-2WR3** (PS1, gói chân SIP-6, công suất 2W) để triệt tiêu hoàn toàn vòng lặp đất (Ground Loop) gây nhiễu tín hiệu serial.
+* **Giao tiếp & IO ngoại vi**:
+  * Kết nối UART USART2 (chân PA2/TX2, PA3/RX2 trên U2) đưa ra cổng RS485 cách ly kết nối trực tiếp về PC.
+  * Hỗ trợ 2 cổng đọc ADC chuyên dụng (`vc1` trên chân PA6, `vc2` trên chân PB0) để thu thập dòng tải phục vụ thuật toán kẹp khép kín (Force control).
+  * Hỗ trợ 5 nhóm đầu đọc Encoder (`E1` đến `E5`) và các chân Timer điều chế độ rộng xung PWM mở rộng (`TIM8`, `TIM9`, `TIM10`, `TIM11`, `TIM12`).
+
 ---
 
 ## 3. KIẾN TRÚC PHẦN MỀM & FIRMWARE (SOFTWARE & FIRMWARE)
