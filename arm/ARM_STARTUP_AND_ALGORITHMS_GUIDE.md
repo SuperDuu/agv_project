@@ -1,7 +1,7 @@
 # HƯỚNG DẪN KHỞI ĐỘNG, KIẾN TRÚC CODE VÀ THUẬT TOÁN HỆ THỐNG CÁNH TAY ROBOT KÉP
 ### *(Dual-Arm System Startup, Code Architecture & Algorithms Guide)*
 
-Tài liệu này cung cấp thông tin chi tiết từ quy trình khởi động hệ thống hai cánh tay robot kép (Left & Right 6-DOF Arms) cho đến thiết kế phần mềm, cấu trúc truyền thông và các thuật toán điều khiển vòng kín chạy trong firmware. Tài liệu được thiết kế trực quan, dễ hiểu cho cả quản lý (sếp), kỹ sư và nhân viên vận hành.
+Tài liệu này cung cấp thông tin chi tiết từ quy trình khởi động hệ thống hai cánh tay robot kép (Left & Right 6-DOF Arms) cho đến thiết kế phần mềm, cách biên dịch (Build), chạy ứng dụng (Run) trên máy tính bằng NetBeans, cấu trúc truyền thông và các thuật toán điều khiển vòng kín chạy trong firmware. Tài liệu được thiết kế trực quan, dễ hiểu cho cả quản lý (sếp), kỹ sư và nhân viên vận hành.
 
 ---
 
@@ -123,26 +123,102 @@ Khớp kẹp vật (Gripper) sử dụng động cơ có tích hợp cảm biế
 
 ---
 
-## PHẦN III: HƯỚNG DẪN VẬN HÀNH CHẠY THỬ THỰC TẾ
+## PHẦN III: HƯỚNG DẪN BIÊN DỊCH VÀ CHẠY JAVA PC APP
+
+Ứng dụng PC điều khiển cánh tay là một project Java Swing thuần túy chạy trên cơ chế Ant Build, đã được tích hợp đầy đủ file thiết lập để mở trực tiếp trong **NetBeans IDE**.
+
+### 1. Chuẩn Bị Môi Trường
+* **JDK (Java Development Kit)**: Cần cài đặt **JDK 17** hoặc mới hơn.
+* **IDE**: Khuyên dùng **Apache NetBeans IDE (phiên bản 17 trở lên)**.
+* **Python (Cho tay cầm PS5)**: Python 3 và thư viện `pygame` (cài đặt qua pip).
+
+---
+
+### 2. Hướng Dẫn Sử Dụng NetBeans IDE (Khuyên Dùng)
+
+#### Bước 1: Mở Project trong NetBeans
+1. Khởi động **NetBeans IDE**.
+2. Trên thanh menu, chọn `File` -> `Open Project...` (hoặc phím tắt `Ctrl + Shift + O`).
+3. Điều hướng tới đường dẫn: `/home/du/Desktop/agv_project/arm/java_app/arm`.
+4. NetBeans sẽ tự động nhận diện thư mục này là một project Java hợp lệ (hiển thị biểu tượng cốc cà phê Java kèm tên `arm`). Nhấn **Open Project**.
+
+#### Bước 2: Quản lý Thư Viện (Libraries)
+* NetBeans tự động nhận diện thư viện giao tiếp nối tiếp nằm trong thư mục `lib/jSerialComm-2.10.4.jar`. Không cần cấu hình tay.
+
+#### Bước 3: Biên Dịch (Clean and Build)
+* Để biên dịch toàn bộ mã nguồn Java:
+  * Click chuột phải vào tên project `arm` ở cây thư mục bên trái -> Chọn **Clean and Build** (hoặc click vào biểu tượng Cái Búa và Cái Chổi trên thanh công cụ).
+  * NetBeans sẽ biên dịch các file `.java` từ thư mục `src` sang file `.class` trong `build/classes`, đồng thời đóng gói thành một file JAR hoàn chỉnh đặt tại thư mục `dist/arm.jar`.
+
+#### Bước 4: Chạy Ứng Dụng (Run Project)
+* Click chuột phải vào project `arm` -> Chọn **Run** (hoặc click vào nút **Play màu xanh** trên thanh công cụ).
+* NetBeans sẽ khởi chạy class chính `app.App` và hiển thị giao diện đồ họa điều khiển 2 cánh tay robot.
+
+---
+
+### 3. Hướng Dẫn Chạy Bằng Script Dòng Lệnh (Không Cần NetBeans)
+
+Nếu không sử dụng NetBeans, bạn có thể tự biên dịch và chạy bằng các file script đã viết sẵn:
+
+#### Trên Ubuntu (Linux):
+Mở terminal tại thư mục `/home/du/Desktop/agv_project/arm/java_app/arm` và chạy:
+```bash
+# 1. Tạo môi trường ảo Python và cài đặt pygame cho PS5 controller
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r scripts/requirements.txt
+
+# 2. Chạy ứng dụng Java (script tự biên dịch và khởi chạy)
+./run.sh
+```
+
+#### Trên Windows:
+Mở Command Prompt (cmd) tại thư mục `arm\java_app\arm` và chạy:
+```cmd
+:: 1. Cài đặt thư viện Python hỗ trợ tay cầm
+python -m pip install -r scripts\requirements.txt
+
+:: 2. Chạy script Java
+run.bat
+```
+
+---
+
+### 4. Biên Dịch Bộ Giải Động Học Ngược C++ (JNI Solver - Tùy Chọn)
+Để tăng tốc độ tính toán động học ngược (IK) bằng mã C++ hiệu năng cao thay cho thuật toán chạy trong Java:
+1. Đảm bảo máy tính đã cài đặt trình biên dịch C++ (`g++` trên Linux hoặc MSVC/MinGW trên Windows) và biến môi trường `JAVA_HOME` đã trỏ đúng tới JDK 17.
+2. Chạy file script build JNI trong thư mục dự án:
+   * **Ubuntu**: `python3 cpp_jni/build_jni.py`
+   * **Windows**: `python cpp_jni\build_jni.py`
+3. Quá trình biên dịch sẽ tạo ra file thư viện động:
+   * `lib/libkinematics_jni.so` (trên Ubuntu) hoặc `lib\kinematics_jni.dll` (trên Windows).
+4. Khi phát hiện các file này trong thư mục `lib`, ứng dụng Java sẽ tự động kích hoạt bộ giải thuật động học JNI tốc độ cao.
+
+---
+
+## PHẦN IV: QUY TRÌNH VẬN HÀNH CHẠY THỬ THỰC TẾ
 
 ### Bước 1: Kết Nối Phần Cứng
 1. Kết nối bộ nguồn DC 12V-24V cấp điện cho hệ thống hai cánh tay robot và mạch driver logic.
 2. Cắm cáp truyền thông RS485 của cả hai mạch cánh tay vào đầu chuyển USB-to-RS485.
-3. Cắm đầu USB-to-RS485 vào máy tính PC điều khiển (kiểm tra cổng COM nhận được trên Device Manager hoặc cổng `/dev/ttyUSB0` trên Linux).
+3. Cắm đầu USB-to-RS485 vào máy tính PC điều khiển.
 
-### Bước 2: Khởi Chạy Kết Nối Trên Java PC App
-1. Khởi chạy ứng dụng PC qua file chạy `./run.sh` hoặc `run.bat`.
-2. Chọn đúng cổng COM của USB-to-RS485, đặt tốc độ Baudrate là **115200**.
-3. Nhấn **Connect**. Khi kết nối thành công, ứng dụng PC sẽ bắt đầu gửi khung truyền text cập nhật liên tục vị trí thanh trượt góc khớp.
+### Bước 2: Khởi Chạy Kết Nối
+1. Khởi động ứng dụng PC qua NetBeans IDE (Run) hoặc chạy trực tiếp bằng file `./run.sh` / `run.bat`.
+2. Trên GUI của ứng dụng: Chọn đúng cổng COM của USB-to-RS485, baudrate **115200**, rồi nhấn **Connect**.
 
 ### Bước 3: Đưa Cánh Tay Về Vị Trí Home
-1. Trên giao diện ứng dụng PC, thiết lập tất cả các góc khớp 6 trục của hai tay về giá trị `0` độ.
-2. Cánh tay sẽ tự động di chuyển về tư thế Home cơ học (tư thế thẳng đứng). Kiểm tra các khớp xem có bị lệch cơ học hay kẹt khớp nào không để điều chỉnh tay gá.
+1. Trên giao diện, thiết lập tất cả các thanh trượt góc khớp 6 trục của hai tay về giá trị `0` độ.
+2. Cánh tay sẽ tự động di chuyển về tư thế Home cơ học (tư thế thẳng đứng). Kiểm tra sự ăn khớp răng để đảm bảo cánh tay thẳng đứng hoàn toàn.
 
-### Bước 4: Chạy Quỹ Đạo Phối Hợp
-* **Chế độ kiểm tra tay cầm (PS5 controller)**: Sử dụng các joystick và nút bấm trên tay cầm PS5 để kiểm tra phản hồi tức thời của cánh tay robot.
-* **Chế độ tự động hoàn toàn (ROS2 & MoveIt 2)**:
-  1. Khởi động Docker Compose chứa ROS2 MoveIt 2.
-  2. Ứng dụng Java gửi tọa độ gắp nhả mong muốn XYZ qua UDP port 5010.
-  3. MoveIt 2 lập quỹ đạo không va chạm và trả chuỗi các góc khớp qua UDP port 5011.
-  4. Java App tiếp nhận chuỗi quỹ đạo và truyền liên tiếp xuống bus RS485 để cánh tay gắp thả vật phẩm nhịp nhàng.
+### Bước 4: Điều Khiển Quỹ Đạo
+* **Điều khiển thủ công**: Kéo các thanh trượt góc khớp (Forward Kinematics - FK) hoặc nhập tọa độ gắp thả XYZ (Inverse Kinematics - IK) trực tiếp trên GUI của Java App.
+* **Điều khiển qua tay cầm PS5**: Khởi chạy script Python chuyển tiếp tín hiệu tay cầm, cắm tay cầm PS5 vào cổng USB của PC để điều khiển cánh tay gắp nhả vật tư trực quan.
+* **Tự động hóa qua ROS2**: Khởi động Docker Compose chứa ROS2 MoveIt 2 để truyền nhận quỹ đạo không va chạm qua UDP cục bộ về Java App.
+
+---
+
+## PHẦN V: CƠ CHẾ BẢO VỆ & AN TOÀN TRONG CODE
+1. **Chặn biên mềm (Software Clamping)**: Trong file `joint_control.c` và `servo.c`, tất cả các lệnh góc đều được chạy qua bộ lọc giới hạn tối đa/tối thiểu để chống xung đột phần cứng gây hỏng động cơ hoặc gãy cơ học cánh tay.
+2. **Khóa dòng kẹp Gripper**: Thuật toán kiểm soát lực kẹp tự động ngắt PWM và khóa cơ ở chế độ Force Hold khi ADC dòng điện quá tải để bảo vệ động cơ kẹp không bị cháy.
+3. **Mất kết nối khẩn cấp**: Nếu mạch cánh tay không nhận được dữ liệu điều khiển từ PC qua cổng UART sau 1 khoảng thời gian timeout nhất định, nó tự động ngắt xung kích để xả các động cơ servo về trạng thái không tải (Idle), giảm thiểu rủi ro va chạm mất kiểm soát.
