@@ -229,8 +229,8 @@ def add_joint_rpy(robot, name, joint_type, parent, child, origin_xyz, origin_rpy
         ET.SubElement(joint, "axis", {"xyz": xyz(axis)})
     if limit is not None:
         ET.SubElement(joint, "limit", {
-            "lower": fmt(deg(limit["lower"] - 0.01)),
-            "upper": fmt(deg(limit["upper"] + 0.01)),
+            "lower": fmt(deg(limit["lower"])),
+            "upper": fmt(deg(limit["upper"])),
             "velocity": fmt(limit.get("velocity", 1.0)),
             "effort": fmt(limit.get("effort", 5.0)),
         })
