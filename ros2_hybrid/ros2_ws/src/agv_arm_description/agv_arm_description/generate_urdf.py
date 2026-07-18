@@ -166,10 +166,11 @@ def add_cylinder_between(link, start, end, radius, color="dark_gray", collision=
 def add_body(robot, config):
     base_link = add_empty_link(robot, "base_link")
     torso_height = mm(config["base"]["torso_height"])
+    torso_y_offset = mm(config["base"].get("torso_y_offset", 0.0))
     dmm = lambda value: decoration_mm(config, value)
 
     add_box(base_link, [dmm(40.0), dmm(40.0), dmm(10.0)], [0.0, 0.0, dmm(5.0)], color="base_gray")
-    add_box(base_link, [dmm(28.0), dmm(28.0), torso_height], [0.0, dmm(-6.0), torso_height / 2.0], color="torso_gray")
+    add_box(base_link, [dmm(28.0), dmm(28.0), torso_height], [0.0, torso_y_offset, torso_height / 2.0], color="torso_gray")
     add_cylinder_between(base_link, [0.0, 0.0, torso_height], [0.0, 0.0, torso_height + dmm(8.0)], dmm(8.0), color="base_gray")
     add_sphere(base_link, dmm(12.0), [0.0, 0.0, torso_height + dmm(8.0)], color="head_gray")
 
@@ -285,7 +286,7 @@ def add_arm(robot, config, side):
     L6 = mm(links["L6"])
     L7 = mm(links["L7"])
 
-    d2 = (L2 + L3) if is_right else -(L2 + L3)
+    d2 = -(L2 + L3) if is_right else (L2 + L3)
 
     shoulder_link = f"{prefix}_shoulder_link"
     add_empty_link(robot, shoulder_link)
@@ -301,8 +302,13 @@ def add_arm(robot, config, side):
 
     T_orig_1 = mat_mult(Rz(-math.pi / 2), Tz(L1 + L0))
     T_orig_2 = mat_mult(mat_mult(Rx(-math.pi / 2), Rz(-math.pi / 2)), Tz(d2))
-    T_orig_3 = mat_mult(Rx(-math.pi / 2), Rz(-math.pi))
-    T_orig_4 = mat_mult(Tx(L4), Rz(-math.pi / 2))
+    # ROS swaps the visual side of each arm relative to the Java DH side.
+    # Bake the Java startup pose into joint zero while keeping sliders in q-space.
+    home_q3 = deg(-20.0 if is_right else 20.0)
+    home_q4 = deg(35.0 if is_right else -35.0)
+
+    T_orig_3 = mat_mult(Rx(-math.pi / 2), Rz(-math.pi + home_q3))
+    T_orig_4 = mat_mult(Tx(L4), Rz(-math.pi / 2 + home_q4))
     T_orig_5 = mat_mult(Rx(-math.pi / 2), Tz(L5 + L6))
     T_orig_6 = Rx(-math.pi / 2)
     T_tool = [
@@ -326,10 +332,10 @@ def add_arm(robot, config, side):
         T = origins[index]
         o_xyz, o_rpy = extract_xyz_rpy(T)
 
+        axis_sign = -1.0 if index in (2, 3) else 1.0
         if (not is_right) and (index == 5):
-            axis = [0.0, 0.0, -1.0]
-        else:
-            axis = [0.0, 0.0, 1.0]
+            axis_sign = -1.0
+        axis = [0.0, 0.0, axis_sign]
 
         mimic = {"joint": "right_joint_1"} if ((not is_right) and index == 0) else None
         add_joint_rpy(

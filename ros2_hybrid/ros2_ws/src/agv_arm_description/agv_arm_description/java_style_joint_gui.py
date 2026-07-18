@@ -49,6 +49,10 @@ def left_actuator_to_joint(q3, q4):
     return theta3, theta4
 
 
+def actuator_to_ros_joint(q3, q4):
+    return q3, q4 - q3
+
+
 class JointStatePublisher(Node):
     def __init__(self):
         super().__init__("java_style_joint_gui")
@@ -82,11 +86,11 @@ class JointStatePublisher(Node):
         }
 
     def publish_state(self):
-        right_theta3, right_theta4 = right_actuator_to_joint(
+        right_theta3, right_theta4 = actuator_to_ros_joint(
             self.values_deg["right_q3"],
             self.values_deg["right_q4"],
         )
-        left_theta3, left_theta4 = left_actuator_to_joint(
+        left_theta3, left_theta4 = actuator_to_ros_joint(
             self.values_deg["left_q3"],
             self.values_deg["left_q4"],
         )

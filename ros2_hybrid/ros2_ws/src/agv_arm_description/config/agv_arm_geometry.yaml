@@ -18,6 +18,7 @@ links:
 
 base:
   torso_height: 1300.0
+  torso_y_offset: 0.0
   shoulder_z: 1300.0
   shoulder_y_offset: 320.0
 
@@ -25,15 +26,15 @@ joint_limits:
   right:
     joint_1: { lower: -45.0, upper: 45.0, velocity: 1.5, effort: 8.0 }
     joint_2: { lower: -90.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
-    joint_3: { lower: 20.0, upper: 165.0, velocity: 1.5, effort: 8.0 }
-    joint_4: { lower: -95.0, upper: -15.0, velocity: 1.5, effort: 8.0 }
+    joint_3: { lower: 0.0, upper: 145.0, velocity: 1.5, effort: 8.0 }
+    joint_4: { lower: -60.0, upper: 20.0, velocity: 1.5, effort: 8.0 }
     joint_5: { lower: -90.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
     joint_6: { lower: 0.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
   left:
     joint_1: { lower: -45.0, upper: 45.0, velocity: 1.5, effort: 8.0 }
     joint_2: { lower: -90.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
-    joint_3: { lower: -165.0, upper: -20.0, velocity: 1.5, effort: 8.0 }
-    joint_4: { lower: 15.0, upper: 95.0, velocity: 1.5, effort: 8.0 }
+    joint_3: { lower: -145.0, upper: 0.0, velocity: 1.5, effort: 8.0 }
+    joint_4: { lower: -20.0, upper: 60.0, velocity: 1.5, effort: 8.0 }
     joint_5: { lower: -90.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
     joint_6: { lower: 0.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
 

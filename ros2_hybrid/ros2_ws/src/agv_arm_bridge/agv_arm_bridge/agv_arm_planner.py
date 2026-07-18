@@ -79,16 +79,31 @@ class AgvArmPlanner(Node):
             [0.0, 0.0, 0.0, 1.0]
         ])
 
+    def joint_axis_signs(self, is_right):
+        signs = np.ones(6)
+        signs[2] = -1.0
+        signs[3] = -1.0
+        if not is_right:
+            signs[5] = -1.0
+        return signs
+
+    def joint_home_offsets(self, is_right):
+        offsets = np.zeros(6)
+        # Match the Java startup pose after swapping the visual arm sides in ROS.
+        offsets[2] = math.radians(-20.0 if is_right else 20.0)
+        offsets[3] = math.radians(35.0 if is_right else -35.0)
+        return offsets
+
     def compute_fk(self, q, is_right):
-        d2 = (self.L2 + self.L3) if is_right else -(self.L2 + self.L3)
-        q6_kinematic = q[5] if is_right else -q[5]
+        d2 = -(self.L2 + self.L3) if is_right else (self.L2 + self.L3)
+        q_eff = self.joint_home_offsets(is_right) + self.joint_axis_signs(is_right) * np.asarray(q)
         params = [
-            (0.0, self.L1 + self.L0, 0.0, -math.pi / 2, q[0]),
-            (-math.pi / 2, d2, 0.0, -math.pi / 2, q[1]),
-            (-math.pi / 2, 0.0, 0.0, -math.pi, q[2]),
-            (0.0, 0.0, self.L4, -math.pi / 2, q[3]),
-            (-math.pi / 2, self.L5 + self.L6, 0.0, 0.0, q[4]),
-            (-math.pi / 2, 0.0, 0.0, 0.0, q6_kinematic)
+            (0.0, self.L1 + self.L0, 0.0, -math.pi / 2, q_eff[0]),
+            (-math.pi / 2, d2, 0.0, -math.pi / 2, q_eff[1]),
+            (-math.pi / 2, 0.0, 0.0, -math.pi, q_eff[2]),
+            (0.0, 0.0, self.L4, -math.pi / 2, q_eff[3]),
+            (-math.pi / 2, self.L5 + self.L6, 0.0, 0.0, q_eff[4]),
+            (-math.pi / 2, 0.0, 0.0, 0.0, q_eff[5])
         ]
         T = np.eye(4)
         for alpha, d, a, offset, qi in params:
@@ -97,20 +112,21 @@ class AgvArmPlanner(Node):
         return T
 
     def compute_jacobian(self, q, is_right):
-        d2 = (self.L2 + self.L3) if is_right else -(self.L2 + self.L3)
-        q6_kinematic = q[5] if is_right else -q[5]
+        d2 = -(self.L2 + self.L3) if is_right else (self.L2 + self.L3)
+        axis_signs = self.joint_axis_signs(is_right)
+        q_eff = self.joint_home_offsets(is_right) + axis_signs * np.asarray(q)
         params = [
-            (0.0, self.L1 + self.L0, 0.0, -math.pi / 2, q[0]),
-            (-math.pi / 2, d2, 0.0, -math.pi / 2, q[1]),
-            (-math.pi / 2, 0.0, 0.0, -math.pi, q[2]),
-            (0.0, 0.0, self.L4, -math.pi / 2, q[3]),
-            (-math.pi / 2, self.L5 + self.L6, 0.0, 0.0, q[4]),
-            (-math.pi / 2, 0.0, 0.0, 0.0, q6_kinematic)
+            (0.0, self.L1 + self.L0, 0.0, -math.pi / 2, q_eff[0]),
+            (-math.pi / 2, d2, 0.0, -math.pi / 2, q_eff[1]),
+            (-math.pi / 2, 0.0, 0.0, -math.pi, q_eff[2]),
+            (0.0, 0.0, self.L4, -math.pi / 2, q_eff[3]),
+            (-math.pi / 2, self.L5 + self.L6, 0.0, 0.0, q_eff[4]),
+            (-math.pi / 2, 0.0, 0.0, 0.0, q_eff[5])
         ]
         T = np.eye(4)
         z0 = []
         p0 = []
-        for alpha, d, a, offset, qi in params:
+        for index, (alpha, d, a, offset, qi) in enumerate(params):
             ca = math.cos(alpha)
             sa = math.sin(alpha)
             RxTx = np.array([
@@ -120,9 +136,7 @@ class AgvArmPlanner(Node):
                 [0.0, 0.0, 0.0, 1.0]
             ])
             T_i_prime = T @ RxTx
-            joint_axis = T_i_prime[0:3, 2].copy()
-            if not is_right and len(z0) == 5:
-                joint_axis = -joint_axis
+            joint_axis = axis_signs[index] * T_i_prime[0:3, 2].copy()
             z0.append(joint_axis)
             p0.append(T_i_prime[0:3, 3])
 
@@ -183,11 +197,11 @@ class AgvArmPlanner(Node):
         q = np.array([math.radians(deg) for deg in q_init_deg])
 
         if is_right:
-            min_lim = np.array([math.radians(deg) for deg in [-45, -90, 20, -95, -90, 0]])
-            max_lim = np.array([math.radians(deg) for deg in [45, 90, 165, -15, 90, 90]])
+            min_lim = np.array([math.radians(deg) for deg in [-45, -90, 0, -60, -90, 0]])
+            max_lim = np.array([math.radians(deg) for deg in [45, 90, 145, 20, 90, 90]])
         else:
-            min_lim = np.array([math.radians(deg) for deg in [-45, -90, -165, 15, -90, 0]])
-            max_lim = np.array([math.radians(deg) for deg in [45, 90, -20, 95, 90, 90]])
+            min_lim = np.array([math.radians(deg) for deg in [-45, -90, -145, -20, -90, 0]])
+            max_lim = np.array([math.radians(deg) for deg in [45, 90, 0, 60, 90, 90]])
 
         T_target = np.eye(4)
         T_target[0:3, 0:3] = R_target
