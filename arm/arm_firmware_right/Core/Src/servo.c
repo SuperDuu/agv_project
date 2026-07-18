@@ -16,13 +16,13 @@ void Servo_Init(void) {
     servos[0] = (Servo_t){&htim8,  TIM_CHANNEL_1, 500, 2550, 270};
     servos[1] = (Servo_t){&htim8,  TIM_CHANNEL_2, 500, 2550, 270};
     servos[2] = (Servo_t){&htim8,  TIM_CHANNEL_3, 500, 2550, 270};
-    servos[3] = (Servo_t){&htim8,  TIM_CHANNEL_4, 500, 2500, 180};
-    servos[4] = (Servo_t){&htim10, TIM_CHANNEL_1, 500, 2500, 90};
-    servos[5] = (Servo_t){&htim9,  TIM_CHANNEL_1, 500, 2500, 180};
-    servos[6] = (Servo_t){&htim9,  TIM_CHANNEL_2, 500, 2550, 270};
-    servos[7] = (Servo_t){&htim11, TIM_CHANNEL_1, 500, 2550, 270};
-    servos[8] = (Servo_t){&htim12, TIM_CHANNEL_1, 500, 2550, 270};
-    servos[9] = (Servo_t){&htim12, TIM_CHANNEL_2, 500, 2550, 270};
+    servos[3] = (Servo_t){&htim8,  TIM_CHANNEL_4, 500, 2550, 180};
+    servos[4] = (Servo_t){&htim10, TIM_CHANNEL_1, 500, 2600, 180};
+    servos[5] = (Servo_t){&htim9,  TIM_CHANNEL_1, 500, 2550, 180};
+    servos[6] = (Servo_t){&htim9,  TIM_CHANNEL_2, 500, 2550, 180};
+    servos[7] = (Servo_t){&htim11, TIM_CHANNEL_1, 500, 2550, 180};
+    servos[8] = (Servo_t){&htim12, TIM_CHANNEL_1, 500, 2550, 180};
+    servos[9] = (Servo_t){&htim12, TIM_CHANNEL_2, 500, 2550, 180};
 
     // Start PWM first, then write the neutral compare value (135 degrees)
     for (int i = 0; i < MAX_SERVOS; i++) {
@@ -58,10 +58,19 @@ void Set_Servo_Angle(uint8_t index, float angle) {
     if (index <= 2) {
         // Apply 5:7 gearbox scaling: servo_angle = joint_angle * 7 / 5
         target_angle = angle * 7.0f / 5.0f;
-    } else if (index == 5) {
+    }
+    else if (index == 4) {
+            // Apply 2:3 gearbox scaling: servo_angle = joint_angle * 3 / 2
+            target_angle = angle*3.0f/2.0f;
+        }
+    else if (index == 5) {
         // Apply 2:3 gearbox scaling: servo_angle = joint_angle * 3 / 2
-        target_angle = angle * 3.0f / 2.0f;
-    } else {
+        target_angle = angle;
+    }
+    else if (index == 6) {
+            // Apply 2:3 gearbox scaling: servo_angle = joint_angle * 3 / 2
+            target_angle = angle * 3.0f / 2.0f;
+        }else {
         // Other joints: normal, 1:1 scaling
         target_angle = angle;
     }

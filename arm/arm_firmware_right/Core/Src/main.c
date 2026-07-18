@@ -285,7 +285,7 @@ int main(void)
     Set_Servo_Angle(3, servo_deg[4]);
     Set_Servo_Angle(4, servo_deg[5]);
     Set_Servo_Angle(5, gripper_angle); /* Command the gripper servo */
-
+    Set_Servo_Angle(6, servo_deg[0]);
     HAL_Delay(10);
 
     // Call test pattern for PWM output testing
@@ -709,14 +709,13 @@ static void MX_TIM9_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 1500;
+  sConfigOC.Pulse = 1525;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim9, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.Pulse = 1525;
   if (HAL_TIM_PWM_ConfigChannel(&htim9, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
@@ -1054,6 +1053,7 @@ static void ARM_Proto_ProcessFrame(const uint8_t *frame, uint16_t frame_len) {
 //      for (int i = 0; i < 6; i++) {
 //        servo_deg[i] = ARM_Proto_X100ToDeg(q_new[i]);
 //      }
+    		servo_deg[0] = -ARM_Proto_X100ToDeg(q_new[0])+96.43;
         servo_deg[1] = -ARM_Proto_X100ToDeg(q_new[1])+90;
         servo_deg[2] = ARM_Proto_X100ToDeg(q_new[2])+35;
         servo_deg[3] = 65-ARM_Proto_X100ToDeg(q_new[3]);
@@ -1154,6 +1154,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
                     if (sscanf((char *)rx_buffer + 2, "%d,%d,%d,%d,%d,%d", &q[0],
                                &q[1], &q[2], &q[3], &q[4], &q[5]) == 6) {
                       dbg_rx_ok++;
+                      servo_deg[0] =-(float)q[0] / 100.0f+96.43;
                       servo_deg[1] =-(float)q[1] / 100.0f+90;
                       servo_deg[2] = (float)q[2] / 100.0f+35;
                       servo_deg[3] = 65.0f-(float)q[3] / 100.0f;
