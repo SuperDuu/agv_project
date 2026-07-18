@@ -9,6 +9,8 @@ LOGDIR="${LOGDIR:-/tmp/agv_reach_logs}"
 MAX_TRAJ_LEN="${MAX_TRAJ_LEN:-160}"
 SEED="${SEED:-11}"
 MODE="${MODE:-auto}"
+VIEW_SPEED="${VIEW_SPEED:-4}"
+NO_REALTIME="${NO_REALTIME:-0}"
 
 cd "$SCRIPT_DIR"
 export PYTHONUNBUFFERED=1
@@ -17,6 +19,7 @@ echo "=========================================="
 echo "  XEM AGV ARM - MUJOCO VIEWER             "
 echo "=========================================="
 echo "  MODE=$MODE"
+echo "  VIEW_SPEED=$VIEW_SPEED"
 echo ""
 
 rm -rf /tmp/mjcf-export/agv_reach
@@ -35,15 +38,21 @@ if [ "$MODE" = "inspect" ]; then
     --max-traj-len "$MAX_TRAJ_LEN" \
     --seed "$SEED"
 elif [ "$MODE" = "policy" ]; then
+  EXTRA_ARGS=(--view-speed "$VIEW_SPEED")
+  if [ "$NO_REALTIME" = "1" ]; then EXTRA_ARGS+=(--no-realtime); fi
   "${PY_CMD[@]}" -m rl_mujoco.ppo_reach eval \
     --logdir "$LOGDIR" \
     --max-traj-len "$MAX_TRAJ_LEN" \
-    --seed "$SEED"
+    --seed "$SEED" \
+    "${EXTRA_ARGS[@]}"
 elif find "$LOGDIR" -name actor.pt -type f -print -quit 2>/dev/null | grep -q .; then
+  EXTRA_ARGS=(--view-speed "$VIEW_SPEED")
+  if [ "$NO_REALTIME" = "1" ]; then EXTRA_ARGS+=(--no-realtime); fi
   "${PY_CMD[@]}" -m rl_mujoco.ppo_reach eval \
     --logdir "$LOGDIR" \
     --max-traj-len "$MAX_TRAJ_LEN" \
-    --seed "$SEED"
+    --seed "$SEED" \
+    "${EXTRA_ARGS[@]}"
 else
   echo "  Chua co checkpoint, mo joint inspector truoc."
   "${PY_CMD[@]}" -m rl_mujoco.ppo_reach inspect \
