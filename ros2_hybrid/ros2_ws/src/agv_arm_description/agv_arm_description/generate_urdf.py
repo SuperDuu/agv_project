@@ -220,7 +220,7 @@ def add_simple_link(robot, name, color="dark_gray"):
     return add_link(robot, name, length=0.005, radius=0.006, color=color)
 
 
-def add_joint_rpy(robot, name, joint_type, parent, child, origin_xyz, origin_rpy, axis=None, limit=None):
+def add_joint_rpy(robot, name, joint_type, parent, child, origin_xyz, origin_rpy, axis=None, limit=None, mimic=None):
     joint = ET.SubElement(robot, "joint", {"name": name, "type": joint_type})
     ET.SubElement(joint, "parent", {"link": parent})
     ET.SubElement(joint, "child", {"link": child})
@@ -233,6 +233,12 @@ def add_joint_rpy(robot, name, joint_type, parent, child, origin_xyz, origin_rpy
             "upper": fmt(deg(limit["upper"] + 0.01)),
             "velocity": fmt(limit.get("velocity", 1.0)),
             "effort": fmt(limit.get("effort", 5.0)),
+        })
+    if mimic is not None:
+        ET.SubElement(joint, "mimic", {
+            "joint": mimic["joint"],
+            "multiplier": fmt(mimic.get("multiplier", 1.0)),
+            "offset": fmt(mimic.get("offset", 0.0)),
         })
     return joint
 
@@ -318,6 +324,7 @@ def add_arm(robot, config, side):
         else:
             axis = [0.0, 0.0, 1.0]
 
+        mimic = {"joint": "right_joint_1"} if ((not is_right) and index == 0) else None
         add_joint_rpy(
             robot,
             f"{prefix}_joint_{index + 1}",
@@ -328,6 +335,7 @@ def add_arm(robot, config, side):
             o_rpy,
             axis=axis,
             limit=limits[f"joint_{index + 1}"],
+            mimic=mimic,
         )
         parent = link_name
 

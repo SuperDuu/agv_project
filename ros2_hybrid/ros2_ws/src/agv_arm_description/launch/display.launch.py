@@ -41,7 +41,6 @@ def generate_launch_description():
         "zeros.right_joint_4": -0.610865,
         "zeros.right_joint_5": 0.0,
         "zeros.right_joint_6": 0.0,
-        "zeros.left_joint_1": 0.0,
         "zeros.left_joint_2": 0.0,
         "zeros.left_joint_3": -0.349066,
         "zeros.left_joint_4": 0.610865,
