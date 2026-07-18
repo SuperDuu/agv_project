@@ -5,20 +5,21 @@ robot:
     angle: deg
 
 links:
-  # Values mirrored from the Java kinematics constants.
-  L0: 130.0
+  # ROS/RViz geometry scaled by 10 from the original Java prototype constants.
+  # The Java application constants are unchanged.
+  L0: 1300.0
   L1: 0.0
-  L2: 32.0
+  L2: 320.0
   L3: 0.0
-  L4: 20.0
-  L5: 25.0
+  L4: 200.0
+  L5: 250.0
   L6: 0.0
-  L7: 15.0
+  L7: 150.0
 
 base:
-  torso_height: 130.0
-  shoulder_z: 130.0
-  shoulder_y_offset: 32.0
+  torso_height: 1300.0
+  shoulder_z: 1300.0
+  shoulder_y_offset: 320.0
 
 joint_limits:
   right:
@@ -37,6 +38,7 @@ joint_limits:
     joint_6: { lower: 0.0, upper: 90.0, velocity: 1.5, effort: 8.0 }
 
 visual:
-  link_radius: 6.0
-  joint_radius: 8.0
-  gripper_length: 20.0
+  decoration_scale: 10.0
+  link_radius: 60.0
+  joint_radius: 80.0
+  gripper_length: 200.0

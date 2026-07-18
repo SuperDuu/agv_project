@@ -11,6 +11,11 @@ def mm(value):
     return float(value) / 1000.0
 
 
+def decoration_mm(config, value):
+    scale = float(config.get("visual", {}).get("decoration_scale", 1.0))
+    return mm(float(value) * scale)
+
+
 def deg(value):
     return math.radians(float(value))
 
@@ -161,11 +166,12 @@ def add_cylinder_between(link, start, end, radius, color="dark_gray", collision=
 def add_body(robot, config):
     base_link = add_empty_link(robot, "base_link")
     torso_height = mm(config["base"]["torso_height"])
+    dmm = lambda value: decoration_mm(config, value)
 
-    add_box(base_link, [mm(40.0), mm(40.0), mm(10.0)], [0.0, 0.0, mm(5.0)], color="base_gray")
-    add_box(base_link, [mm(28.0), mm(28.0), torso_height], [0.0, mm(-6.0), torso_height / 2.0], color="torso_gray")
-    add_cylinder_between(base_link, [0.0, 0.0, torso_height], [0.0, 0.0, torso_height + mm(8.0)], mm(8.0), color="base_gray")
-    add_sphere(base_link, mm(12.0), [0.0, 0.0, torso_height + mm(8.0)], color="head_gray")
+    add_box(base_link, [dmm(40.0), dmm(40.0), dmm(10.0)], [0.0, 0.0, dmm(5.0)], color="base_gray")
+    add_box(base_link, [dmm(28.0), dmm(28.0), torso_height], [0.0, dmm(-6.0), torso_height / 2.0], color="torso_gray")
+    add_cylinder_between(base_link, [0.0, 0.0, torso_height], [0.0, 0.0, torso_height + dmm(8.0)], dmm(8.0), color="base_gray")
+    add_sphere(base_link, dmm(12.0), [0.0, 0.0, torso_height + dmm(8.0)], color="head_gray")
 
     add_empty_link(robot, "torso_link")
     add_joint(robot, "base_to_torso", "fixed", "base_link", "torso_link", [0.0, 0.0, 0.0])
@@ -173,15 +179,16 @@ def add_body(robot, config):
 
 def add_gripper_visual(tool_link, config):
     L7 = mm(config["links"]["L7"])
-    open_half_width = mm(3.5)
+    dmm = lambda value: decoration_mm(config, value)
+    open_half_width = dmm(3.5)
 
-    add_cylinder_between(tool_link, [0.0, 0.0, -L7], [0.0, 0.0, -L7 + mm(1.5)], mm(4.0), color="gripper_silver", collision=False)
-    add_cylinder_between(tool_link, [0.0, 0.0, -L7 + mm(1.5)], [0.0, 0.0, -L7 + mm(5.5)], mm(2.8), color="gripper_body", collision=False)
-    add_cylinder_between(tool_link, [open_half_width, 0.0, -L7 + mm(5.5)], [open_half_width, 0.0, 0.0], mm(0.9), color="gripper_orange", collision=False)
-    add_cylinder_between(tool_link, [-open_half_width, 0.0, -L7 + mm(5.5)], [-open_half_width, 0.0, 0.0], mm(0.9), color="gripper_orange", collision=False)
-    add_cylinder_between(tool_link, [open_half_width - mm(0.3), 0.0, -L7 + mm(8.0)], [open_half_width - mm(0.3), 0.0, -mm(0.5)], mm(0.4), color="gripper_pad", collision=False)
-    add_cylinder_between(tool_link, [-open_half_width + mm(0.3), 0.0, -L7 + mm(8.0)], [-open_half_width + mm(0.3), 0.0, -mm(0.5)], mm(0.4), color="gripper_pad", collision=False)
-    add_sphere(tool_link, mm(2.5), [0.0, 0.0, 0.0], color="tool_red", collision=False)
+    add_cylinder_between(tool_link, [0.0, 0.0, -L7], [0.0, 0.0, -L7 + dmm(1.5)], dmm(4.0), color="gripper_silver", collision=False)
+    add_cylinder_between(tool_link, [0.0, 0.0, -L7 + dmm(1.5)], [0.0, 0.0, -L7 + dmm(5.5)], dmm(2.8), color="gripper_body", collision=False)
+    add_cylinder_between(tool_link, [open_half_width, 0.0, -L7 + dmm(5.5)], [open_half_width, 0.0, 0.0], dmm(0.9), color="gripper_orange", collision=False)
+    add_cylinder_between(tool_link, [-open_half_width, 0.0, -L7 + dmm(5.5)], [-open_half_width, 0.0, 0.0], dmm(0.9), color="gripper_orange", collision=False)
+    add_cylinder_between(tool_link, [open_half_width - dmm(0.3), 0.0, -L7 + dmm(8.0)], [open_half_width - dmm(0.3), 0.0, -dmm(0.5)], dmm(0.4), color="gripper_pad", collision=False)
+    add_cylinder_between(tool_link, [-open_half_width + dmm(0.3), 0.0, -L7 + dmm(8.0)], [-open_half_width + dmm(0.3), 0.0, -dmm(0.5)], dmm(0.4), color="gripper_pad", collision=False)
+    add_sphere(tool_link, dmm(2.5), [0.0, 0.0, 0.0], color="tool_red", collision=False)
 
 
 def add_link_custom(robot, name, size, origin_xyz, color="dark_gray"):
