@@ -17,6 +17,16 @@ def generate_launch_description():
         default_value=default_config,
         description="Robot geometry YAML file.",
     )
+    rviz_config = PathJoinSubstitution([
+        FindPackageShare("agv_arm_description"),
+        "rviz",
+        "display.rviz",
+    ])
+    rviz_config_arg = DeclareLaunchArgument(
+        "rviz_config",
+        default_value=rviz_config,
+        description="RViz configuration file.",
+    )
 
     robot_description = {
         "robot_description": Command([
@@ -27,6 +37,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         config_arg,
+        rviz_config_arg,
         Node(
             package="robot_state_publisher",
             executable="robot_state_publisher",
@@ -41,6 +52,7 @@ def generate_launch_description():
         Node(
             package="rviz2",
             executable="rviz2",
+            arguments=["-d", LaunchConfiguration("rviz_config")],
             output="screen",
         ),
     ])

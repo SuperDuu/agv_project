@@ -12,6 +12,7 @@ setup(
         (f"share/{package_name}", ["package.xml"]),
         (f"share/{package_name}/config", glob("config/*.yaml")),
         (f"share/{package_name}/launch", glob("launch/*.py")),
+        (f"share/{package_name}/rviz", glob("rviz/*.rviz")),
         (f"share/{package_name}/urdf", glob("urdf/*")),
     ],
     install_requires=["setuptools"],
