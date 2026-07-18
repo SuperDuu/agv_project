@@ -80,9 +80,108 @@ def extract_xyz_rpy(T):
     return [x, y, z], [r, p, yaw]
 
 
+def cylinder_rpy_from_points(start, end):
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    dz = end[2] - start[2]
+    radial = math.sqrt(dx * dx + dy * dy)
+    yaw = math.atan2(dy, dx) if radial > 1e-9 else 0.0
+    pitch = math.atan2(radial, dz)
+    return [0.0, pitch, yaw]
+
+
+def midpoint(start, end):
+    return [
+        (start[0] + end[0]) / 2.0,
+        (start[1] + end[1]) / 2.0,
+        (start[2] + end[2]) / 2.0,
+    ]
+
+
+def distance(start, end):
+    return math.sqrt(
+        (end[0] - start[0]) ** 2
+        + (end[1] - start[1]) ** 2
+        + (end[2] - start[2]) ** 2
+    )
+
+
 def add_material(robot, name, rgba):
     material = ET.SubElement(robot, "material", {"name": name})
     ET.SubElement(material, "color", {"rgba": rgba})
+
+
+def add_empty_link(robot, name):
+    return ET.SubElement(robot, "link", {"name": name})
+
+
+def add_visual(link, origin_xyz, origin_rpy, color):
+    visual = ET.SubElement(link, "visual")
+    ET.SubElement(visual, "origin", {"xyz": xyz(origin_xyz), "rpy": xyz(origin_rpy)})
+    geometry = ET.SubElement(visual, "geometry")
+    ET.SubElement(visual, "material", {"name": color})
+    return geometry
+
+
+def add_collision(link, origin_xyz, origin_rpy):
+    collision = ET.SubElement(link, "collision")
+    ET.SubElement(collision, "origin", {"xyz": xyz(origin_xyz), "rpy": xyz(origin_rpy)})
+    return ET.SubElement(collision, "geometry")
+
+
+def add_box(link, size, origin_xyz, color="dark_gray", collision=True):
+    geometry = add_visual(link, origin_xyz, [0.0, 0.0, 0.0], color)
+    ET.SubElement(geometry, "box", {"size": xyz(size)})
+    if collision:
+        collision_geometry = add_collision(link, origin_xyz, [0.0, 0.0, 0.0])
+        ET.SubElement(collision_geometry, "box", {"size": xyz(size)})
+
+
+def add_sphere(link, radius, origin_xyz, color="dark_gray", collision=True):
+    geometry = add_visual(link, origin_xyz, [0.0, 0.0, 0.0], color)
+    ET.SubElement(geometry, "sphere", {"radius": fmt(radius)})
+    if collision:
+        collision_geometry = add_collision(link, origin_xyz, [0.0, 0.0, 0.0])
+        ET.SubElement(collision_geometry, "sphere", {"radius": fmt(radius)})
+
+
+def add_cylinder_between(link, start, end, radius, color="dark_gray", collision=True):
+    length = distance(start, end)
+    if length < 1e-6:
+        return
+    origin = midpoint(start, end)
+    rpy = cylinder_rpy_from_points(start, end)
+    geometry = add_visual(link, origin, rpy, color)
+    ET.SubElement(geometry, "cylinder", {"radius": fmt(radius), "length": fmt(length)})
+    if collision:
+        collision_geometry = add_collision(link, origin, rpy)
+        ET.SubElement(collision_geometry, "cylinder", {"radius": fmt(radius), "length": fmt(length)})
+
+
+def add_body(robot, config):
+    base_link = add_empty_link(robot, "base_link")
+    torso_height = mm(config["base"]["torso_height"])
+
+    add_box(base_link, [mm(40.0), mm(40.0), mm(10.0)], [0.0, 0.0, mm(5.0)], color="base_gray")
+    add_box(base_link, [mm(28.0), mm(28.0), torso_height], [0.0, mm(-6.0), torso_height / 2.0], color="torso_gray")
+    add_cylinder_between(base_link, [0.0, 0.0, torso_height], [0.0, 0.0, torso_height + mm(8.0)], mm(8.0), color="base_gray")
+    add_sphere(base_link, mm(12.0), [0.0, 0.0, torso_height + mm(8.0)], color="head_gray")
+
+    add_empty_link(robot, "torso_link")
+    add_joint(robot, "base_to_torso", "fixed", "base_link", "torso_link", [0.0, 0.0, 0.0])
+
+
+def add_gripper_visual(tool_link, config):
+    L7 = mm(config["links"]["L7"])
+    open_half_width = mm(3.5)
+
+    add_cylinder_between(tool_link, [0.0, 0.0, -L7], [0.0, 0.0, -L7 + mm(1.5)], mm(4.0), color="gripper_silver", collision=False)
+    add_cylinder_between(tool_link, [0.0, 0.0, -L7 + mm(1.5)], [0.0, 0.0, -L7 + mm(5.5)], mm(2.8), color="gripper_body", collision=False)
+    add_cylinder_between(tool_link, [open_half_width, 0.0, -L7 + mm(5.5)], [open_half_width, 0.0, 0.0], mm(0.9), color="gripper_orange", collision=False)
+    add_cylinder_between(tool_link, [-open_half_width, 0.0, -L7 + mm(5.5)], [-open_half_width, 0.0, 0.0], mm(0.9), color="gripper_orange", collision=False)
+    add_cylinder_between(tool_link, [open_half_width - mm(0.3), 0.0, -L7 + mm(8.0)], [open_half_width - mm(0.3), 0.0, -mm(0.5)], mm(0.4), color="gripper_pad", collision=False)
+    add_cylinder_between(tool_link, [-open_half_width + mm(0.3), 0.0, -L7 + mm(8.0)], [-open_half_width + mm(0.3), 0.0, -mm(0.5)], mm(0.4), color="gripper_pad", collision=False)
+    add_sphere(tool_link, mm(2.5), [0.0, 0.0, 0.0], color="tool_red", collision=False)
 
 
 def add_link_custom(robot, name, size, origin_xyz, color="dark_gray"):
@@ -156,13 +255,12 @@ def arm_lengths(config):
 
 def add_arm(robot, config, side):
     is_right = side == "right"
-    sign = -1.0 if is_right else 1.0
     color = "right_blue" if is_right else "left_red"
     prefix = "right" if is_right else "left"
     limits = config["joint_limits"][prefix]
-    base = config["base"]
     visual = config["visual"]
     radius = mm(visual.get("link_radius", 6.0))
+    joint_radius = mm(visual.get("joint_radius", 8.0))
 
     links = config["links"]
     L0 = mm(links["L0"])
@@ -176,12 +274,17 @@ def add_arm(robot, config, side):
 
     d2 = (L2 + L3) if is_right else -(L2 + L3)
 
-    shoulder_y = sign * mm(base["shoulder_y_offset"])
-    shoulder_z = mm(base["shoulder_z"])
-
     shoulder_link = f"{prefix}_shoulder_link"
-    add_simple_link(robot, shoulder_link, color=color)
-    add_joint_rpy(robot, f"{prefix}_shoulder_mount", "fixed", "torso_link", shoulder_link, [0.0, shoulder_y, shoulder_z], [0.0, 0.0, 0.0])
+    add_empty_link(robot, shoulder_link)
+    add_joint_rpy(
+        robot,
+        f"{prefix}_shoulder_mount",
+        "fixed",
+        "torso_link",
+        shoulder_link,
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0],
+    )
 
     T_orig_1 = mat_mult(Rz(-math.pi / 2), Tz(L1 + L0))
     T_orig_2 = mat_mult(mat_mult(Rx(-math.pi / 2), Rz(-math.pi / 2)), Tz(d2))
@@ -201,31 +304,11 @@ def add_arm(robot, config, side):
     parent = shoulder_link
     for index in range(6):
         link_name = f"{prefix}_link_{index + 1}"
-        r2 = radius * 2.0
-        if index == 0:
-            l_val = L1 + L0
-            size = [r2, r2, max(l_val, 0.005)]
-            origin_xyz = [0.0, 0.0, l_val / 2.0]
-        elif index == 1:
-            l_val = abs(d2)
-            size = [r2, r2, max(l_val, 0.005)]
-            origin_xyz = [0.0, 0.0, d2 / 2.0]
-        elif index == 2:
-            size = [r2, r2, r2]
-            origin_xyz = [0.0, 0.0, 0.0]
-        elif index == 3:
-            l_val = L4
-            size = [max(l_val, 0.005), r2, r2]
-            origin_xyz = [l_val / 2.0, 0.0, 0.0]
-        elif index == 4:
-            l_val = L5 + L6
-            size = [r2, r2, max(l_val, 0.005)]
-            origin_xyz = [0.0, 0.0, l_val / 2.0]
-        elif index == 5:
-            size = [r2, r2, r2]
-            origin_xyz = [0.0, 0.0, 0.0]
-
-        add_link_custom(robot, link_name, size, origin_xyz, color=color)
+        link = add_empty_link(robot, link_name)
+        add_sphere(link, joint_radius, [0.0, 0.0, 0.0], color=color)
+        if index < 5:
+            next_xyz, _ = extract_xyz_rpy(origins[index + 1])
+            add_cylinder_between(link, [0.0, 0.0, 0.0], next_xyz, radius, color="arm_tube_gray")
 
         T = origins[index]
         o_xyz, o_rpy = extract_xyz_rpy(T)
@@ -249,7 +332,8 @@ def add_arm(robot, config, side):
         parent = link_name
 
     tool_link = f"{prefix}_tool0"
-    add_simple_link(robot, tool_link, color=color)
+    tool = add_empty_link(robot, tool_link)
+    add_gripper_visual(tool, config)
     o_xyz, o_rpy = extract_xyz_rpy(T_tool)
     add_joint_rpy(robot, f"{prefix}_tool0_fixed", "fixed", parent, tool_link, o_xyz, o_rpy)
 
@@ -257,13 +341,19 @@ def add_arm(robot, config, side):
 def generate(config):
     robot = ET.Element("robot", {"name": config["robot"]["name"]})
     add_material(robot, "dark_gray", "0.2 0.22 0.24 1.0")
-    add_material(robot, "right_blue", "0.1 0.35 0.8 1.0")
-    add_material(robot, "left_red", "0.8 0.2 0.2 1.0")
+    add_material(robot, "base_gray", "0.22 0.23 0.25 1.0")
+    add_material(robot, "torso_gray", "0.28 0.31 0.33 1.0")
+    add_material(robot, "head_gray", "0.47 0.5 0.53 1.0")
+    add_material(robot, "arm_tube_gray", "0.55 0.56 0.56 1.0")
+    add_material(robot, "right_blue", "0.2 0.47 0.78 1.0")
+    add_material(robot, "left_red", "0.78 0.31 0.31 1.0")
+    add_material(robot, "gripper_silver", "0.78 0.8 0.82 1.0")
+    add_material(robot, "gripper_body", "0.22 0.23 0.25 1.0")
+    add_material(robot, "gripper_orange", "0.96 0.49 0.08 1.0")
+    add_material(robot, "gripper_pad", "0.02 0.02 0.02 1.0")
+    add_material(robot, "tool_red", "1.0 0.05 0.03 1.0")
 
-    add_link(robot, "base_link", length=0.08, radius=0.04, color="dark_gray")
-    add_link(robot, "torso_link", length=0.04, radius=0.03, color="dark_gray")
-    add_joint(robot, "base_to_torso", "fixed", "base_link", "torso_link", [0.0, 0.0, mm(config["base"]["torso_height"]) / 2.0])
-
+    add_body(robot, config)
     add_arm(robot, config, "right")
     add_arm(robot, config, "left")
     return robot
