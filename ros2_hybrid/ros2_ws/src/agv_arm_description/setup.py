@@ -24,6 +24,7 @@ setup(
     entry_points={
         "console_scripts": [
             "generate_agv_arm_urdf = agv_arm_description.generate_urdf:main",
+            "java_style_joint_gui = agv_arm_description.java_style_joint_gui:main",
         ],
     },
 )
