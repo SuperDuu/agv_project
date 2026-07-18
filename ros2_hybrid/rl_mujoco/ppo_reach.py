@@ -140,6 +140,16 @@ def _cpu_state_dict(module: nn.Module) -> dict[str, torch.Tensor]:
     return {key: value.detach().cpu() for key, value in module.state_dict().items()}
 
 
+def set_actor_std(actor: Actor, std: float) -> None:
+    with torch.no_grad():
+        actor.log_std.fill_(float(np.log(std)))
+
+
+def clamp_actor_std(actor: Actor, min_std: float, max_std: float) -> None:
+    with torch.no_grad():
+        actor.log_std.clamp_(min=float(np.log(min_std)), max=float(np.log(max_std)))
+
+
 if ray is not None:
 
     @ray.remote
@@ -252,6 +262,52 @@ def behavior_clone(actor: Actor, envs: list[AgvReachEnv], args) -> None:
         obs = np.stack(next_obs)
         if step == 1 or step % max(1, args.bc_log_freq) == 0:
             print(f"bc_step={step:05d} loss={float(loss):.5f}")
+
+
+def load_bc_dataset(args, actor: Actor) -> tuple[np.ndarray, np.ndarray] | None:
+    if args.bc_dataset is None:
+        return None
+    dataset_path = Path(args.bc_dataset)
+    if not dataset_path.exists():
+        raise FileNotFoundError(f"Missing BC dataset: {dataset_path}")
+    data = np.load(dataset_path, allow_pickle=False)
+    obs = np.asarray(data["obs"], dtype=np.float32)
+    actions = np.asarray(data["actions"], dtype=np.float32)
+    if obs.ndim != 2 or actions.ndim != 2 or len(obs) != len(actions):
+        raise ValueError(f"Invalid BC dataset shapes: obs={obs.shape} actions={actions.shape}")
+    if obs.shape[1] != actor.obs_mean.numel() or actions.shape[1] != actor.log_std.numel():
+        raise ValueError(
+            "BC dataset dimensions do not match actor: "
+            f"obs={obs.shape[1]}/{actor.obs_mean.numel()} actions={actions.shape[1]}/{actor.log_std.numel()}"
+        )
+    return obs, actions
+
+
+def behavior_clone_dataset(actor: Actor, args, dataset: tuple[np.ndarray, np.ndarray] | None) -> None:
+    if dataset is None:
+        return
+    obs, actions = dataset
+    steps = int(args.bc_dataset_steps)
+    if steps <= 0:
+        return
+    batch_size = min(int(args.bc_batch_size), len(obs))
+    optimizer = torch.optim.Adam(actor.parameters(), lr=args.bc_lr, eps=1e-5)
+    print(f"BC dataset warm-start: path={args.bc_dataset} samples={len(obs)} steps={steps} batch={batch_size}")
+    for step in range(1, steps + 1):
+        indices = np.random.randint(0, len(obs), size=batch_size)
+        obs_tensor = torch.tensor(obs[indices], dtype=torch.float32)
+        action_tensor = torch.tensor(actions[indices], dtype=torch.float32)
+        pred = actor.distribution(obs_tensor).mean
+        loss = (pred - action_tensor).pow(2).mean()
+        optimizer.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(actor.parameters(), args.max_grad_norm)
+        optimizer.step()
+        if step == 1 or step % max(1, args.bc_log_freq) == 0:
+            print(f"bc_dataset_step={step:05d} loss={float(loss):.5f}")
+    if args.post_bc_std > 0.0:
+        set_actor_std(actor, args.post_bc_std)
+        print(f"BC dataset set exploration std: {args.post_bc_std:.3f}")
 
 
 @torch.no_grad()
@@ -409,7 +465,13 @@ def train(args):
     (run_dir / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
     (run_dir / "model.xml").write_text(Path(envs[0].xml_path).read_text(encoding="utf-8"), encoding="utf-8")
 
+    bc_dataset = load_bc_dataset(args, actor)
+    behavior_clone_dataset(actor, args, bc_dataset)
     behavior_clone(actor, envs, args)
+    if args.post_bc_std > 0.0 and args.bc_dataset is None and args.bc_steps > 0:
+        set_actor_std(actor, args.post_bc_std)
+        print(f"BC set exploration std: {args.post_bc_std:.3f}")
+    clamp_actor_std(actor, args.min_std, args.max_std)
     save_checkpoint(run_dir / "actor_bc.pt", actor, critic, args, obs_dim, action_dim)
     save_checkpoint(run_dir / "actor.pt", actor, critic, args, obs_dim, action_dim)
     print(f"Saved BC warm-start actor: {run_dir / 'actor_bc.pt'}")
@@ -431,9 +493,14 @@ def train(args):
         obs = np.stack([env.reset() for env in envs])
         print(f"Using sequential rollout envs: num_envs={len(envs)}")
     best_success = 0.0
+    adaptive_level = 0.0
+    curriculum_ema = None
     print(f"Training AGV reach policy: logdir={run_dir}")
     for itr in range(1, args.n_itr + 1):
-        level = min(1.0, itr / max(1, args.curriculum_iters)) if args.curriculum_iters > 0 else 1.0
+        if args.adaptive_curriculum:
+            level = adaptive_level
+        else:
+            level = min(1.0, itr / max(1, args.curriculum_iters)) if args.curriculum_iters > 0 else 1.0
         if use_ray:
             rollout = collect_rollouts_ray(workers, actor, critic, args, level, obs_dim, action_dim)
         else:
@@ -460,26 +527,57 @@ def train(args):
             np.random.shuffle(inds)
             for start in range(0, len(inds), args.minibatch_size):
                 mb = inds[start : start + args.minibatch_size]
-                dist = actor.distribution(obs_tensor[mb])
-                logp = dist.log_prob(act_tensor[mb]).sum(-1)
-                ratio = torch.exp(logp - old_logp_tensor[mb])
-                clipped = torch.clamp(ratio, 1.0 - args.clip, 1.0 + args.clip) * adv_tensor[mb]
-                policy_loss = -torch.min(ratio * adv_tensor[mb], clipped).mean()
                 value_loss = 0.5 * (critic(obs_tensor[mb]) - ret_tensor[mb]).pow(2).mean()
-                entropy = dist.entropy().sum(-1).mean()
-                loss = policy_loss + args.value_coeff * value_loss - args.entropy_coeff * entropy
+                actor_warmup = bc_dataset is not None and itr <= args.critic_warmup_iters
+                if actor_warmup:
+                    loss = args.value_coeff * value_loss
+                else:
+                    dist = actor.distribution(obs_tensor[mb])
+                    logp = dist.log_prob(act_tensor[mb]).sum(-1)
+                    ratio = torch.exp(logp - old_logp_tensor[mb])
+                    clipped = torch.clamp(ratio, 1.0 - args.clip, 1.0 + args.clip) * adv_tensor[mb]
+                    policy_loss = -torch.min(ratio * adv_tensor[mb], clipped).mean()
+                    entropy = dist.entropy().sum(-1).mean()
+                    loss = policy_loss + args.value_coeff * value_loss - args.entropy_coeff * entropy
+                    if (
+                        bc_dataset is not None
+                        and args.bc_anchor_coeff > 0.0
+                        and (args.bc_anchor_iters <= 0 or itr <= args.bc_anchor_iters)
+                    ):
+                        bc_obs, bc_actions = bc_dataset
+                        bc_indices = np.random.randint(0, len(bc_obs), size=len(mb))
+                        bc_obs_tensor = torch.tensor(bc_obs[bc_indices], dtype=torch.float32)
+                        bc_action_tensor = torch.tensor(bc_actions[bc_indices], dtype=torch.float32)
+                        bc_loss = (actor.distribution(bc_obs_tensor).mean - bc_action_tensor).pow(2).mean()
+                        loss = loss + args.bc_anchor_coeff * bc_loss
                 optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(list(actor.parameters()) + list(critic.parameters()), args.max_grad_norm)
                 optimizer.step()
+                clamp_actor_std(actor, args.min_std, args.max_std)
 
         success_rate = float(np.mean(rollout["ep_success"])) if rollout["ep_success"] else 0.0
         collision_rate = float(np.mean(rollout["ep_collision"])) if rollout["ep_collision"] else 0.0
         mean_reward = float(rewards.sum(axis=0).mean())
+        curriculum_extra = ""
+        if args.adaptive_curriculum:
+            completed_episodes = len(rollout["ep_success"])
+            if completed_episodes >= args.curriculum_min_episodes:
+                alpha = float(np.clip(args.curriculum_ema_alpha, 0.0, 1.0))
+                if curriculum_ema is None:
+                    curriculum_ema = success_rate
+                else:
+                    curriculum_ema = (1.0 - alpha) * curriculum_ema + alpha * success_rate
+                if curriculum_ema >= args.curriculum_success and adaptive_level < 1.0:
+                    adaptive_level = min(1.0, adaptive_level + args.curriculum_step)
+                    curriculum_ema = None
+            ema_text = "nan" if curriculum_ema is None else f"{curriculum_ema:4.2f}"
+            curriculum_extra = f" next={adaptive_level:4.2f} ema={ema_text}"
         if itr % args.eval_freq == 0 or itr == 1:
             print(
                 f"itr={itr:05d} reward={mean_reward:8.3f} "
-                f"success={success_rate:5.2%} collision={collision_rate:5.2%} curriculum={level:4.2f}"
+                f"success={success_rate:5.2%} collision={collision_rate:5.2%} "
+                f"curriculum={level:4.2f}{curriculum_extra}"
             )
             if args.eval_episodes > 0:
                 eval_metrics = evaluate_actor(actor, args, episodes=args.eval_episodes, domain_randomization=True)
@@ -490,13 +588,13 @@ def train(args):
                     f"clearance={eval_metrics['mean_clearance']:.3f} "
                     f"shield={eval_metrics['mean_shield_rate']:5.2%}"
                 )
-        if success_rate >= best_success or itr % args.save_freq == 0:
+        if success_rate >= best_success:
             best_success = max(best_success, success_rate)
             save_checkpoint(run_dir / "actor.pt", actor, critic, args, obs_dim, action_dim)
         if itr % args.save_freq == 0:
             save_checkpoint(run_dir / f"actor_{itr}.pt", actor, critic, args, obs_dim, action_dim)
 
-    save_checkpoint(run_dir / "actor.pt", actor, critic, args, obs_dim, action_dim)
+    save_checkpoint(run_dir / "actor_final.pt", actor, critic, args, obs_dim, action_dim)
     if workers:
         ray.get([worker.close.remote() for worker in workers])
     for env in envs:
@@ -528,8 +626,11 @@ def eval_policy(args):
         raise FileNotFoundError(f"Missing actor checkpoint: {actor_path}")
     actor = load_actor(actor_path)
     env = make_env(args, args.seed, train_mode=False, render=True)
+    curriculum = float(np.clip(args.curriculum, 0.0, 1.0))
+    env.set_curriculum(curriculum)
     obs = env.reset()
     print(f"Viewing policy: {actor_path}")
+    print(f"Viewing curriculum: {curriculum:.2f}")
     print("Close the MuJoCo viewer window to stop.")
     while True:
         start = time.time()
@@ -548,6 +649,7 @@ def eval_policy(args):
                 f"distance={info['distance']:.3f} clearance={info['min_clearance']:.3f} "
                 f"parallel={info['parallel_score']:.3f}"
             )
+            env.set_curriculum(curriculum)
             obs = env.reset()
         if env.viewer is not None and not env.viewer.is_running():
             break
@@ -627,21 +729,36 @@ def parse_args():
     tr.add_argument("--n-itr", type=int, default=5000)
     tr.add_argument("--eval-freq", type=int, default=50)
     tr.add_argument("--save-freq", type=int, default=100)
-    tr.add_argument("--lr", type=float, default=3e-4)
+    tr.add_argument("--lr", type=float, default=1e-4)
     tr.add_argument("--gamma", type=float, default=0.98)
     tr.add_argument("--lam", type=float, default=0.95)
-    tr.add_argument("--clip", type=float, default=0.2)
+    tr.add_argument("--clip", type=float, default=0.1)
     tr.add_argument("--epochs", type=int, default=3)
     tr.add_argument("--minibatch-size", type=int, default=512)
     tr.add_argument("--std-dev", type=float, default=0.45)
-    tr.add_argument("--entropy-coeff", type=float, default=0.002)
+    tr.add_argument("--entropy-coeff", type=float, default=0.0)
     tr.add_argument("--value-coeff", type=float, default=0.5)
     tr.add_argument("--max-grad-norm", type=float, default=0.5)
     tr.add_argument("--no-domain-randomization", action="store_true")
     tr.add_argument("--curriculum-iters", type=int, default=1200)
+    tr.add_argument("--no-adaptive-curriculum", dest="adaptive_curriculum", action="store_false")
+    tr.set_defaults(adaptive_curriculum=True)
+    tr.add_argument("--curriculum-success", type=float, default=0.65)
+    tr.add_argument("--curriculum-step", type=float, default=0.025)
+    tr.add_argument("--curriculum-ema-alpha", type=float, default=0.3)
+    tr.add_argument("--curriculum-min-episodes", type=int, default=8)
     tr.add_argument("--bc-steps", type=int, default=0)
     tr.add_argument("--bc-lr", type=float, default=1e-3)
     tr.add_argument("--bc-log-freq", type=int, default=100)
+    tr.add_argument("--bc-dataset", type=Path, default=None)
+    tr.add_argument("--bc-dataset-steps", type=int, default=1200)
+    tr.add_argument("--bc-batch-size", type=int, default=1024)
+    tr.add_argument("--post-bc-std", type=float, default=0.08)
+    tr.add_argument("--min-std", type=float, default=0.03)
+    tr.add_argument("--max-std", type=float, default=0.12)
+    tr.add_argument("--bc-anchor-coeff", type=float, default=2.0)
+    tr.add_argument("--bc-anchor-iters", type=int, default=2000)
+    tr.add_argument("--critic-warmup-iters", type=int, default=200)
     tr.add_argument("--eval-episodes", type=int, default=0)
     tr.add_argument("--gate-episodes", type=int, default=0)
     tr.add_argument("--gate-success", type=float, default=0.85)
@@ -651,6 +768,7 @@ def parse_args():
     ev = sub.add_parser("eval", parents=[common])
     ev.add_argument("--path", type=Path, default=None)
     ev.add_argument("--eval-domain-randomization", action="store_true")
+    ev.add_argument("--curriculum", type=float, default=1.0)
     ev.add_argument("--view-speed", type=int, default=1)
     ev.add_argument("--no-realtime", action="store_true")
 

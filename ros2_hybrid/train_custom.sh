@@ -11,8 +11,25 @@ NUM_PROCS="${NUM_PROCS:-15}"
 MAX_TRAJ_LEN="${MAX_TRAJ_LEN:-160}"
 EVAL_FREQ="${EVAL_FREQ:-50}"
 SEED="${SEED:-7}"
+LR="${LR:-1e-4}"
+CLIP="${CLIP:-0.1}"
 BC_STEPS="${BC_STEPS:-0}"
+BC_DATASET="${BC_DATASET:-/tmp/agv_reach_teacher/agv_reach_teacher.npz}"
+BC_DATASET_STEPS="${BC_DATASET_STEPS:-1200}"
+BC_BATCH_SIZE="${BC_BATCH_SIZE:-1024}"
+POST_BC_STD="${POST_BC_STD:-0.08}"
+MIN_STD="${MIN_STD:-0.03}"
+MAX_STD="${MAX_STD:-0.12}"
+ENTROPY_COEFF="${ENTROPY_COEFF:-0.0}"
+BC_ANCHOR_COEFF="${BC_ANCHOR_COEFF:-2.0}"
+BC_ANCHOR_ITERS="${BC_ANCHOR_ITERS:-2000}"
+CRITIC_WARMUP_ITERS="${CRITIC_WARMUP_ITERS:-200}"
 CURRICULUM_ITERS="${CURRICULUM_ITERS:-1200}"
+ADAPTIVE_CURRICULUM="${ADAPTIVE_CURRICULUM:-1}"
+CURRICULUM_SUCCESS="${CURRICULUM_SUCCESS:-0.65}"
+CURRICULUM_STEP="${CURRICULUM_STEP:-0.025}"
+CURRICULUM_EMA_ALPHA="${CURRICULUM_EMA_ALPHA:-0.3}"
+CURRICULUM_MIN_EPISODES="${CURRICULUM_MIN_EPISODES:-8}"
 EVAL_EPISODES="${EVAL_EPISODES:-0}"
 GATE_EPISODES="${GATE_EPISODES:-0}"
 GATE_SUCCESS="${GATE_SUCCESS:-0.85}"
@@ -29,6 +46,11 @@ echo "=========================================="
 echo "  HUAN LUYEN AGV ARM - REACH/AVOID TASK   "
 echo "=========================================="
 echo "  BC_STEPS=$BC_STEPS EVAL_EPISODES=$EVAL_EPISODES GATE_EPISODES=$GATE_EPISODES"
+echo "  BC_DATASET=$BC_DATASET"
+echo "  LR=$LR CLIP=$CLIP"
+echo "  POST_BC_STD=$POST_BC_STD MIN_STD=$MIN_STD MAX_STD=$MAX_STD ENTROPY_COEFF=$ENTROPY_COEFF"
+echo "  BC_ANCHOR_COEFF=$BC_ANCHOR_COEFF BC_ANCHOR_ITERS=$BC_ANCHOR_ITERS CRITIC_WARMUP_ITERS=$CRITIC_WARMUP_ITERS"
+echo "  ADAPTIVE_CURRICULUM=$ADAPTIVE_CURRICULUM SUCCESS=$CURRICULUM_SUCCESS STEP=$CURRICULUM_STEP EMA=$CURRICULUM_EMA_ALPHA"
 echo "  NUM_PROCS=$NUM_PROCS USE_RAY=$USE_RAY"
 echo "  ULTRA_FAST_UNSAFE=$ULTRA_FAST_UNSAFE"
 
@@ -54,6 +76,15 @@ fi
 if [ "$USE_RAY" = "0" ]; then
   EXTRA_ARGS+=(--no-ray-workers)
 fi
+if [ "$ADAPTIVE_CURRICULUM" = "0" ]; then
+  EXTRA_ARGS+=(--no-adaptive-curriculum)
+fi
+if [ -f "$BC_DATASET" ]; then
+  EXTRA_ARGS+=(--bc-dataset "$BC_DATASET" --bc-dataset-steps "$BC_DATASET_STEPS" --bc-batch-size "$BC_BATCH_SIZE")
+else
+  echo "  Chua co BC dataset, bo qua dataset warm-start."
+  echo "  Tao dataset: ./make_teacher_dataset.sh"
+fi
 
 "${PY_CMD[@]}" -m rl_mujoco.ppo_reach train \
   --logdir "$LOGDIR" \
@@ -62,8 +93,21 @@ fi
   --eval-freq "$EVAL_FREQ" \
   --max-traj-len "$MAX_TRAJ_LEN" \
   --seed "$SEED" \
+  --lr "$LR" \
+  --clip "$CLIP" \
+  --entropy-coeff "$ENTROPY_COEFF" \
   --bc-steps "$BC_STEPS" \
+  --post-bc-std "$POST_BC_STD" \
+  --min-std "$MIN_STD" \
+  --max-std "$MAX_STD" \
+  --bc-anchor-coeff "$BC_ANCHOR_COEFF" \
+  --bc-anchor-iters "$BC_ANCHOR_ITERS" \
+  --critic-warmup-iters "$CRITIC_WARMUP_ITERS" \
   --curriculum-iters "$CURRICULUM_ITERS" \
+  --curriculum-success "$CURRICULUM_SUCCESS" \
+  --curriculum-step "$CURRICULUM_STEP" \
+  --curriculum-ema-alpha "$CURRICULUM_EMA_ALPHA" \
+  --curriculum-min-episodes "$CURRICULUM_MIN_EPISODES" \
   --eval-episodes "$EVAL_EPISODES" \
   --gate-episodes "$GATE_EPISODES" \
   --gate-success "$GATE_SUCCESS" \

@@ -209,6 +209,9 @@ class AgvReachEnv:
         self.action_dim = 12
         self.obs_mean = np.zeros(self.obs_dim, dtype=np.float32)
         self.obs_std = np.ones(self.obs_dim, dtype=np.float32)
+        self._teacher_path: list[np.ndarray] = []
+        self._teacher_path_index = 1
+        self._teacher_target_q = np.full(12, np.nan, dtype=np.float64)
 
     def _load_config(self) -> dict:
         with open(self.geometry_path, "r", encoding="utf-8") as handle:
@@ -395,8 +398,146 @@ class AgvReachEnv:
             J[:, j] = (self.fk(q_plus)[side][1] - base_tool) / eps
         return J
 
+    def _random_planner_q(self) -> np.ndarray:
+        q = self.rng.uniform(self.q_lower, self.q_upper)
+        return self._enforce_q_coupling(q, q1_source="average")
+
+    def _safe_segment(self, q0: np.ndarray, q1: np.ndarray, max_step: float = 0.06) -> bool:
+        q0 = np.asarray(q0, dtype=np.float64)
+        q1 = self._enforce_q_coupling(q1, q1_source="average")
+        steps = max(1, int(np.ceil(float(np.max(np.abs(q1 - q0))) / max_step)))
+        for i in range(1, steps + 1):
+            alpha = i / steps
+            q = self._enforce_q_coupling(q0 + alpha * (q1 - q0), q1_source="average")
+            if not self._is_safe_q(q):
+                return False
+        return True
+
+    def _resample_joint_path(self, path: list[np.ndarray], max_step: float | None = None) -> list[np.ndarray]:
+        if not path:
+            return []
+        if max_step is None:
+            max_step = float(np.min(np.minimum(self.action_scale, self.q_velocity_limits * self.dt)))
+        out = [np.asarray(path[0], dtype=np.float64).copy()]
+        for start, goal in zip(path[:-1], path[1:]):
+            start = np.asarray(start, dtype=np.float64)
+            goal = self._enforce_q_coupling(goal, q1_source="average")
+            steps = max(1, int(np.ceil(float(np.max(np.abs(goal - start))) / max_step)))
+            for i in range(1, steps + 1):
+                alpha = i / steps
+                out.append(self._enforce_q_coupling(start + alpha * (goal - start), q1_source="average"))
+        return out
+
+    def _shortcut_path(self, path: list[np.ndarray], attempts: int = 60) -> list[np.ndarray]:
+        if len(path) <= 2:
+            return path
+        path = [p.copy() for p in path]
+        for _ in range(attempts):
+            if len(path) <= 2:
+                break
+            i = int(self.rng.integers(0, len(path) - 2))
+            j = int(self.rng.integers(i + 2, len(path)))
+            if self._safe_segment(path[i], path[j]):
+                path = path[: i + 1] + path[j:]
+        return path
+
+    def _extend_tree(self, nodes: list[np.ndarray], parents: list[int], target: np.ndarray, step_size: float) -> int | None:
+        node_array = np.vstack(nodes)
+        scaled = (node_array - target) / self.q_range
+        nearest = int(np.argmin(np.einsum("ij,ij->i", scaled, scaled)))
+        direction = target - nodes[nearest]
+        distance = float(np.linalg.norm(direction))
+        if distance < 1e-9:
+            return None
+        q_new = target if distance <= step_size else nodes[nearest] + direction * (step_size / distance)
+        q_new = self._enforce_q_coupling(q_new, q1_source="average")
+        if not self._safe_segment(nodes[nearest], q_new):
+            return None
+        nodes.append(q_new)
+        parents.append(nearest)
+        return len(nodes) - 1
+
+    def _trace_tree_path(self, nodes: list[np.ndarray], parents: list[int], index: int) -> list[np.ndarray]:
+        path = []
+        while index >= 0:
+            path.append(nodes[index])
+            index = parents[index]
+        path.reverse()
+        return path
+
+    def plan_to_target(
+        self,
+        max_nodes: int = 700,
+        step_size: float = 0.28,
+        goal_bias: float = 0.25,
+        shortcut_attempts: int = 80,
+    ) -> list[np.ndarray]:
+        start = self._enforce_q_coupling(self.q, q1_source="average")
+        goal = self._enforce_q_coupling(self.target_q, q1_source="average")
+        if self._safe_segment(start, goal):
+            return self._resample_joint_path([start, goal])
+
+        start_nodes, start_parents = [start], [-1]
+        goal_nodes, goal_parents = [goal], [-1]
+        for iteration in range(max_nodes):
+            if self.rng.random() < goal_bias:
+                sample = goal if iteration % 2 == 0 else start
+            else:
+                sample = self._random_planner_q()
+            if not self._is_safe_q(sample):
+                continue
+
+            if iteration % 2 == 0:
+                a_nodes, a_parents = start_nodes, start_parents
+                b_nodes, b_parents = goal_nodes, goal_parents
+                from_start = True
+            else:
+                a_nodes, a_parents = goal_nodes, goal_parents
+                b_nodes, b_parents = start_nodes, start_parents
+                from_start = False
+
+            a_index = self._extend_tree(a_nodes, a_parents, sample, step_size)
+            if a_index is None:
+                continue
+
+            while True:
+                b_index = self._extend_tree(b_nodes, b_parents, a_nodes[a_index], step_size)
+                if b_index is None:
+                    break
+                if self._safe_segment(b_nodes[b_index], a_nodes[a_index]):
+                    a_path = self._trace_tree_path(a_nodes, a_parents, a_index)
+                    b_path = self._trace_tree_path(b_nodes, b_parents, b_index)
+                    if from_start:
+                        path = a_path + list(reversed(b_path))
+                    else:
+                        path = b_path + list(reversed(a_path))
+                    path = self._shortcut_path(path, attempts=shortcut_attempts)
+                    return self._resample_joint_path(path)
+                if np.linalg.norm(b_nodes[b_index] - a_nodes[a_index]) <= step_size:
+                    break
+
+        q_projected, _ = self._safety_project(start, goal)
+        return self._resample_joint_path([start, q_projected])
+
     def teacher_action(self) -> np.ndarray:
         q = self.q.copy()
+        if (
+            not self._teacher_path
+            or not np.allclose(self._teacher_target_q, self.target_q, atol=1e-6)
+            or self._teacher_path_index >= len(self._teacher_path)
+        ):
+            self._teacher_path = self.plan_to_target()
+            self._teacher_path_index = 1
+            self._teacher_target_q = self.target_q.copy()
+        while self._teacher_path_index < len(self._teacher_path) - 1:
+            waypoint = self._teacher_path[self._teacher_path_index]
+            if np.max(np.abs(waypoint - q)) > np.deg2rad(1.0):
+                break
+            self._teacher_path_index += 1
+        if self._teacher_path_index < len(self._teacher_path):
+            dq = self._teacher_path[self._teacher_path_index] - q
+            if np.linalg.norm(dq) > 1e-8:
+                return np.clip(dq / self.action_scale, -1.0, 1.0)
         if np.all(np.isfinite(self.target_q)):
             bounded_dq = np.clip(self.target_q - q, -self.action_scale, self.action_scale)
             q_goal, _ = self._safety_project(q, q + bounded_dq)
@@ -637,6 +778,9 @@ class AgvReachEnv:
         self.prev_delta[:] = 0.0
         self.last_shielded = False
         self.shield_corrections = 0
+        self._teacher_path = []
+        self._teacher_path_index = 1
+        self._teacher_target_q = np.full(12, np.nan, dtype=np.float64)
         self._sample_domain()
         for _ in range(80):
             right = self.q_mid[self._arm_slice("right")] + self.rng.uniform(-0.12, 0.12, size=6) * self.q_range[self._arm_slice("right")]
@@ -658,7 +802,7 @@ class AgvReachEnv:
 
     def _sample_reachable_targets(self) -> np.ndarray:
         span = 0.35 + 0.65 * self.curriculum_level
-        for _ in range(200):
+        for _ in range(600):
             right_slice = self._arm_slice("right")
             q_right = self.q_mid[right_slice] + self.rng.uniform(-0.5 * span, 0.5 * span, size=6) * self.q_range[right_slice]
             q_right = np.clip(q_right, self.q_lower[right_slice], self.q_upper[right_slice])
@@ -673,7 +817,13 @@ class AgvReachEnv:
             )
             fk = self.fk(q_pair)
             targets = np.vstack([fk["right"][1], fk["left"][1]])
-            if np.all((0.30 <= targets[:, 2]) & (targets[:, 2] <= 1.75)) and np.all(np.linalg.norm(targets[:, :2], axis=1) <= 1.55):
+            rotations = [fk[arm][2] for arm in self.arms]
+            parallel = float(np.mean([abs(np.dot(R[:, 2], np.array([0.0, 0.0, 1.0]))) for R in rotations]))
+            if (
+                parallel > 0.88
+                and np.all((0.30 <= targets[:, 2]) & (targets[:, 2] <= 1.75))
+                and np.all(np.linalg.norm(targets[:, :2], axis=1) <= 1.55)
+            ):
                 self.target_q = q_pair.copy()
                 return targets
         self.target_q = self._enforce_q_coupling(self.q_mid, q1_source="average")

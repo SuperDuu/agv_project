@@ -15,6 +15,10 @@ left_arm:
   planner_configs:
     - RRTConnectkConfigDefault
   default_planner_config: RRTConnectkConfigDefault
+dual_arm:
+  planner_configs:
+    - RRTConnectkConfigDefault
+  default_planner_config: RRTConnectkConfigDefault
 planner_configs:
   RRTConnectkConfigDefault:
     type: geometric::RRTConnect
